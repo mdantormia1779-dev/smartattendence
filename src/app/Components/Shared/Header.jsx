@@ -1,19 +1,20 @@
 import React from 'react';
 import { Button } from "@/components/ui/button"; // shadcn button import
+import Link from 'next/link';
 
 const Header = () => {
     return (
         <header className="w-full bg-white border-b border-gray-100 py-4 px-6 md:px-12 flex items-center justify-between">
             
             {/* Left Side: Logo & Brand Name */}
-            <div className="flex items-center gap-3">
-                <div className="bg-[#00B050] text-white font-bold px-3 py-1.5 rounded-lg text-lg tracking-wider flex items-center justify-center shadow-sm">
-                    VX
-                </div>
-                <div className="text-xl font-bold tracking-tight text-gray-900">
-                    Attendance<span className="text-[#00B050]">ERP</span>
-                </div>
+            <Link href="/" className="flex items-center gap-3 cursor-pointer group">
+            <div className="bg-[#00B050] text-white font-bold px-3 py-1.5 rounded-lg text-lg tracking-wider flex items-center justify-center shadow-sm">
+                VX
             </div>
+            <div className="text-xl font-bold tracking-tight text-gray-900 group-hover:opacity-90 transition-opacity">
+                Attendance<span className="text-[#00B050]">ERP</span>
+            </div>
+        </Link>
 
             {/* Middle: Navigation Links */}
             <nav className="hidden md:flex items-center gap-8 text-gray-600 font-medium text-sm">
