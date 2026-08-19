@@ -4,6 +4,7 @@ import FeaturesSection from './Components/Home/FeaturesSection';
 import HowItWorks from './Components/Home/HowItWorks';
 import SolutionsSection from './Components/Home/SolutionsSection';
 import PricingSection from './Components/Home/PricingSection';
+import FaqSection from './Components/Home/FaqSection';
 
 export default function Home() {
   return (
@@ -13,6 +14,7 @@ export default function Home() {
       <HowItWorks />
       <SolutionsSection />
       <PricingSection />
+      <FaqSection />
     </div>
   );
 }
