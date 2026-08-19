@@ -83,7 +83,7 @@ const SolutionsSection = () => {
                             <ul className="space-y-3 pt-2 border-t border-gray-100">
                                 {item.features.map((feature, fIndex) => (
                                     <li key={fIndex} className="flex items-center gap-3 text-sm text-gray-700">
-                                        <span className="w-5 h-5 rounded-full bg-[#00B050]/10 flex items-center justify-center flex-shrink-0">
+                                        <span className="w-5 h-5 rounded-full bg-[#00B050]/10 flex items-center justify-center shrink-0">
                                             <Check className="w-3.5 h-3.5 text-[#00B050]" />
                                         </span>
                                         {feature}
