@@ -1,5 +1,13 @@
-import React from 'react';
+'use client';
+import React, { useEffect, useRef } from 'react';
 import { Check } from 'lucide-react';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+
+// GSAP ScrollTrigger রেজিস্টার করা হলো
+if (typeof window !== 'undefined') {
+    gsap.registerPlugin(ScrollTrigger);
+}
 
 const pricingPlans = [
     {
@@ -84,11 +92,53 @@ const pricingPlans = [
 ];
 
 const PricingSection = () => {
+    const sectionRef = useRef(null);
+
+    useEffect(() => {
+        const ctx = gsap.context(() => {
+            // সেকশন হেডার অ্যানিমেশন
+            gsap.fromTo(
+                ".pricing-header",
+                { y: 50, opacity: 0 },
+                {
+                    y: 0,
+                    opacity: 1,
+                    duration: 1,
+                    ease: "power3.out",
+                    scrollTrigger: {
+                        trigger: sectionRef.current,
+                        start: "top 80%",
+                    }
+                }
+            );
+
+            // প্রাইসিং কার্ডগুলোর স্ট্যাগারড অ্যানিমেশন
+            gsap.fromTo(
+                ".pricing-card",
+                { y: 70, opacity: 0, scale: 0.95 },
+                {
+                    y: 0,
+                    opacity: 1,
+                    scale: 1,
+                    duration: 0.8,
+                    stagger: 0.15,
+                    ease: "power3.out",
+                    scrollTrigger: {
+                        trigger: ".pricing-grid",
+                        start: "top 85%",
+                    }
+                }
+            );
+        }, sectionRef);
+
+        return () => ctx.revert();
+    }, []);
+
     return (
-        <section className="w-full bg-white py-20 px-6 md:px-12">
+        <section ref={sectionRef} id="pricing" className="w-full bg-white py-20 px-6 md:px-12">
             
             {/* Section Header */}
-            <div className="max-w-6xl mx-auto text-center space-y-4 mb-16">
+            <div className="pricing-header max-w-6xl mx-auto text-center space-y-4 mb-16">
                 <span className="text-xs font-semibold uppercase tracking-wider text-[#00B050]">
                     Pricing
                 </span>
@@ -103,19 +153,19 @@ const PricingSection = () => {
             </div>
 
             {/* Pricing Cards Grid (4 Columns) */}
-            <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <div className="pricing-grid max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                 {pricingPlans.map((plan, index) => (
                     <div 
                         key={index} 
-                        className={`bg-white rounded-2xl p-6 flex flex-col justify-between relative transition-all ${
+                        className={`pricing-card bg-white rounded-2xl p-6 flex flex-col justify-between relative transition-all duration-300 hover:-translate-y-2 ${
                             plan.popular 
-                                ? 'border-2 border-[#00B050] shadow-lg ring-1 ring-[#00B050]/20' 
-                                : 'border border-gray-200 shadow-sm hover:shadow-md'
+                                ? 'border-2 border-[#00B050] shadow-xl ring-2 ring-[#00B050]/20 lg:-translate-y-2' 
+                                : 'border border-gray-200 shadow-sm hover:shadow-lg'
                         }`}
                     >
                         {/* Most Popular Badge */}
                         {plan.popular && (
-                            <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#00B050] text-white text-xs font-semibold px-3 py-1 rounded-full shadow-sm">
+                            <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#00B050] text-white text-xs font-semibold px-3 py-1 rounded-full shadow-md">
                                 Most popular
                             </span>
                         )}
@@ -155,7 +205,7 @@ const PricingSection = () => {
 
                         {/* Action Button */}
                         <div className="pt-8">
-                            <button className={`w-full py-2.5 px-4 rounded-xl font-medium text-sm transition-all shadow-sm ${plan.buttonStyle}`}>
+                            <button className={`w-full py-2.5 px-4 rounded-xl font-medium text-sm transition-all shadow-sm cursor-pointer ${plan.buttonStyle}`}>
                                 {plan.buttonText}
                             </button>
                         </div>

@@ -1,5 +1,13 @@
-import React from 'react';
+'use client';
+import React, { useEffect, useRef } from 'react';
 import { ScanFace, MapPin, Fingerprint, WalletCards, CalendarDays, BarChart3 } from 'lucide-react';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+
+// GSAP ScrollTrigger রেজিস্টার করা হলো
+if (typeof window !== 'undefined') {
+    gsap.registerPlugin(ScrollTrigger);
+}
 
 const featuresData = [
     {
@@ -41,9 +49,50 @@ const featuresData = [
 ];
 
 const FeaturesSection = () => {
+    const sectionRef = useRef(null);
+
+    useEffect(() => {
+        const ctx = gsap.context(() => {
+            // সেকশন হেডার অ্যানিমেশন
+            gsap.fromTo(
+                ".feature-header",
+                { y: 50, opacity: 0 },
+                {
+                    y: 0,
+                    opacity: 1,
+                    duration: 1,
+                    ease: "power3.out",
+                    scrollTrigger: {
+                        trigger: sectionRef.current,
+                        start: "top 80%",
+                    }
+                }
+            );
+
+            // ফিচার কার্ডগুলো একটার পর একটা (Stagger) অ্যানিমেট হবে
+            gsap.fromTo(
+                ".feature-card",
+                { y: 60, opacity: 0 },
+                {
+                    y: 0,
+                    opacity: 1,
+                    duration: 0.8,
+                    stagger: 0.15, // প্রতিটি কার্ডের মাঝে সামান্য বিরতি
+                    ease: "power3.out",
+                    scrollTrigger: {
+                        trigger: ".features-grid",
+                        start: "top 85%",
+                    }
+                }
+            );
+        }, sectionRef);
+
+        return () => ctx.revert();
+    }, []);
+
     return (
-        <section className="w-full bg-[#FBF9F5] py-20 px-6 md:px-12">
-            <div className="max-w-6xl mx-auto text-center space-y-4 mb-16">
+        <section ref={sectionRef} id="features" className="w-full bg-[#FBF9F5] py-20 px-6 md:px-12">
+            <div className="feature-header max-w-6xl mx-auto text-center space-y-4 mb-16">
                 {/* Small Top Tag */}
                 <span className="text-xs font-semibold uppercase tracking-wider text-[#00B050]">
                     Features
@@ -61,15 +110,15 @@ const FeaturesSection = () => {
             </div>
 
             {/* Cards Grid (3 columns on desktop, 1 on mobile) */}
-            <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="features-grid max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
                 {featuresData.map((feature, index) => (
                     <div 
                         key={index} 
-                        className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between"
+                        className="feature-card bg-white p-8 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between group"
                     >
                         <div className="space-y-4">
-                            {/* Icon Box */}
-                            <div className={`w-12 h-12 rounded-xl ${feature.iconBg} flex items-center justify-center`}>
+                            {/* Icon Box with Hover Scale Effect */}
+                            <div className={`w-12 h-12 rounded-xl ${feature.iconBg} flex items-center justify-center transition-transform group-hover:scale-110`}>
                                 {feature.icon}
                             </div>
 

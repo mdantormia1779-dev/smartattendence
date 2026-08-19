@@ -1,5 +1,13 @@
-import React from 'react';
+'use client';
+import React, { useEffect, useRef } from 'react';
 import { ShieldCheck, Users, ScanFace, Check } from 'lucide-react';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+
+// GSAP ScrollTrigger রেজিস্টার করা হলো
+if (typeof window !== 'undefined') {
+    gsap.registerPlugin(ScrollTrigger);
+}
 
 const solutionsData = [
     {
@@ -38,11 +46,53 @@ const solutionsData = [
 ];
 
 const SolutionsSection = () => {
+    const sectionRef = useRef(null);
+
+    useEffect(() => {
+        const ctx = gsap.context(() => {
+            // সেকশন হেডার অ্যানিমেশন
+            gsap.fromTo(
+                ".solutions-header",
+                { y: 50, opacity: 0 },
+                {
+                    y: 0,
+                    opacity: 1,
+                    duration: 1,
+                    ease: "power3.out",
+                    scrollTrigger: {
+                        trigger: sectionRef.current,
+                        start: "top 80%",
+                    }
+                }
+            );
+
+            // কার্ডগুলোর অ্যাডভান্সড স্ট্যাগারড অ্যানিমেশন (Scale + Fade-in)
+            gsap.fromTo(
+                ".solutions-card",
+                { y: 80, opacity: 0, scale: 0.95 },
+                {
+                    y: 0,
+                    opacity: 1,
+                    scale: 1,
+                    duration: 0.9,
+                    stagger: 0.2,
+                    ease: "power3.out",
+                    scrollTrigger: {
+                        trigger: ".solutions-grid",
+                        start: "top 85%",
+                    }
+                }
+            );
+        }, sectionRef);
+
+        return () => ctx.revert();
+    }, []);
+
     return (
-        <section className="w-full bg-[#FBF9F5] py-20 px-6 md:px-12">
+        <section ref={sectionRef} id="solutions" className="w-full bg-[#FBF9F5] py-20 px-6 md:px-12">
             
             {/* Section Header */}
-            <div className="max-w-6xl mx-auto text-center space-y-4 mb-16">
+            <div className="solutions-header max-w-6xl mx-auto text-center space-y-4 mb-16">
                 <span className="text-xs font-semibold uppercase tracking-wider text-[#00B050]">
                     Solutions
                 </span>
@@ -57,21 +107,21 @@ const SolutionsSection = () => {
             </div>
 
             {/* Cards Grid (3 Columns) */}
-            <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="solutions-grid max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
                 {solutionsData.map((item, index) => (
                     <div 
                         key={index} 
-                        className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between"
+                        className="solutions-card bg-white p-8 rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-2 flex flex-col justify-between group"
                     >
                         <div className="space-y-6">
-                            {/* Icon Box */}
-                            <div className={`w-12 h-12 rounded-xl ${item.iconBg} flex items-center justify-center`}>
+                            {/* Icon Box with Smooth Hover Zoom & Rotate */}
+                            <div className={`w-12 h-12 rounded-xl ${item.iconBg} flex items-center justify-center transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3`}>
                                 {item.icon}
                             </div>
 
                             {/* Title & Description */}
                             <div className="space-y-2">
-                                <h3 className="text-xl font-bold text-gray-900">
+                                <h3 className="text-xl font-bold text-gray-900 group-hover:text-[#00B050] transition-colors">
                                     {item.title}
                                 </h3>
                                 <p className="text-sm text-gray-600 leading-relaxed">
