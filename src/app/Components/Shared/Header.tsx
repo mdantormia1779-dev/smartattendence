@@ -5,7 +5,7 @@ import Link from 'next/link';
 import gsap from 'gsap';
 
 const Header = () => {
-    const headerRef = useRef(null);
+    const headerRef = useRef<HTMLElement>(null);
 
     useEffect(() => {
         const ctx = gsap.context(() => {
@@ -28,7 +28,7 @@ const Header = () => {
     }, []);
 
     // স্মুথ স্ক্রলিং হ্যান্ডলার (সেকশনের জন্য)
-    const handleScrollToSection = (e, id) => {
+    const handleScrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
         e.preventDefault();
         const element = document.getElementById(id);
         if (element) {
@@ -39,8 +39,8 @@ const Header = () => {
         }
     };
 
-    // লোগোতে ক্লিক করলে পেজের একদম উপরে যাওয়ার হ্যান্ডলার
-    const handleScrollToTop = (e) => {
+    // লোগোতে ক্লিক করলে পেজের একদম উপরে যাওয়ার হ্যান্ডলার
+    const handleScrollToTop = (e: React.MouseEvent<HTMLAnchorElement>) => {
         if (window.location.pathname === '/') {
             e.preventDefault();
             window.scrollTo({

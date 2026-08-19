@@ -74,7 +74,7 @@ const SignupPage: React.FC = () => {
         <div className="min-h-screen bg-[#F4F7F6] relative overflow-hidden flex items-center justify-center py-12 px-4 md:px-8">
             <div className="absolute inset-0 opacity-30 pointer-events-none" 
                  style={{ backgroundImage: "radial-gradient(#00B050 1.5px, transparent 1.5px)", backgroundSize: "28px 28px" }}></div>
-            <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-[#00B050]/5 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute top-0 right-1/4 w-125 h-125 bg-[#00B050]/5 rounded-full blur-3xl pointer-events-none"></div>
 
             <div className="max-w-3xl w-full relative z-10">
                 <div className="text-center mb-8 space-y-2">

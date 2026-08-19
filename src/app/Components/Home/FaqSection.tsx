@@ -29,8 +29,9 @@ const faqsData = [
 ];
 
 const FaqSection = () => {
-    const [openIndex, setOpenIndex] = useState(0);
-    const sectionRef = useRef(null);
+    // এখানে state-এ number বা null টাইপ এলাও করা হলো
+    const [openIndex, setOpenIndex] = useState<number | null>(0);
+    const sectionRef = useRef<HTMLElement>(null);
 
     useEffect(() => {
         const ctx = gsap.context(() => {
@@ -71,7 +72,8 @@ const FaqSection = () => {
         return () => ctx.revert();
     }, []);
 
-    const toggleFaq = (index) => {
+    // index প্যারামিটারে number টাইপ নির্দিষ্ট করা হলো
+    const toggleFaq = (index: number) => {
         setOpenIndex(openIndex === index ? null : index);
     };
 
@@ -87,11 +89,11 @@ const FaqSection = () => {
                 <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-gray-900">
                     Frequently asked questions
                 </h2>
-                </div>
+            </div>
 
             {/* FAQ Items Container */}
             <div className="faq-container max-w-3xl mx-auto space-y-4">
-                {faqsData.map((faq, index) => {
+                {faqsData.map((faq, index: number) => {
                     const isOpen = openIndex === index;
                     return (
                         <div 
@@ -115,7 +117,7 @@ const FaqSection = () => {
                                 </span>
                             </button>
 
-                            {/* Answer (Collapsible with smooth transition look) */}
+                            {/* Answer */}
                             {isOpen && (
                                 <div className="px-6 pb-6 text-sm md:text-base text-gray-600 leading-relaxed border-t border-gray-100 pt-4 animate-fadeIn">
                                     {faq.answer}

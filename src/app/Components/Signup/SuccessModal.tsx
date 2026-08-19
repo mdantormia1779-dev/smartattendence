@@ -53,9 +53,9 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, onClose }) =
                                 initial={{ scale: 0, rotate: -180 }}
                                 animate={{ scale: 1, rotate: 0 }}
                                 transition={{ delay: 0.1, type: "spring", stiffness: 260, damping: 20 }}
-                                className="w-20 h-20 bg-gradient-to-tr from-[#00B050] to-emerald-400 text-white rounded-3xl flex items-center justify-center shadow-xl shadow-emerald-500/30 relative z-10"
+                                className="w-20 h-20 bg-linear-to-tr from-[#00B050] to-emerald-400 text-white rounded-3xl flex items-center justify-center shadow-xl shadow-emerald-500/30 relative z-10"
                             >
-                                <Check className="w-10 h-10 stroke-[3]" />
+                                <Check className="w-10 h-10 stroke-3" />
                             </motion.div>
                         </div>
 
