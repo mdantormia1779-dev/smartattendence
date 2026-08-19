@@ -2,15 +2,41 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import Link from 'next/link';
-import { Mail, Lock, ArrowLeft, Eye, EyeOff, CheckCircle2, ShieldCheck, Zap } from 'lucide-react';
+import { Mail, Lock, ArrowLeft, Eye, EyeOff, CheckCircle2, ShieldCheck, Zap, AlertCircle } from 'lucide-react';
 import gsap from 'gsap';
+import { useForm, SubmitHandler } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 
-const LoginPage = () => {
-    const [showPassword, setShowPassword] = useState(false);
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [rememberMe, setRememberMe] = useState(false);
-    const containerRef = useRef(null);
+// Zod দিয়ে ফর্ম ভ্যালিডেশন স্কিমা তৈরি (rememberMe চেক করা বাধ্যতামূলক করা হয়েছে)
+const loginSchema = z.object({
+    email: z.string().min(1, { message: "Email is required" }).email({ message: "Invalid email address" }),
+    password: z.string().min(6, { message: "Password must be at least 6 characters" }),
+    rememberMe: z.boolean().refine((val) => val === true, {
+        message: "You must check 'Remember for 30 days' to sign in",
+    }),
+});
+
+// TypeScript টাইপ ডিক্লেরেশন
+type LoginFormData = z.infer<typeof loginSchema>;
+
+const LoginPage: React.FC = () => {
+    const [showPassword, setShowPassword] = useState<boolean>(false);
+    const containerRef = useRef<HTMLDivElement | null>(null);
+
+    // React Hook Form সেটআপ
+    const {
+        register,
+        handleSubmit,
+        formState: { errors, isSubmitting },
+    } = useForm<LoginFormData>({
+        resolver: zodResolver(loginSchema),
+        defaultValues: {
+            email: '',
+            password: '',
+            rememberMe: false,
+        },
+    });
 
     useEffect(() => {
         const ctx = gsap.context(() => {
@@ -30,9 +56,10 @@ const LoginPage = () => {
         return () => ctx.revert();
     }, []);
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        console.log("Logging in with:", { email, password, rememberMe });
+    const onSubmit: SubmitHandler<LoginFormData> = (data) => {
+        console.log("Secure Login Data:", data);
+        alert("🎉 Login Successful! Welcome back to AttendanceERP dashboard.");
+        // এখানে আপনার ব্যাকএন্ড লগইন এপিআই কল করতে পারেন
     };
 
     return (
@@ -125,10 +152,10 @@ const LoginPage = () => {
                     </div>
 
                     {/* Form */}
-                    <form onSubmit={handleSubmit} className="space-y-6">
+                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
                         
                         {/* Email Field */}
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                             <label className="text-xs font-semibold uppercase tracking-wider text-gray-700">
                                 Email Address
                             </label>
@@ -138,17 +165,25 @@ const LoginPage = () => {
                                 </span>
                                 <input 
                                     type="email" 
-                                    required
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    {...register("email")}
                                     placeholder="name@company.com" 
-                                    className="w-full pl-12 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm text-gray-900 focus:outline-none focus:border-[#00B050] focus:ring-2 focus:ring-[#00B050]/20 transition-all shadow-sm"
+                                    className={`w-full pl-12 pr-4 py-3.5 bg-white border rounded-2xl text-sm text-gray-900 focus:outline-none transition-all shadow-sm ${
+                                        errors.email 
+                                            ? "border-red-500 focus:ring-2 focus:ring-red-500/20" 
+                                            : "border-gray-200 focus:border-[#00B050] focus:ring-2 focus:ring-[#00B050]/20"
+                                    }`}
                                 />
                             </div>
+                            {errors.email && (
+                                <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
+                                    <AlertCircle className="w-3.5 h-3.5" />
+                                    {errors.email.message}
+                                </p>
+                            )}
                         </div>
 
                         {/* Password Field */}
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
                                 <label className="text-xs font-semibold uppercase tracking-wider text-gray-700">
                                     Password
@@ -163,11 +198,13 @@ const LoginPage = () => {
                                 </span>
                                 <input 
                                     type={showPassword ? "text" : "password"} 
-                                    required
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
+                                    {...register("password")}
                                     placeholder="••••••••" 
-                                    className="w-full pl-12 pr-12 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm text-gray-900 focus:outline-none focus:border-[#00B050] focus:ring-2 focus:ring-[#00B050]/20 transition-all shadow-sm"
+                                    className={`w-full pl-12 pr-12 py-3.5 bg-white border rounded-2xl text-sm text-gray-900 focus:outline-none transition-all shadow-sm ${
+                                        errors.password 
+                                            ? "border-red-500 focus:ring-2 focus:ring-red-500/20" 
+                                            : "border-gray-200 focus:border-[#00B050] focus:ring-2 focus:ring-[#00B050]/20"
+                                    }`}
                                 />
                                 <button 
                                     type="button"
@@ -177,32 +214,44 @@ const LoginPage = () => {
                                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                 </button>
                             </div>
+                            {errors.password && (
+                                <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
+                                    <AlertCircle className="w-3.5 h-3.5" />
+                                    {errors.password.message}
+                                </p>
+                            )}
                         </div>
 
-                        {/* Remember Me Checkbox */}
-                        <div className="flex items-center">
+                        {/* Remember Me Checkbox & Error Display */}
+                        <div className="space-y-1 pt-1">
                             <label className="flex items-center gap-3 cursor-pointer select-none">
                                 <input 
                                     type="checkbox"
-                                    checked={rememberMe}
-                                    onChange={(e) => setRememberMe(e.target.checked)}
+                                    {...register("rememberMe")}
                                     className="w-4 h-4 text-[#00B050] border-gray-300 rounded focus:ring-[#00B050]"
                                 />
                                 <span className="text-sm text-gray-600 font-medium">Remember for 30 days</span>
                             </label>
+                            {errors.rememberMe && (
+                                <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
+                                    <AlertCircle className="w-3.5 h-3.5" />
+                                    {errors.rememberMe.message}
+                                </p>
+                            )}
                         </div>
 
                         {/* Submit Button */}
                         <Button 
                             type="submit" 
-                            className="w-full bg-[#00B050] hover:bg-[#009644] text-white font-medium py-4 rounded-2xl shadow-md transition-transform hover:scale-[1.01] cursor-pointer text-base"
+                            disabled={isSubmitting}
+                            className="w-full bg-[#00B050] hover:bg-[#009644] text-white font-medium py-4 rounded-2xl shadow-md transition-transform hover:scale-[1.01] cursor-pointer text-base disabled:opacity-50"
                         >
-                            Sign In to Dashboard
+                            {isSubmitting ? "Signing in..." : "Sign In to Dashboard"}
                         </Button>
                     </form>
 
                     {/* Bottom redirect link */}
-                    <div className="text-center text-sm text-gray-500 pt-4">
+                    <div className="text-center text-sm text-gray-500 pt-2">
                         Don't have an account yet?{" "}
                         <Link href="/signup" className="font-semibold text-[#00B050] hover:underline">
                             Start Free Trial
