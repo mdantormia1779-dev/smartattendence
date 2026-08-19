@@ -25,7 +25,7 @@ const stepsData = [
 
 const HowItWorks = () => {
     return (
-        <section className="w-full bg-[#FBF9F5] py-20 px-6 md:px-12">
+        <section className="w-full bg-white py-20 px-6 md:px-12">
             
             {/* Section Header */}
             <div className="max-w-6xl mx-auto text-center space-y-4 mb-16">
