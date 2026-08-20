@@ -1,102 +1,20 @@
 'use client';
-import React, { useEffect, useRef } from 'react';
-import { Check } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { pricingPlans, Plan } from '../../../../src/data/pricingData';
+import { PricingCard } from './PricingCard';
 
-// GSAP ScrollTrigger রেজিস্টার করা হলো
 if (typeof window !== 'undefined') {
     gsap.registerPlugin(ScrollTrigger);
 }
 
-const pricingPlans = [
-    {
-        name: "Free",
-        price: "$0",
-        period: "forever",
-        popular: false,
-        stats: [
-            { label: "Organizations", value: "1" },
-            { label: "Branches", value: "1" },
-            { label: "Managers", value: "1" },
-            { label: "Employees", value: "20" }
-        ],
-        features: [
-            "Face Recognition",
-            "GPS Verification",
-            "Basic Reports",
-            "Attendance Logs"
-        ],
-        buttonText: "Start Free",
-        buttonStyle: "bg-white hover:bg-gray-50 text-gray-900 border border-gray-200"
-    },
-    {
-        name: "Starter",
-        price: "$49",
-        period: "/ month",
-        popular: false,
-        stats: [
-            { label: "Branches", value: "5" },
-            { label: "Managers", value: "5" },
-            { label: "Employees", value: "100" }
-        ],
-        features: [
-            "Everything in Free",
-            "Leave Management",
-            "Shift Management",
-            "Email Notification"
-        ],
-        buttonText: "Choose Plan",
-        buttonStyle: "bg-white hover:bg-gray-50 text-gray-900 border border-gray-200"
-    },
-    {
-        name: "Business",
-        price: "$149",
-        period: "/ month",
-        popular: true,
-        stats: [
-            { label: "Branches", value: "20" },
-            { label: "Managers", value: "20" },
-            { label: "Employees", value: "500" }
-        ],
-        features: [
-            "Everything in Starter",
-            "Payroll & Payslips",
-            "Fingerprint Support",
-            "Advanced Analytics",
-            "API Access"
-        ],
-        buttonText: "Choose Plan",
-        buttonStyle: "bg-[#00B050] hover:bg-[#009644] text-white"
-    },
-    {
-        name: "Enterprise",
-        price: "$399",
-        period: "/ month",
-        popular: false,
-        stats: [
-            { label: "Branches", value: "Unlimited" },
-            { label: "Managers", value: "Unlimited" },
-            { label: "Employees", value: "Unlimited" }
-        ],
-        features: [
-            "Everything in Business",
-            "White Label",
-            "Custom Domain",
-            "Priority Support",
-            "Dedicated Manager"
-        ],
-        buttonText: "Choose Plan",
-        buttonStyle: "bg-white hover:bg-gray-50 text-gray-900 border border-gray-200"
-    }
-];
-
 const PricingSection = () => {
-    const sectionRef = useRef(null);
+    const [isYearly, setIsYearly] = useState<boolean>(false);
+    const sectionRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         const ctx = gsap.context(() => {
-            // সেকশন হেডার অ্যানিমেশন
             gsap.fromTo(
                 ".pricing-header",
                 { y: 50, opacity: 0 },
@@ -112,7 +30,6 @@ const PricingSection = () => {
                 }
             );
 
-            // প্রাইসিং কার্ডগুলোর স্ট্যাগারড অ্যানিমেশন
             gsap.fromTo(
                 ".pricing-card",
                 { y: 70, opacity: 0, scale: 0.95 },
@@ -136,9 +53,7 @@ const PricingSection = () => {
 
     return (
         <section ref={sectionRef} id="pricing" className="w-full bg-white py-20 px-6 md:px-12">
-            
-            {/* Section Header */}
-            <div className="pricing-header max-w-6xl mx-auto text-center space-y-4 mb-16">
+            <div className="pricing-header max-w-6xl mx-auto text-center space-y-4 mb-12">
                 <span className="text-xs font-semibold uppercase tracking-wider text-[#00B050]">
                     Pricing
                 </span>
@@ -150,69 +65,37 @@ const PricingSection = () => {
                 <p className="text-base md:text-lg text-gray-600 max-w-xl mx-auto">
                     Start free and upgrade as your team grows. No hidden fees.
                 </p>
-            </div>
 
-            {/* Pricing Cards Grid (4 Columns) */}
-            <div className="pricing-grid max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                {pricingPlans.map((plan, index) => (
-                    <div 
-                        key={index} 
-                        className={`pricing-card bg-white rounded-2xl p-6 flex flex-col justify-between relative transition-all duration-300 hover:-translate-y-2 ${
-                            plan.popular 
-                                ? 'border-2 border-[#00B050] shadow-xl ring-2 ring-[#00B050]/20 lg:-translate-y-2' 
-                                : 'border border-gray-200 shadow-sm hover:shadow-lg'
+                <div className="flex items-center justify-center gap-4 pt-4">
+                    <span className={`text-sm font-semibold ${!isYearly ? "text-gray-900" : "text-gray-500"}`}>
+                        Monthly
+                    </span>
+                    <button
+                        onClick={() => setIsYearly(!isYearly)}
+                        className={`w-14 h-8 rounded-full p-1 relative transition-colors duration-300 focus:outline-none cursor-pointer ${
+                            isYearly ? "bg-[#00B050]" : "bg-gray-200"
                         }`}
                     >
-                        {/* Most Popular Badge */}
-                        {plan.popular && (
-                            <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#00B050] text-white text-xs font-semibold px-3 py-1 rounded-full shadow-md">
-                                Most popular
-                            </span>
-                        )}
-
-                        <div className="space-y-6">
-                            {/* Plan Name & Price */}
-                            <div>
-                                <h3 className="text-lg font-bold text-gray-900">{plan.name}</h3>
-                                <div className="mt-2 flex items-baseline gap-1">
-                                    <span className="text-4xl font-extrabold text-gray-900">{plan.price}</span>
-                                    <span className="text-sm text-gray-500">{plan.period}</span>
-                                </div>
-                            </div>
-
-                            {/* Stats Box inside Card */}
-                            <div className="bg-[#FBF9F5] rounded-xl p-4 grid grid-cols-2 gap-3 border border-gray-100">
-                                {plan.stats.map((stat, sIndex) => (
-                                    <div key={sIndex} className="space-y-0.5">
-                                        <p className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">{stat.label}</p>
-                                        <p className="text-sm font-bold text-gray-900">{stat.value}</p>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Features List */}
-                            <ul className="space-y-3 pt-2">
-                                {plan.features.map((feature, fIndex) => (
-                                    <li key={fIndex} className="flex items-center gap-3 text-sm text-gray-700">
-                                        <span className="w-5 h-5 rounded-full bg-[#00B050]/10 flex items-center justify-center shrink-0">
-                                            <Check className="w-3.5 h-3.5 text-[#00B050]" />
-                                        </span>
-                                        {feature}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-
-                        {/* Action Button */}
-                        <div className="pt-8">
-                            <button className={`w-full py-2.5 px-4 rounded-xl font-medium text-sm transition-all shadow-sm cursor-pointer ${plan.buttonStyle}`}>
-                                {plan.buttonText}
-                            </button>
-                        </div>
-                    </div>
-                ))}
+                        <div
+                            className={`w-6 h-6 bg-white rounded-full shadow-md transform transition-transform duration-300 ${
+                                isYearly ? "translate-x-6" : "translate-x-0"
+                            }`}
+                        />
+                    </button>
+                    <span className={`text-sm font-semibold flex items-center gap-2 ${isYearly ? "text-gray-900" : "text-gray-500"}`}>
+                        Yearly
+                        <span className="bg-[#00B050]/10 text-[#00B050] text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                            Save 20%
+                        </span>
+                    </span>
+                </div>
             </div>
 
+            <div className="pricing-grid max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                {pricingPlans.map((plan: Plan, index: number) => (
+                    <PricingCard key={index} plan={plan} isYearly={isYearly} />
+                ))}
+            </div>
         </section>
     );
 };
