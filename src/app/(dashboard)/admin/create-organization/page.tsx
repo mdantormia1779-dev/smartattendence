@@ -6,7 +6,7 @@ import { OrganizationTable, Organization } from '../Components/Organizations/Org
 import { SuspensionNoticeCard } from '../Components/Organizations/SuspensionNoticeCard';
 import { OrganizationDetailsModal } from '../Components/Organizations/OrganizationDetailsModal';
 import { OrganizationEditModal } from '../Components/Organizations/OrganizationEditModal';
-import { OrganizationDeleteModal } from '../Components/Organizations/OrganizationDeleteModal'; // ডিলিট মডাল ইমপোর্ট
+import { OrganizationDeleteModal } from '../Components/Organizations/OrganizationDeleteModal';
 
 const initialOrganizations: Organization[] = [
     { 
@@ -254,7 +254,7 @@ export const OrganizationsPage = () => {
             {/* Header Component */}
             <OrganizationsHeader 
                 totalShown={filteredOrganizations.length} 
-                totalCount={organizations.length} 
+                totalCount={organizations.length}
             />
 
             {/* Filters Component */}

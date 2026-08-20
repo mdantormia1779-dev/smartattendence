@@ -1,8 +1,8 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Building2, Save, Mail, Phone, Globe, MapPin, Clock, Coins, Globe2 } from 'lucide-react';
-import { Organization } from './OrganizationTable'; // আপনার সঠিক পাথ দিয়ে নিবেন
+import { X, Building2, Save } from 'lucide-react';
+import { Organization } from './OrganizationTable'; // আপনার সঠিক পাথ দিয়ে নিবেন
 
 interface OrganizationEditModalProps {
     organization: Organization | null;
@@ -100,6 +100,22 @@ export const OrganizationEditModal: React.FC<OrganizationEditModalProps> = ({
                                     className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                                     required
                                 />
+                            </div>
+
+                            {/* New Subscription Plan Field Added */}
+                            <div>
+                                <label className="block font-semibold text-gray-700 mb-1">Subscription Plan</label>
+                                <select 
+                                    name="plan" 
+                                    value={formData.plan || 'Free'} 
+                                    onChange={handleChange}
+                                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+                                >
+                                    <option value="Free">Free</option>
+                                    <option value="Standard">Standard</option>
+                                    <option value="Premium">Premium</option>
+                                    <option value="Enterprise">Enterprise</option>
+                                </select>
                             </div>
 
                             <div>
