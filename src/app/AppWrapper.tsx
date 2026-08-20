@@ -7,8 +7,8 @@ import Footer from './Components/Shared/Fotter';
 export default function AppWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   
-  // চেক করা হচ্ছে রুটটি admin রুট কিনা (যেমন /super-admin দিয়ে শুরু হলে)
-  const isAdminRoute = pathname?.startsWith('/admin');
+  // চেক করা হচ্ছে রুটটি /admin অথবা /organizationadmin দিয়ে শুরু কিনা
+  const isAdminRoute = pathname?.startsWith('/admin') || pathname?.startsWith('/organizationadmin');
 
   return (
     <>
