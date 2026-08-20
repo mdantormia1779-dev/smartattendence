@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { Plan } from "@/types/subscription";
+import gsap from "gsap";
 
 interface PlanModalProps {
   isOpen: boolean;
@@ -18,6 +19,28 @@ export default function PlanModal({ isOpen, onClose, onSave, editingPlan }: Plan
   const [priceYearly, setPriceYearly] = useState(editingPlan?.priceYearly || "");
   const [features, setFeatures] = useState(editingPlan?.features.join(", ") || "");
   const [isPopular, setIsPopular] = useState(!!editingPlan?.isPopular);
+
+  // GSAP Refs
+  const modalRef = useRef<HTMLDivElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      // Backdrop Fade In
+      gsap.fromTo(
+        backdropRef.current,
+        { opacity: 0 },
+        { opacity: 1, duration: 0.3, ease: "power2.out" }
+      );
+
+      // Modal Scale & Bounce Entrance
+      gsap.fromTo(
+        modalRef.current,
+        { scale: 0.85, opacity: 0, y: 30 },
+        { scale: 1, opacity: 1, y: 0, duration: 0.4, ease: "back.out(1.4)" }
+      );
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -42,13 +65,19 @@ export default function PlanModal({ isOpen, onClose, onSave, editingPlan }: Plan
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-xl border border-neutral-100 animate-in fade-in zoom-in duration-200">
+    <div
+      ref={backdropRef}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+    >
+      <div
+        ref={modalRef}
+        className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-xl border border-neutral-100"
+      >
         <div className="flex justify-between items-center mb-5">
           <h2 className="text-lg font-bold text-neutral-900">
             {editingPlan ? "Edit Subscription Plan" : "Create New Plan"}
           </h2>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-600 p-1">
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-600 p-1 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -96,7 +125,7 @@ export default function PlanModal({ isOpen, onClose, onSave, editingPlan }: Plan
             <input
               type="text"
               value={features}
-              onChange={(e) =>setFeatures(e.target.value)}
+              onChange={(e) => setFeatures(e.target.value)}
               placeholder="Feature 1, Feature 2, Feature 3"
               className="w-full px-3.5 py-2 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981]"
             />
@@ -108,7 +137,7 @@ export default function PlanModal({ isOpen, onClose, onSave, editingPlan }: Plan
               id="isPopular"
               checked={isPopular}
               onChange={(e) => setIsPopular(e.target.checked)}
-              className="w-4 h-4 text-[#10b981] rounded border-neutral-300 focus:ring-[#10b981]"
+              className="w-4 h-4 text-[#10b981] rounded border-neutral-300 focus:ring-[#10b981] cursor-pointer"
             />
             <label htmlFor="isPopular" className="text-xs font-medium text-neutral-700 cursor-pointer">
               Mark as Most Popular Plan
@@ -119,13 +148,13 @@ export default function PlanModal({ isOpen, onClose, onSave, editingPlan }: Plan
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-neutral-200 rounded-xl text-xs font-semibold text-neutral-600 hover:bg-neutral-50 transition-colors"
+              className="px-4 py-2 border border-neutral-200 rounded-xl text-xs font-semibold text-neutral-600 hover:bg-neutral-50 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-[#10b981] hover:bg-emerald-600 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
+              className="px-4 py-2 bg-[#10b981] hover:bg-emerald-600 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors cursor-pointer"
             >
               {editingPlan ? "Update Plan" : "Save Plan"}
             </button>
