@@ -250,7 +250,7 @@ export const OrganizationsPage = () => {
     });
 
     return (
-        <div className="space-y-6 pb-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 min-h-screen bg-[#FDFBF7]">
+        <div className="space-y-6 pb-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 min-h-screen bg-[#FBFBFA]">
             {/* Header Component */}
             <OrganizationsHeader 
                 totalShown={filteredOrganizations.length} 

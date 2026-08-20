@@ -8,7 +8,7 @@ import { RecentOrganizations } from './Components/HomePage/RecentOrganizations';
 
 const SuperAdminDashboard = () => {
     return (
-        <div className="relative min-h-screen bg-[#F8FAFC] overflow-hidden">
+        <div className="relative min-h-screen bg-[#FBFBFA] overflow-hidden">
             {/* Ambient Background Glow Effects */}
             <div className="absolute top-0 left-1/4 w-96 h-96 bg-emerald-400/5 rounded-full blur-3xl pointer-events-none" />
             <div className="absolute top-1/3 right-10 w-96 h-96 bg-blue-400/5 rounded-full blur-3xl pointer-events-none" />
