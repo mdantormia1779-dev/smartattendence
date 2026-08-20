@@ -24,12 +24,13 @@ interface Branch {
 interface BranchFormData {
     name: string;
     code: string;
-    shortName: string;
+    shortName?: string;
     address: string;
     phone: string;
     geoFence: string;
     latitude: string;
     longitude: string;
+    status: "Active" | "Inactive"; // এখানে status ফিল্ড যুক্ত করা হয়েছে
 }
 
 export default function BranchesPage() {
@@ -100,9 +101,8 @@ export default function BranchesPage() {
             const newBranch: Branch = {
                 id: Date.now().toString(),
                 ...data,
-                shortName: data.name.substring(0, 3).toUpperCase(),
+                shortName: data.shortName || data.name.substring(0, 3).toUpperCase(),
                 employees: 0,
-                status: "Active",
             };
             setBranches([newBranch, ...branches]);
         }

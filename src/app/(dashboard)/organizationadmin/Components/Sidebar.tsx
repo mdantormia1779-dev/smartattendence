@@ -19,7 +19,7 @@ import {
 const navItems = [
     { name: "Dashboard", href: "/organizationadmin", icon: LayoutDashboard },
     { name: "Create Branches", href: "/organizationadmin/branchescreate", icon: GitBranch },
-    { name: "Create Departments", href: "/organizationadmin/departments/create", icon: Building2 },
+    { name: "Create Departments", href: "/organizationadmin/departmentscreate", icon: Building2 },
     { name: "Assign Managers", href: "/organizationadmin/assign-managers", icon: UserCog },
     { name: "Manage Employees", href: "/organizationadmin/employees", icon: Users },
     { name: "Manage Payroll", href: "/organizationadmin/payroll", icon: DollarSign },
@@ -68,7 +68,11 @@ export default function Sidebar() {
             <div className="flex-1 overflow-y-auto py-2 px-4 space-y-1 custom-scrollbar">
                 {navItems.map((item) => {
                     const Icon = item.icon;
-                    const isActive = pathname === item.href || (item.href !== "/organizationadmin/dashboard" && pathname?.startsWith(item.href));
+                    
+                    // Fixed Active Path Logic
+                    const isActive = item.href === "/organizationadmin" 
+                        ? pathname === "/organizationadmin" 
+                        : pathname === item.href || pathname?.startsWith(`${item.href}/`);
 
                     return (
                         <Link
