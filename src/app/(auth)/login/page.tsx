@@ -2,39 +2,92 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import Link from 'next/link';
-import { Mail, Lock, ArrowLeft, Eye, EyeOff, CheckCircle2, ShieldCheck, Zap, AlertCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { 
+    Mail, 
+    Lock, 
+    ArrowLeft, 
+    Eye, 
+    EyeOff, 
+    CheckCircle2, 
+    ShieldCheck, 
+    Zap, 
+    AlertCircle,
+    Crown,
+    Building2,
+    UserCheck,
+    User,
+    ArrowRight
+} from 'lucide-react';
 import gsap from 'gsap';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
-// Zod দিয়ে ফর্ম ভ্যালিডেশন স্কিমা তৈরি (rememberMe চেক করা বাধ্যতামূলক করা হয়েছে)
 const loginSchema = z.object({
     email: z.string().min(1, { message: "Email is required" }).email({ message: "Invalid email address" }),
     password: z.string().min(6, { message: "Password must be at least 6 characters" }),
-    rememberMe: z.boolean().refine((val) => val === true, {
-        message: "You must check 'Remember for 30 days' to sign in",
-    }),
+    rememberMe: z.boolean().optional(),
 });
 
-// TypeScript টাইপ ডিক্লেরেশন
 type LoginFormData = z.infer<typeof loginSchema>;
 
+const demoRoles = [
+    {
+        title: "Super Admin",
+        role: "Platform Owner",
+        email: "superadmin@saas.com",
+        password: "password123",
+        path: "/admin",
+        icon: Crown,
+        color: "from-amber-500/20 to-amber-600/20 border-amber-300 text-amber-900",
+    },
+    {
+        title: "Org Admin",
+        role: "Vertex Technologies",
+        email: "sarah.admin@vertextech.io",
+        password: "password123",
+        path: "/organizationadmin",
+        icon: Building2,
+        color: "from-emerald-500/20 to-emerald-600/20 border-emerald-300 text-emerald-900",
+    },
+    {
+        title: "Team Manager",
+        role: "IT Department Lead",
+        email: "tanvir.mgr@vertextech.io",
+        password: "password123",
+        path: "/manager",
+        icon: UserCheck,
+        color: "from-blue-500/20 to-blue-600/20 border-blue-300 text-blue-900",
+    },
+    {
+        title: "Employee",
+        role: "Sr. Software Engineer",
+        email: "arif.c@vertextech.io",
+        password: "password123",
+        path: "/employee",
+        icon: User,
+        color: "from-purple-500/20 to-purple-600/20 border-purple-300 text-purple-900",
+    },
+];
+
 const LoginPage: React.FC = () => {
+    const router = useRouter();
     const [showPassword, setShowPassword] = useState<boolean>(false);
+    const [selectedRole, setSelectedRole] = useState<string>("Org Admin");
     const containerRef = useRef<HTMLDivElement | null>(null);
 
-    // React Hook Form সেটআপ
     const {
         register,
         handleSubmit,
+        setValue,
         formState: { errors, isSubmitting },
     } = useForm<LoginFormData>({
         resolver: zodResolver(loginSchema),
         defaultValues: {
-            email: '',
-            password: '',
-            rememberMe: false,
+            email: 'sarah.admin@vertextech.io',
+            password: 'password123',
+            rememberMe: true,
         },
     });
 
@@ -43,29 +96,34 @@ const LoginPage: React.FC = () => {
             gsap.fromTo(
                 ".login-content",
                 { y: 30, opacity: 0 },
-                { y: 0, opacity: 1, duration: 1, ease: "power3.out" }
+                { y: 0, opacity: 1, duration: 0.8, ease: "power3.out" }
             );
 
             gsap.fromTo(
                 ".brand-side",
                 { x: -50, opacity: 0 },
-                { x: 0, opacity: 1, duration: 1, ease: "power3.out" }
+                { x: 0, opacity: 1, duration: 0.8, ease: "power3.out" }
             );
         }, containerRef);
 
         return () => ctx.revert();
     }, []);
 
+    const handleSelectDemoRole = (roleItem: typeof demoRoles[0]) => {
+        setSelectedRole(roleItem.title);
+        setValue("email", roleItem.email);
+        setValue("password", roleItem.password);
+    };
+
     const onSubmit: SubmitHandler<LoginFormData> = (data) => {
-        console.log("Secure Login Data:", data);
-        alert("🎉 Login Successful! Welcome back to AttendanceERP dashboard.");
-        // এখানে আপনার ব্যাকএন্ড লগইন এপিআই কল করতে পারেন
+        const matchingRole = demoRoles.find(r => r.title === selectedRole);
+        const destination = matchingRole ? matchingRole.path : "/organizationadmin";
+        router.push(destination);
     };
 
     return (
         <div ref={containerRef} className="min-h-screen w-full bg-[#FBF9F5] grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
-            
-            {/* Left Side: Brand Showcase & Features (Desktop Only) */}
+            {/* Left Side: Brand Showcase */}
             <div className="brand-side hidden lg:flex lg:col-span-5 bg-gradient-to-br from-gray-900 to-gray-800 p-12 flex-col justify-between text-white relative">
                 <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#00B050_1px,transparent_1px)] [background-size:16px_16px]"></div>
                 
@@ -84,13 +142,13 @@ const LoginPage: React.FC = () => {
                 {/* Middle Content */}
                 <div className="relative z-10 space-y-6 max-w-md">
                     <span className="inline-block bg-[#00B050]/20 text-[#00B050] text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider">
-                        Secure Enterprise Portal
+                        Multi-Tenant SaaS ERP
                     </span>
                     <h2 className="text-3xl xl:text-4xl font-bold leading-tight">
-                        Manage your workforce with intelligence & precision.
+                        Intelligent AI-Powered Attendance & Workforce Suite.
                     </h2>
                     <p className="text-gray-400 text-sm leading-relaxed">
-                        Access automated payroll, face-recognition attendance, GPS tracking, and real-time analytics from a single unified dashboard.
+                        Access automated payroll, face-recognition clock-in, GPS tracking, and real-time analytics from a unified multi-tenant dashboard.
                     </p>
 
                     {/* Feature Bullets */}
@@ -101,25 +159,23 @@ const LoginPage: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-3">
                             <ShieldCheck className="w-5 h-5 text-[#00B050] shrink-0" />
-                            <span>Strict GPS geo-fencing branch validation</span>
+                            <span>GPS branch geo-fencing validation</span>
                         </div>
                         <div className="flex items-center gap-3">
                             <Zap className="w-5 h-5 text-[#00B050] shrink-0" />
-                            <span>One-click automated salary & tax calculation</span>
+                            <span>Automatic payroll, allowances & tax calculation</span>
                         </div>
                     </div>
                 </div>
 
-                {/* Bottom Footer info */}
+                {/* Bottom Footer */}
                 <div className="relative z-10 text-xs text-gray-500">
-                    © 2026 AttendanceERP. All rights reserved.
+                    © 2026 Smart Attendance SaaS. All rights reserved.
                 </div>
             </div>
 
-            {/* Right Side: Login Form Container */}
-            <div className="col-span-1 lg:col-span-7 flex flex-col justify-between p-6 sm:p-12 lg:p-16 xl:p-24">
-                
-                {/* Top Back Link */}
+            {/* Right Side: Login Form */}
+            <div className="col-span-1 lg:col-span-7 flex flex-col justify-between p-6 sm:p-10 lg:p-12 xl:p-16 overflow-y-auto">
                 <div className="w-full flex justify-between items-center">
                     <Link 
                         href="/" 
@@ -129,7 +185,6 @@ const LoginPage: React.FC = () => {
                         Back to home
                     </Link>
                     
-                    {/* Mobile Logo View */}
                     <div className="lg:hidden flex items-center gap-2">
                         <div className="bg-[#00B050] text-white font-bold px-2.5 py-1 rounded-lg text-sm tracking-wider">
                             VX
@@ -138,40 +193,63 @@ const LoginPage: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Main Form Box */}
-                <div className="login-content w-full max-w-lg mx-auto my-auto py-8 space-y-8">
-                    
-                    {/* Header */}
+                <div className="login-content w-full max-w-lg mx-auto my-auto py-6 space-y-6">
                     <div className="space-y-2 text-left">
-                        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
+                        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">
                             Welcome back 👋
                         </h1>
-                        <p className="text-sm text-gray-500">
-                            Please enter your credentials to sign in to your account.
+                        <p className="text-xs text-gray-500">
+                            Select any persona below to preview its dedicated workspace:
                         </p>
                     </div>
 
+                    {/* Quick Demo Role Switcher Grid */}
+                    <div className="grid grid-cols-2 gap-2.5">
+                        {demoRoles.map((roleItem) => {
+                            const Icon = roleItem.icon;
+                            const isSelected = selectedRole === roleItem.title;
+
+                            return (
+                                <button
+                                    key={roleItem.title}
+                                    type="button"
+                                    onClick={() => handleSelectDemoRole(roleItem)}
+                                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                                        isSelected
+                                            ? "bg-[#00B050]/10 border-[#00B050] shadow-xs"
+                                            : "bg-white border-gray-200 hover:bg-gray-50"
+                                    }`}
+                                >
+                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                                        isSelected ? "bg-[#00B050] text-white" : "bg-gray-100 text-gray-600"
+                                    }`}>
+                                        <Icon className="w-4 h-4" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-bold text-gray-900 truncate">{roleItem.title}</p>
+                                        <p className="text-[10px] text-gray-400 truncate">{roleItem.role}</p>
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+
                     {/* Form */}
-                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-                        
+                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                         {/* Email Field */}
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                             <label className="text-xs font-semibold uppercase tracking-wider text-gray-700">
                                 Email Address
                             </label>
                             <div className="relative">
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-gray-400">
-                                    <Mail className="w-5 h-5" />
+                                    <Mail className="w-4 h-4" />
                                 </span>
                                 <input 
                                     type="email" 
                                     {...register("email")}
                                     placeholder="name@company.com" 
-                                    className={`w-full pl-12 pr-4 py-3.5 bg-white border rounded-2xl text-sm text-gray-900 focus:outline-none transition-all shadow-sm ${
-                                        errors.email 
-                                            ? "border-red-500 focus:ring-2 focus:ring-red-500/20" 
-                                            : "border-gray-200 focus:border-[#00B050] focus:ring-2 focus:ring-[#00B050]/20"
-                                    }`}
+                                    className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-2xl text-xs text-gray-900 focus:outline-none focus:border-[#00B050] focus:ring-2 focus:ring-[#00B050]/20 transition-all shadow-xs"
                                 />
                             </div>
                             {errors.email && (
@@ -183,35 +261,31 @@ const LoginPage: React.FC = () => {
                         </div>
 
                         {/* Password Field */}
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                             <div className="flex items-center justify-between">
                                 <label className="text-xs font-semibold uppercase tracking-wider text-gray-700">
                                     Password
                                 </label>
-                                <a href="#forgot" className="text-xs font-semibold text-[#00B050] hover:underline">
+                                <span className="text-xs font-semibold text-[#00B050] hover:underline cursor-pointer">
                                     Forgot password?
-                                </a>
+                                </span>
                             </div>
                             <div className="relative">
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-gray-400">
-                                    <Lock className="w-5 h-5" />
+                                    <Lock className="w-4 h-4" />
                                 </span>
                                 <input 
                                     type={showPassword ? "text" : "password"} 
                                     {...register("password")}
                                     placeholder="••••••••" 
-                                    className={`w-full pl-12 pr-12 py-3.5 bg-white border rounded-2xl text-sm text-gray-900 focus:outline-none transition-all shadow-sm ${
-                                        errors.password 
-                                            ? "border-red-500 focus:ring-2 focus:ring-red-500/20" 
-                                            : "border-gray-200 focus:border-[#00B050] focus:ring-2 focus:ring-[#00B050]/20"
-                                    }`}
+                                    className="w-full pl-11 pr-11 py-3 bg-white border border-gray-200 rounded-2xl text-xs text-gray-900 focus:outline-none focus:border-[#00B050] focus:ring-2 focus:ring-[#00B050]/20 transition-all shadow-xs"
                                 />
                                 <button 
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
                                     className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer"
                                 >
-                                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                 </button>
                             </div>
                             {errors.password && (
@@ -222,36 +296,31 @@ const LoginPage: React.FC = () => {
                             )}
                         </div>
 
-                        {/* Remember Me Checkbox & Error Display */}
-                        <div className="space-y-1 pt-1">
-                            <label className="flex items-center gap-3 cursor-pointer select-none">
-                                <input 
-                                    type="checkbox"
-                                    {...register("rememberMe")}
-                                    className="w-4 h-4 text-[#00B050] border-gray-300 rounded focus:ring-[#00B050]"
-                                />
-                                <span className="text-sm text-gray-600 font-medium">Remember for 30 days</span>
-                            </label>
-                            {errors.rememberMe && (
-                                <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
-                                    <AlertCircle className="w-3.5 h-3.5" />
-                                    {errors.rememberMe.message}
-                                </p>
-                            )}
+                        {/* Direct Role Portal Shortcut Link */}
+                        <div className="p-3 bg-emerald-50/70 border border-emerald-200/60 rounded-2xl flex items-center justify-between text-xs text-emerald-900">
+                            <div>
+                                <span className="font-bold">Enter {selectedRole} Portal</span>
+                                <p className="text-[10px] text-emerald-700">Direct instant dashboard launch</p>
+                            </div>
+                            <Link
+                                href={demoRoles.find(r => r.title === selectedRole)?.path || "/organizationadmin"}
+                                className="px-3.5 py-1.5 bg-[#00B050] text-white rounded-xl font-bold flex items-center gap-1 shadow-sm hover:bg-[#009b46] transition-colors"
+                            >
+                                Launch <ArrowRight className="w-3 h-3" />
+                            </Link>
                         </div>
 
                         {/* Submit Button */}
                         <Button 
                             type="submit" 
                             disabled={isSubmitting}
-                            className="w-full bg-[#00B050] hover:bg-[#009644] text-white font-medium py-4 rounded-2xl shadow-md transition-transform hover:scale-[1.01] cursor-pointer text-base disabled:opacity-50"
+                            className="w-full bg-[#00B050] hover:bg-[#009644] text-white font-semibold py-3.5 rounded-2xl shadow-md transition-transform hover:scale-[1.01] cursor-pointer text-sm disabled:opacity-50"
                         >
-                            {isSubmitting ? "Signing in..." : "Sign In to Dashboard"}
+                            Sign In to {selectedRole} Dashboard
                         </Button>
                     </form>
 
-                    {/* Bottom redirect link */}
-                    <div className="text-center text-sm text-gray-500 pt-2">
+                    <div className="text-center text-xs text-gray-500">
                         Don't have an account yet?{" "}
                         <Link href="/signup" className="font-semibold text-[#00B050] hover:underline">
                             Start Free Trial
@@ -259,11 +328,9 @@ const LoginPage: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Mobile Bottom Footer */}
-                <div className="lg:hidden text-center text-xs text-gray-400 pt-6">
+                <div className="lg:hidden text-center text-xs text-gray-400 pt-4">
                     © 2026 AttendanceERP. All rights reserved.
                 </div>
-
             </div>
         </div>
     );
