@@ -1,0 +1,552 @@
+// Prisma Schema for Smart Attendance Management System (Multi-Tenant SaaS ERP)
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  SUPER_ADMIN
+  ORG_ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+enum PlanTier {
+  FREE
+  STARTER
+  BUSINESS
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  PENDING
+  SUSPENDED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  HALF_DAY
+  ON_LEAVE
+}
+
+enum VerificationMethod {
+  FACE_RECOGNITION
+  GPS_GEOFENCE
+  BIOMETRIC_DEVICE
+  MANUAL_OVERRIDE
+}
+
+enum ShiftType {
+  MORNING
+  EVENING
+  NIGHT
+  FLEXIBLE
+  ROTATIONAL
+}
+
+enum LeaveType {
+  CASUAL
+  SICK
+  ANNUAL
+  MATERNITY
+  UNPAID
+}
+
+enum ApprovalStatus {
+  PENDING_MANAGER
+  PENDING_ORG_ADMIN
+  APPROVED
+  REJECTED
+}
+
+enum OvertimeType {
+  REGULAR
+  WEEKEND
+  HOLIDAY
+  EMERGENCY
+}
+
+enum PayrollStatus {
+  DRAFT
+  APPROVED
+  LOCKED
+  PAID
+}
+
+// ----------------------------------------------------
+// Super Admin & Platform Level Models
+// ----------------------------------------------------
+
+model SubscriptionPlan {
+  id              String         @id @default(uuid())
+  name            String         @unique // Free, Starter, Business, Enterprise
+  tier            PlanTier       @default(STARTER)
+  monthlyPrice    Float
+  yearlyPrice     Float
+  maxBranches     Int            // e.g. 1, 5, 20, -1 for unlimited
+  maxManagers     Int            // e.g. 1, 5, 20, -1 for unlimited
+  maxEmployees    Int            // e.g. 20, 100, 500, -1 for unlimited
+  hasFaceRecog    Boolean        @default(true)
+  hasGpsGeofence  Boolean        @default(true)
+  hasShiftMgmt    Boolean        @default(true)
+  hasLeaveMgmt    Boolean        @default(true)
+  hasPayroll      Boolean        @default(false)
+  hasBiometrics   Boolean        @default(false)
+  hasAnalytics    Boolean        @default(false)
+  hasApiAccess    Boolean        @default(false)
+  hasWhiteLabel   Boolean        @default(false)
+  hasCustomDomain Boolean        @default(false)
+  organizations   Organization[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model Organization {
+  id                 String             @id @default(uuid())
+  name               String
+  slug               String             @unique
+  industry           String?
+  email              String             @unique
+  phone              String?
+  website            String?
+  address            String?
+  country            String             @default("Bangladesh")
+  currency           String             @default("BDT")
+  timezone           String             @default("Asia/Dhaka")
+  workingDays        String[]           @default(["Sun", "Mon", "Tue", "Wed", "Thu"])
+  defaultOfficeStart String             @default("09:00 AM")
+  defaultOfficeEnd   String             @default("05:00 PM")
+  defaultGeofenceM   Int                @default(120)
+  antiSpoofingMode   String             @default("High")
+  
+  // White-label settings (Enterprise only)
+  brandColor         String?            @default("#00B050")
+  customLogoUrl      String?
+  customDomain       String?            @unique
+  
+  // Subscription & Lock Status
+  planId             String
+  plan               SubscriptionPlan   @relation(fields: [planId], references: [id])
+  subscriptionStatus SubscriptionStatus @default(ACTIVE)
+  subscriptionExpiry DateTime?
+  isSuspended        Boolean            @default(false)
+  suspensionReason   String?
+
+  // Relations (All tenant-scoped data cascades from here)
+  users              User[]
+  branches           Branch[]
+  departments        Department[]
+  managers           ManagerProfile[]
+  employees          EmployeeProfile[]
+  shifts             Shift[]
+  attendanceRecords  AttendanceRecord[]
+  overtimeClaims     OvertimeClaim[]
+  leaveRequests      LeaveRequest[]
+  holidays           Holiday[]
+  payrolls           PayrollBatch[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+  payments           PaymentRecord[]
+
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([slug])
+  @@index([email])
+  @@index([subscriptionStatus])
+}
+
+model Coupon {
+  id              String    @id @default(uuid())
+  code            String    @unique
+  discountPercent Float
+  maxDiscount     Float?
+  validUntil      DateTime
+  maxUses         Int       @default(100)
+  timesUsed       Int       @default(0)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model PaymentRecord {
+  id             String        @id @default(uuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  planName       String
+  amount         Float
+  billingCycle   String        // Monthly / Yearly
+  transactionId  String        @unique
+  senderNumber   String?
+  status         PaymentStatus @default(PENDING)
+  approvedAt     DateTime?
+  approvedBy     String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+model AuditLog {
+  id             String        @id @default(uuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  userName       String
+  userRole       Role
+  action         String        // LOGIN, CREATE_EMPLOYEE, REGULARIZE_ATTENDANCE, APPROVE_LEAVE, LOCK_PAYROLL
+  module         String        // Auth, Attendance, Payroll, Leaves, Settings
+  details        String
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime      @default(now())
+
+  @@index([organizationId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ----------------------------------------------------
+// Tenant-Scoped Core Entity Models
+// ----------------------------------------------------
+
+model User {
+  id             String           @id @default(uuid())
+  email          String           @unique
+  passwordHash   String
+  fullName       String
+  role           Role             @default(EMPLOYEE)
+  organizationId String?
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  avatarUrl      String?
+  isActive       Boolean          @default(true)
+  twoFactorAuth  Boolean          @default(false)
+  twoFactorSecret String?
+  managerProfile ManagerProfile?
+  employeeProfile EmployeeProfile?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+model Branch {
+  id             String           @id @default(uuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  code           String
+  address        String
+  phone          String?
+  latitude       Float
+  longitude      Float
+  geofenceRadius Int              @default(120) // in meters
+  status         String           @default("Active")
+  employees      EmployeeProfile[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+model Department {
+  id             String           @id @default(uuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  code           String?
+  headOfDept     String?
+  employees      EmployeeProfile[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model ManagerProfile {
+  id             String           @id @default(uuid())
+  userId         String           @unique
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  managerId      String
+  designation    String
+  departmentName String
+  assignedBranches String[]
+  teamMembers    EmployeeProfile[] @relation("ManagerTeam")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([organizationId, managerId])
+  @@index([organizationId])
+}
+
+model EmployeeProfile {
+  id                  String             @id @default(uuid())
+  userId              String             @unique
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId      String
+  organization        Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employeeId          String
+  designation         String
+  branchId            String
+  branch              Branch             @relation(fields: [branchId], references: [id])
+  departmentId        String
+  department          Department         @relation(fields: [departmentId], references: [id])
+  managerId           String?
+  manager             ManagerProfile?    @relation("ManagerTeam", fields: [managerId], references: [id])
+  shiftId             String?
+  shift               Shift?             @relation(fields: [shiftId], references: [id])
+  
+  // Personal Info
+  gender              String?
+  dob                 DateTime?
+  bloodGroup          String?
+  maritalStatus       String?
+  nationality         String             @default("Bangladeshi")
+  phone               String?
+  emergencyContact    String?
+  
+  // Salary Structure (ReadOnly for Employee)
+  basicSalary         Float              @default(0)
+  salaryGrade         String             @default("Grade 1")
+  salaryType          String             @default("Monthly")
+  bankAccountNumber   String?
+  bankName            String?
+  
+  // Biometric & Documents
+  faceVector          FaceVector?
+  documents           EmployeeDocument[]
+  attendanceRecords   AttendanceRecord[]
+  overtimeClaims      OvertimeClaim[]
+  leaveRequests       LeaveRequest[]
+  payslips            EmployeePayslip[]
+
+  joiningDate         DateTime           @default(now())
+  employmentType      String             @default("Full-time")
+  status              String             @default("Active")
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@unique([organizationId, employeeId])
+  @@index([organizationId])
+  @@index([branchId])
+  @@index([departmentId])
+}
+
+model FaceVector {
+  id             String          @id @default(uuid())
+  employeeId     String          @unique
+  employee       EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  vectorData     Float[]         // 128-dimensional embedding vector
+  encryptionHash String
+  antiSpoofScore Float           @default(99.0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model EmployeeDocument {
+  id             String          @id @default(uuid())
+  employeeId     String
+  employee       EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  title          String
+  fileType       String
+  s3Key          String
+  fileSizeBytes  Int
+  isVerified     Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+
+  @@index([employeeId])
+}
+
+model Shift {
+  id                     String             @id @default(uuid())
+  organizationId         String
+  organization           Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name                   String
+  type                   ShiftType          @default(MORNING)
+  startTime              String             // e.g. "09:00 AM"
+  endTime                String             // e.g. "05:00 PM"
+  breakMinutes           Int                @default(60)
+  graceMinutes           Int                @default(15)
+  overtimeThresholdHours Float              @default(8.0)
+  workingDays            String[]           @default(["Mon", "Tue", "Wed", "Thu", "Fri"])
+  status                 String             @default("Active")
+  employees              EmployeeProfile[]
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  @@index([organizationId])
+}
+
+model AttendanceRecord {
+  id                 String             @id @default(uuid())
+  organizationId     String
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employeeId         String
+  employee           EmployeeProfile    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date               DateTime           @default(now())
+  checkInTime        DateTime?
+  checkOutTime       DateTime?
+  status             AttendanceStatus   @default(PRESENT)
+  verificationMethod VerificationMethod @default(FACE_RECOGNITION)
+  faceConfidence     Float              @default(0)
+  gpsLatitude        Float?
+  gpsLongitude       Float?
+  gpsDistanceMeters  Float?
+  isGeofenceVerified Boolean            @default(true)
+  isRegularized      Boolean            @default(false)
+  regularizedBy      String?
+  regularizeReason   String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@unique([organizationId, employeeId, date])
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([date])
+}
+
+model OvertimeClaim {
+  id                 String          @id @default(uuid())
+  organizationId     String
+  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employeeId         String
+  employee           EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date               DateTime
+  type               OvertimeType    @default(REGULAR)
+  claimedHours       Float
+  hourlyRate         Float
+  multiplier         Float           @default(1.5)
+  calculatedAmount   Float
+  reason             String
+  managerApproval    ApprovalStatus  @default(PENDING_MANAGER)
+  managerComment     String?
+  orgApproval        ApprovalStatus  @default(PENDING_ORG_ADMIN)
+  orgComment         String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@index([organizationId])
+  @@index([employeeId])
+}
+
+model LeaveRequest {
+  id                 String          @id @default(uuid())
+  organizationId     String
+  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employeeId         String
+  employee           EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type               LeaveType       @default(CASUAL)
+  startDate          DateTime
+  endDate            DateTime
+  totalDays          Int
+  reason             String
+  attachmentS3Key    String?
+  managerApproval    ApprovalStatus  @default(PENDING_MANAGER)
+  managerComment     String?
+  orgApproval        ApprovalStatus  @default(PENDING_ORG_ADMIN)
+  orgComment         String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@index([organizationId])
+  @@index([employeeId])
+}
+
+model Holiday {
+  id                 String          @id @default(uuid())
+  organizationId     String
+  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name               String
+  type               String          // Government, Festival, Company, Weekly
+  startDate          DateTime
+  endDate            DateTime
+  totalDays          Int             @default(1)
+  description        String?
+  applicableBranches String[]        @default(["All"])
+  createdAt          DateTime        @default(now())
+
+  @@index([organizationId])
+}
+
+model PayrollBatch {
+  id                 String            @id @default(uuid())
+  organizationId     String
+  organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  month              String            // e.g. "2026-08"
+  totalGrossPay      Float
+  totalDeductions    Float
+  totalNetPayable    Float
+  totalStaffCount    Int
+  status             PayrollStatus     @default(DRAFT)
+  lockedAt           DateTime?
+  lockedBy           String?
+  payslips           EmployeePayslip[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@unique([organizationId, month])
+  @@index([organizationId])
+}
+
+model EmployeePayslip {
+  id                 String          @id @default(uuid())
+  payrollBatchId     String
+  payrollBatch       PayrollBatch    @relation(fields: [payrollBatchId], references: [id], onDelete: Cascade)
+  employeeId         String
+  employee           EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  basicSalary        Float
+  houseRent          Float
+  medicalAllowance   Float
+  transportAllowance Float
+  foodAllowance      Float
+  bonus              Float           @default(0)
+  overtimePay        Float           @default(0)
+  taxDeduction       Float           @default(0)
+  providentFund      Float           @default(0)
+  loanDeduction      Float           @default(0)
+  lateDeduction      Float           @default(0)
+  absentDeduction    Float           @default(0)
+  grossEarnings      Float
+  totalDeductions    Float
+  netSalary          Float
+  paymentRef         String?
+  isLocked           Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+
+  @@unique([payrollBatchId, employeeId])
+  @@index([employeeId])
+}
+
+model Notification {
+  id                 String          @id @default(uuid())
+  organizationId     String
+  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  recipientUserId    String
+  title              String
+  message            String
+  type               String          // Info, Alert, Success, Warning
+  isRead             Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+
+  @@index([organizationId, recipientUserId])
+}

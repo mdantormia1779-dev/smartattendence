@@ -109,15 +109,34 @@ const LoginPage: React.FC = () => {
         return () => ctx.revert();
     }, []);
 
+    const isDemoEnabled = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
+
+    const roleCookieMap: Record<string, string> = {
+        "Super Admin": "SUPER_ADMIN",
+        "Org Admin": "ORG_ADMIN",
+        "Team Manager": "MANAGER",
+        "Employee": "EMPLOYEE",
+    };
+
     const handleSelectDemoRole = (roleItem: typeof demoRoles[0]) => {
         setSelectedRole(roleItem.title);
         setValue("email", roleItem.email);
         setValue("password", roleItem.password);
+        if (typeof document !== "undefined") {
+            const role = roleCookieMap[roleItem.title] || "ORG_ADMIN";
+            document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`;
+            document.cookie = `auth_session=demo_session_active; path=/; max-age=86400; SameSite=Lax`;
+        }
     };
 
     const onSubmit: SubmitHandler<LoginFormData> = (data) => {
         const matchingRole = demoRoles.find(r => r.title === selectedRole);
         const destination = matchingRole ? matchingRole.path : "/organizationadmin";
+        if (typeof document !== "undefined") {
+            const role = roleCookieMap[selectedRole] || "ORG_ADMIN";
+            document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`;
+            document.cookie = `auth_session=session_${Date.now()}; path=/; max-age=86400; SameSite=Lax`;
+        }
         router.push(destination);
     };
 
@@ -203,36 +222,44 @@ const LoginPage: React.FC = () => {
                         </p>
                     </div>
 
-                    {/* Quick Demo Role Switcher Grid */}
-                    <div className="grid grid-cols-2 gap-2.5">
-                        {demoRoles.map((roleItem) => {
-                            const Icon = roleItem.icon;
-                            const isSelected = selectedRole === roleItem.title;
+                    {/* Quick Demo Role Switcher Grid (Dev/Demo Only) */}
+                    {isDemoEnabled && (
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between text-[11px] text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
+                                <span>⚡ Demo Mode Active: Select persona to test</span>
+                                <span className="font-mono text-[10px]">NEXT_PUBLIC_DEMO_MODE</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2.5">
+                                {demoRoles.map((roleItem) => {
+                                    const Icon = roleItem.icon;
+                                    const isSelected = selectedRole === roleItem.title;
 
-                            return (
-                                <button
-                                    key={roleItem.title}
-                                    type="button"
-                                    onClick={() => handleSelectDemoRole(roleItem)}
-                                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
-                                        isSelected
-                                            ? "bg-[#00B050]/10 border-[#00B050] shadow-xs"
-                                            : "bg-white border-gray-200 hover:bg-gray-50"
-                                    }`}
-                                >
-                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                                        isSelected ? "bg-[#00B050] text-white" : "bg-gray-100 text-gray-600"
-                                    }`}>
-                                        <Icon className="w-4 h-4" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-xs font-bold text-gray-900 truncate">{roleItem.title}</p>
-                                        <p className="text-[10px] text-gray-400 truncate">{roleItem.role}</p>
-                                    </div>
-                                </button>
-                            );
-                        })}
-                    </div>
+                                    return (
+                                        <button
+                                            key={roleItem.title}
+                                            type="button"
+                                            onClick={() => handleSelectDemoRole(roleItem)}
+                                            className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                                                isSelected
+                                                    ? "bg-[#00B050]/10 border-[#00B050] shadow-xs"
+                                                    : "bg-white border-gray-200 hover:bg-gray-50"
+                                            }`}
+                                        >
+                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                                                isSelected ? "bg-[#00B050] text-white" : "bg-gray-100 text-gray-600"
+                                            }`}>
+                                                <Icon className="w-4 h-4" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-xs font-bold text-gray-900 truncate">{roleItem.title}</p>
+                                                <p className="text-[10px] text-gray-400 truncate">{roleItem.role}</p>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Form */}
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

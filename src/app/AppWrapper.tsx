@@ -8,7 +8,7 @@ export default function AppWrapper({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   
   // চেক করা হচ্ছে রুটটি /admin অথবা /organizationadmin দিয়ে শুরু কিনা
-  const isAdminRoute = pathname?.startsWith('/admin') || pathname?.startsWith('/organizationadmin');
+  const isAdminRoute = pathname?.startsWith('/admin') || pathname?.startsWith('/organizationadmin') || pathname?.startsWith('/manager') || pathname?.startsWith('/employee');
 
   return (
     <>

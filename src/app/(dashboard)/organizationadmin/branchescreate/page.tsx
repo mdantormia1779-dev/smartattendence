@@ -95,12 +95,31 @@ export default function BranchesPage() {
     }, [branches]);
 
     const handleSaveBranch = (data: BranchFormData) => {
+        // Validate Coordinates & Radius
+        const lat = parseFloat(data.latitude);
+        const lng = parseFloat(data.longitude);
+        const radius = parseInt(data.geoFence.replace(/\D/g, ""), 10) || 120;
+
+        if (isNaN(lat) || lat < -90 || lat > 90) {
+            alert("Invalid Latitude: Latitude must be a numeric coordinate between -90 and 90.");
+            return;
+        }
+        if (isNaN(lng) || lng < -180 || lng > 180) {
+            alert("Invalid Longitude: Longitude must be a numeric coordinate between -180 and 180.");
+            return;
+        }
+        if (radius < 20 || radius > 1000) {
+            alert("Invalid Geofence Radius: Geofence must be between 20 meters and 1000 meters.");
+            return;
+        }
+
         if (branchToEdit) {
-            setBranches(branches.map(b => b.id === branchToEdit.id ? { ...b, ...data } : b));
+            setBranches(branches.map(b => b.id === branchToEdit.id ? { ...b, ...data, geoFence: `${radius}m` } : b));
         } else {
             const newBranch: Branch = {
                 id: Date.now().toString(),
                 ...data,
+                geoFence: `${radius}m`,
                 shortName: data.shortName || data.name.substring(0, 3).toUpperCase(),
                 employees: 0,
             };

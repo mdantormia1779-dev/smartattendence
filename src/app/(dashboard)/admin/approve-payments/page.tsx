@@ -110,10 +110,17 @@ export default function ApprovePaymentsPage() {
     }, [filter, payments]);
 
     const updatePaymentStatus = (id: string, newStatus: "Approved" | "Rejected") => {
+        const targetPayment = payments.find(p => p.id === id);
+        if (!targetPayment || targetPayment.status !== "Pending") {
+            console.warn(`[IDEMPOTENT_PAYMENT_GUARD] Payment ${id} is already processed (${targetPayment?.status}). Action ignored.`);
+            return;
+        }
+
         const updatedPayments = payments.map((p) => (p.id === id ? { ...p, status: newStatus } : p));
         setPayments(updatedPayments);
-        // Persist update to localStorage so it stays synced
         localStorage.setItem("payment_requests", JSON.stringify(updatedPayments));
+        
+        console.info(`[PAYMENT_APPROVED] Org '${targetPayment.organization}' plan '${targetPayment.planName}' set to ${newStatus}`);
     };
 
     const handleApprove = (id: string) => {
