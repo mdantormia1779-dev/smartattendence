@@ -67,13 +67,14 @@ const Sidebar = () => {
 
             {/* Logout / Footer */}
             <div className="p-4 border-t border-gray-100">
-                <button 
+                <Link 
+                    href="/login"
                     onClick={() => console.log('Logout')}
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
                 >
                     <LogOut className="w-5 h-5 text-red-500" />
                     <span>Logout</span>
-                </button>
+                </Link>
             </div>
         </aside>
     );
