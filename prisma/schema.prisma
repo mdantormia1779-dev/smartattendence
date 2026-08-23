@@ -87,6 +87,59 @@ enum PayrollStatus {
   PAID
 }
 
+enum ReferralType {
+  CUSTOMER
+  EMPLOYEE
+  MANAGER
+  ORG_ADMIN
+  PARTNER
+  AFFILIATE
+  INFLUENCER
+}
+
+enum CommissionType {
+  PERCENTAGE
+  FIXED
+  FIRST_PAYMENT
+  RECURRING
+}
+
+enum CommissionStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  AVAILABLE
+  REVERSED
+  REJECTED
+  PAID
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  PAID
+  REJECTED
+}
+
+enum WalletTxType {
+  COMMISSION_PENDING
+  COMMISSION_APPROVED
+  COMMISSION_REVERSED
+  WITHDRAWAL_REQUEST
+  WITHDRAWAL_PAID
+  WITHDRAWAL_REJECTED
+  BONUS
+  ADJUSTMENT
+}
+
+enum NotificationScope {
+  GLOBAL_BROADCAST
+  ORG_BROADCAST
+  ROLE_BROADCAST
+  TARGETED_USER
+}
+
 // ----------------------------------------------------
 // Super Admin & Platform Level Models
 // ----------------------------------------------------
@@ -146,6 +199,10 @@ model Organization {
   isSuspended        Boolean            @default(false)
   suspensionReason   String?
 
+  // Referral Attribution
+  referredByCode     String?
+  referredByAccount  ReferralAccount?   @relation("ReferredOrganizations", fields: [referredByCode], references: [referralCode])
+
   // Relations (All tenant-scoped data cascades from here)
   users              User[]
   branches           Branch[]
@@ -161,6 +218,7 @@ model Organization {
   notifications      Notification[]
   auditLogs          AuditLog[]
   payments           PaymentRecord[]
+  referralConversions ReferralConversion[]
 
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
@@ -195,6 +253,7 @@ model PaymentRecord {
   status         PaymentStatus @default(PENDING)
   approvedAt     DateTime?
   approvedBy     String?
+  commissions    Commission[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -209,8 +268,8 @@ model AuditLog {
   userId         String?
   userName       String
   userRole       Role
-  action         String        // LOGIN, CREATE_EMPLOYEE, REGULARIZE_ATTENDANCE, APPROVE_LEAVE, LOCK_PAYROLL
-  module         String        // Auth, Attendance, Payroll, Leaves, Settings
+  action         String        // LOGIN, CREATE_EMPLOYEE, REGULARIZE_ATTENDANCE, APPROVE_LEAVE, LOCK_PAYROLL, REFERRAL_WITHDRAWAL, NOTIFICATION_BROADCAST
+  module         String        // Auth, Attendance, Payroll, Leaves, Settings, Referral, Notifications
   details        String
   ipAddress      String?
   userAgent      String?
@@ -222,25 +281,224 @@ model AuditLog {
 }
 
 // ----------------------------------------------------
+// Referral & Affiliate Commission Models (Section 32)
+// ----------------------------------------------------
+
+model ReferralProgram {
+  id                    String         @id @default(uuid())
+  name                  String         @default("Standard Growth Affiliate Program")
+  description           String?
+  status                String         @default("ACTIVE") // ACTIVE, PAUSED, DISABLED
+  commissionType        CommissionType @default(RECURRING)
+  defaultCommissionRate Float          @default(20.0) // 20%
+  holdingPeriodDays     Int            @default(30)
+  cookieDurationDays    Int            @default(30)
+  minimumWithdrawal     Float          @default(50.0)
+  recurringEnabled      Boolean        @default(true)
+  recurringMonths       Int            @default(12)
+  refundProtection      Boolean        @default(true)
+  selfReferralBlocked   Boolean        @default(true)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+}
+
+model ReferralAccount {
+  id                  String             @id @default(uuid())
+  userId              String             @unique
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId      String?
+  referralType        ReferralType       @default(CUSTOMER)
+  referralCode        String             @unique // e.g. "ANTOR2026", "REF-EMP1042"
+  customCommissionRate Float?            // Override default e.g. 25%
+  totalClicks         Int                @default(0)
+  totalRegistrations  Int                @default(0)
+  totalConversions    Int                @default(0)
+  totalRevenue        Float              @default(0.0)
+  status              String             @default("ACTIVE") // ACTIVE, SUSPENDED
+  
+  wallet              ReferralWallet?
+  visits              ReferralVisit[]
+  conversions         ReferralConversion[]
+  commissions         Commission[]
+  withdrawals         Withdrawal[]
+  referredOrgs        Organization[]     @relation("ReferredOrganizations")
+
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([referralCode])
+  @@index([userId])
+}
+
+model ReferralVisit {
+  id                String          @id @default(uuid())
+  referralAccountId String
+  referralAccount   ReferralAccount @relation(fields: [referralAccountId], references: [id], onDelete: Cascade)
+  referralCode      String
+  sessionId         String?
+  ipAddress         String?
+  userAgent         String?
+  deviceType        String?         // Desktop, Mobile, Tablet
+  browser           String?
+  country           String?
+  landingPage       String?
+  utmSource         String?
+  utmCampaign       String?
+  createdAt         DateTime        @default(now())
+
+  @@index([referralAccountId])
+  @@index([referralCode])
+  @@index([createdAt])
+}
+
+model ReferralConversion {
+  id                String          @id @default(uuid())
+  referralAccountId String
+  referralAccount   ReferralAccount @relation(fields: [referralAccountId], references: [id], onDelete: Cascade)
+  organizationId    String          @unique
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  referredUserId    String?
+  attributionType   String          @default("LAST_CLICK")
+  fraudScore        Int             @default(0) // 0-100
+  isSelfReferral    Boolean         @default(false)
+  status            String          @default("ACTIVE") // ACTIVE, FRAUD_FLAGGED, REVERSED
+  commissions       Commission[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([referralAccountId])
+}
+
+model Commission {
+  id                   String             @id @default(uuid())
+  referralAccountId    String
+  referralAccount      ReferralAccount    @relation(fields: [referralAccountId], references: [id], onDelete: Cascade)
+  referralConversionId String
+  referralConversion  ReferralConversion @relation(fields: [referralConversionId], references: [id], onDelete: Cascade)
+  paymentId            String
+  payment              PaymentRecord      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  commissionType       CommissionType     @default(RECURRING)
+  ratePercent          Float              @default(20.0)
+  basePaymentAmount    Float
+  commissionAmount     Float
+  currency             String             @default("USD")
+  status               CommissionStatus   @default(PENDING)
+  holdingPeriodDays    Int                @default(30)
+  availableAt          DateTime?
+  approvedAt           DateTime?
+  reversedAt           DateTime?
+  reversalReason       String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@unique([paymentId, referralAccountId, commissionType])
+  @@index([referralAccountId])
+  @@index([status])
+}
+
+model ReferralWallet {
+  id                String              @id @default(uuid())
+  referralAccountId String              @unique
+  referralAccount   ReferralAccount     @relation(fields: [referralAccountId], references: [id], onDelete: Cascade)
+  currency          String              @default("USD")
+  pendingBalance    Float               @default(0.0)
+  availableBalance  Float               @default(0.0)
+  lifetimeEarnings  Float               @default(0.0)
+  lifetimePaid      Float               @default(0.0)
+  transactions      WalletTransaction[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+}
+
+model WalletTransaction {
+  id            String         @id @default(uuid())
+  walletId      String
+  wallet        ReferralWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  type          WalletTxType
+  amount        Float
+  balanceBefore Float
+  balanceAfter  Float
+  referenceType String?        // COMMISSION, WITHDRAWAL, BONUS, REFUND
+  referenceId   String?
+  description   String
+  createdAt     DateTime       @default(now())
+
+  @@index([walletId])
+  @@index([type])
+}
+
+model Withdrawal {
+  id                String           @id @default(uuid())
+  referralAccountId String
+  referralAccount   ReferralAccount  @relation(fields: [referralAccountId], references: [id], onDelete: Cascade)
+  amount            Float
+  currency          String           @default("USD")
+  paymentMethod     String           // Bank Transfer, bKash, Nagad, PayPal, Wise, Payoneer
+  paymentDetails    String           // Account No, Routing / Email / Phone
+  status            WithdrawalStatus @default(PENDING)
+  rejectionReason   String?
+  adminNotes        String?
+  requestedAt       DateTime         @default(now())
+  approvedAt        DateTime?
+  processedAt       DateTime?
+  payout            Payout?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([referralAccountId])
+  @@index([status])
+}
+
+model Payout {
+  id                String     @id @default(uuid())
+  withdrawalId      String     @unique
+  withdrawal        Withdrawal @relation(fields: [withdrawalId], references: [id], onDelete: Cascade)
+  amount            Float
+  currency          String     @default("USD")
+  provider          String     // Manual Bank, Stripe Connect, bKash Disbursal
+  providerReference String?
+  status            String     @default("PAID") // PROCESSING, PAID, FAILED
+  processedBy       String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+}
+
+model ReferralFraudEvent {
+  id                String   @id @default(uuid())
+  referralAccountId String?
+  referralCode      String?
+  ipAddress         String?
+  eventType         String   // SAME_IP_SIGNUP, SELF_REFERRAL, RAPID_CLICKING, DEVICE_MATCH
+  severity          String   // LOW, MEDIUM, HIGH, CRITICAL
+  details           String
+  isResolved        Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  @@index([referralCode])
+  @@index([eventType])
+}
+
+// ----------------------------------------------------
 // Tenant-Scoped Core Entity Models
 // ----------------------------------------------------
 
 model User {
-  id             String           @id @default(uuid())
-  email          String           @unique
-  passwordHash   String
-  fullName       String
-  role           Role             @default(EMPLOYEE)
-  organizationId String?
-  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  avatarUrl      String?
-  isActive       Boolean          @default(true)
-  twoFactorAuth  Boolean          @default(false)
+  id              String           @id @default(uuid())
+  email           String           @unique
+  passwordHash    String
+  fullName        String
+  role            Role             @default(EMPLOYEE)
+  organizationId  String?
+  organization    Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  avatarUrl       String?
+  isActive        Boolean          @default(true)
+  twoFactorAuth   Boolean          @default(false)
   twoFactorSecret String?
-  managerProfile ManagerProfile?
+  managerProfile  ManagerProfile?
   employeeProfile EmployeeProfile?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  referralAccount ReferralAccount?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   @@index([organizationId])
   @@index([email])
@@ -282,18 +540,18 @@ model Department {
 }
 
 model ManagerProfile {
-  id             String           @id @default(uuid())
-  userId         String           @unique
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organizationId String
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  managerId      String
-  designation    String
-  departmentName String
+  id               String            @id @default(uuid())
+  userId           String            @unique
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId   String
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  managerId        String
+  designation      String
+  departmentName   String
   assignedBranches String[]
-  teamMembers    EmployeeProfile[] @relation("ManagerTeam")
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  teamMembers      EmployeeProfile[] @relation("ManagerTeam")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   @@unique([organizationId, managerId])
   @@index([organizationId])
@@ -537,16 +795,42 @@ model EmployeePayslip {
   @@index([employeeId])
 }
 
+// ----------------------------------------------------
+// Enhanced Dynamic & Scoped Notifications Model
+// ----------------------------------------------------
+
 model Notification {
-  id                 String          @id @default(uuid())
-  organizationId     String
-  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  recipientUserId    String
+  id                 String            @id @default(uuid())
+  // Tenant scoping: null if Super Admin platform broadcast, set if org-scoped
+  organizationId     String?
+  organization       Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  // Sender info
+  senderId           String?
+  senderName         String            @default("System")
+  senderRole         Role              @default(SUPER_ADMIN)
+  
+  // Scope & Target Filter
+  scope              NotificationScope @default(TARGETED_USER)
+  targetOrgId        String?           // For Super Admin sending to specific org
+  targetRole         Role?             // For sending to all Org Admins, Managers, or Employees
+  recipientUserId    String?           // For direct user dispatch
+  
+  // Content & Category
   title              String
   message            String
-  type               String          // Info, Alert, Success, Warning
-  isRead             Boolean         @default(false)
-  createdAt          DateTime        @default(now())
+  category           String            @default("SYSTEM") // SYSTEM, ATTENDANCE, LEAVE, PAYROLL, REFERRAL, SECURITY
+  type               String            @default("INFO") // INFO, SUCCESS, WARNING, ALERT
+  link               String?
+  dataJson           String?           // Extra metadata e.g. {"referralId": "123", "amount": 40}
+  
+  isRead             Boolean           @default(false)
+  readAt             DateTime?
+  createdAt          DateTime          @default(now())
 
-  @@index([organizationId, recipientUserId])
+  @@index([organizationId])
+  @@index([recipientUserId])
+  @@index([targetRole])
+  @@index([scope])
+  @@index([createdAt])
 }

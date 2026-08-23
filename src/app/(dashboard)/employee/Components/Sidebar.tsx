@@ -12,7 +12,7 @@ import {
     DollarSign, 
     User, 
     LogOut,
-    Sparkles
+    Share2
 } from "lucide-react";
 
 const employeeNavItems = [
@@ -22,6 +22,7 @@ const employeeNavItems = [
     { name: "My Attendance", href: "/employee/attendance", icon: Calendar },
     { name: "Apply Leave", href: "/employee/leaves", icon: CalendarCheck },
     { name: "Salary & Payslips", href: "/employee/salary", icon: DollarSign },
+    { name: "Refer & Earn", href: "/employee/referrals", icon: Share2 },
     { name: "Profile & Documents", href: "/employee/profile", icon: User },
 ];
 

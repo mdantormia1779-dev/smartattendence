@@ -2,7 +2,8 @@
 
 import React from "react";
 import Link from "next/link";
-import { Bell, ChevronDown, CheckCircle2, ScanFace, MapPin } from "lucide-react";
+import { ChevronDown, ScanFace } from "lucide-react";
+import NotificationDropdown from "@/components/NotificationDropdown";
 
 interface HeaderProps {
     title?: string;
@@ -30,13 +31,12 @@ export default function EmployeeHeader({ title = "Employee Self-Service" }: Head
                     Punch Out
                 </Link>
 
-                <button 
-                    aria-label="Notifications"
-                    className="w-9 h-9 rounded-xl border border-neutral-200/80 flex items-center justify-center text-neutral-600 hover:bg-neutral-50 transition-colors relative cursor-pointer"
-                >
-                    <Bell className="w-4 h-4" />
-                    <span className="absolute top-2 right-2 w-2 h-2 bg-[#00B050] rounded-full ring-2 ring-white"></span>
-                </button>
+                {/* Scoped Notification Dropdown for Employee */}
+                <NotificationDropdown 
+                    userId="user-emp-1" 
+                    role="EMPLOYEE" 
+                    organizationId="org-1" 
+                />
 
                 {/* Profile Pill */}
                 <div className="flex items-center gap-2.5 pl-2 border-l border-neutral-200 cursor-pointer">

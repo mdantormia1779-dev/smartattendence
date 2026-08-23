@@ -14,7 +14,8 @@ import {
     LogOut,
     UserCheck,
     Building2,
-    Shield
+    Shield,
+    Share2
 } from "lucide-react";
 
 const managerNavItems = [
@@ -24,6 +25,7 @@ const managerNavItems = [
     { name: "Shift Scheduling", href: "/manager/shifts", icon: Clock },
     { name: "Leave Approvals", href: "/manager/leaves", icon: CalendarCheck },
     { name: "Overtime Requests", href: "/manager/overtime", icon: TrendingUp },
+    { name: "Referral & Rewards", href: "/manager/referrals", icon: Share2 },
     { name: "Team Reports", href: "/manager/reports", icon: BarChart3 },
 ];
 

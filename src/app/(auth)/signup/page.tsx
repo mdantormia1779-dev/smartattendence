@@ -1,14 +1,15 @@
 "use client"
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import * as z from 'zod';
 import { StepIndicator } from '@/app/Components/Signup/StepIndicator';
 import { AdminStep } from '@/app/Components/Signup/AdminStep';
 import { OrgStep } from '@/app/Components/Signup/OrgStep';
 import { OperationStep } from '@/app/Components/Signup/OperationStep';
 import { SuccessModal } from '@/app/Components/Signup/SuccessModal';
+import { Sparkles, Gift } from 'lucide-react';
 
 const signupSchema = z.object({
     adminName: z.string().min(2, { message: "Admin name is required" }),
@@ -33,10 +34,25 @@ const signupSchema = z.object({
 
 type SignupFormData = z.infer<typeof signupSchema>;
 
-const SignupPage: React.FC = () => {
+function SignupContent() {
     const [step, setStep] = useState<number>(1);
-    const [isSuccessModalOpen, setIsSuccessModalOpen] = useState<boolean>(false); // <-- মডাল স্টেট
+    const [isSuccessModalOpen, setIsSuccessModalOpen] = useState<boolean>(false);
+    const [referralCode, setReferralCode] = useState<string | null>(null);
     const router = useRouter();
+    const searchParams = useSearchParams();
+
+    useEffect(() => {
+        const ref = searchParams.get('ref');
+        if (ref) {
+            setReferralCode(ref);
+            // Track click
+            fetch('/api/referral/track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: ref, landingPage: '/signup' }),
+            }).catch(console.error);
+        }
+    }, [searchParams]);
 
     const { register, handleSubmit, trigger, formState: { errors, isSubmitting } } = useForm<SignupFormData>({
         resolver: zodResolver(signupSchema),
@@ -58,13 +74,10 @@ const SignupPage: React.FC = () => {
     const prevStep = () => setStep((prev) => Math.max(prev - 1, 1));
 
     const onSubmit = async (data: SignupFormData) => {
-        console.log("Modular Signup Data:", data);
-        
-        // ব্যাকএন্ড API কল সফল হওয়ার পর মডাল ওপেন হবে
+        console.log("Modular Signup Data with Referral Attribution:", { ...data, referralCode });
         setIsSuccessModalOpen(true);
     };
 
-    // মডালের বাটন ক্লিক করলে লগইন পেজে যাবে
     const handleModalClose = () => {
         setIsSuccessModalOpen(false);
         router.push('/login');
@@ -77,7 +90,7 @@ const SignupPage: React.FC = () => {
             <div className="absolute top-0 right-1/4 w-125 h-125 bg-[#00B050]/5 rounded-full blur-3xl pointer-events-none"></div>
 
             <div className="max-w-3xl w-full relative z-10">
-                <div className="text-center mb-8 space-y-2">
+                <div className="text-center mb-6 space-y-2">
                     <div className="inline-flex items-center gap-2">
                         <div className="bg-[#00B050] text-white font-extrabold px-3 py-1.5 rounded-xl text-lg shadow-md">
                             VX
@@ -87,6 +100,13 @@ const SignupPage: React.FC = () => {
                         </span>
                     </div>
                     <p className="text-gray-500 text-sm">Enterprise Resource Planning & Smart Attendance System</p>
+                    
+                    {referralCode && (
+                        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-emerald-50 text-[#00B050] border border-emerald-200 rounded-full text-xs font-bold shadow-xs animate-bounce">
+                            <Gift className="w-4 h-4" />
+                            Referred by partner code: <span className="font-mono underline">{referralCode}</span>
+                        </div>
+                    )}
                 </div>
 
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-8 flex items-center justify-between">
@@ -117,6 +137,12 @@ const SignupPage: React.FC = () => {
             <SuccessModal isOpen={isSuccessModalOpen} onClose={handleModalClose} />
         </div>
     );
-};
+}
 
-export default SignupPage;
+export default function SignupPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-xs font-semibold text-gray-400">Loading registration...</div>}>
+            <SignupContent />
+        </Suspense>
+    );
+}

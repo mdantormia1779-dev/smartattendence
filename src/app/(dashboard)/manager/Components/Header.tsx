@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { Search, Bell, ChevronDown, Building2, UserCheck } from "lucide-react";
+import { Search, ChevronDown, Building2 } from "lucide-react";
+import NotificationDropdown from "@/components/NotificationDropdown";
 
 interface HeaderProps {
     title?: string;
@@ -30,14 +31,12 @@ export default function ManagerHeader({ title = "Manager Dashboard" }: HeaderPro
                     />
                 </div>
 
-                {/* Notification Bell */}
-                <button 
-                    aria-label="Notifications"
-                    className="w-9 h-9 rounded-xl border border-neutral-200/80 flex items-center justify-center text-neutral-600 hover:bg-neutral-50 transition-colors relative cursor-pointer"
-                >
-                    <Bell className="w-4 h-4" />
-                    <span className="absolute top-2 right-2 w-2 h-2 bg-amber-500 rounded-full ring-2 ring-white"></span>
-                </button>
+                {/* Scoped Notification Bell */}
+                <NotificationDropdown 
+                    userId="user-mgr-1" 
+                    role="MANAGER" 
+                    organizationId="org-1" 
+                />
 
                 {/* Manager Profile */}
                 <div className="flex items-center gap-2.5 pl-2 border-l border-neutral-200 cursor-pointer">

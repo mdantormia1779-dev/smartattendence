@@ -18,7 +18,9 @@ import {
     BarChart3, 
     Settings, 
     LogOut,
-    ShieldCheck
+    ShieldCheck,
+    Share2,
+    BellRing
 } from "lucide-react";
 
 const navItems = [
@@ -33,6 +35,8 @@ const navItems = [
     { name: "Holiday Calendar", href: "/organizationadmin/holidays", icon: Calendar },
     { name: "Overtime (OT) Rules", href: "/organizationadmin/overtime", icon: TrendingUp },
     { name: "Manage Payroll", href: "/organizationadmin/payroll", icon: DollarSign },
+    { name: "Refer & Earn", href: "/organizationadmin/referrals", icon: Share2 },
+    { name: "Send Notifications", href: "/organizationadmin/notifications", icon: BellRing },
     { name: "Reports & Analytics", href: "/organizationadmin/reports", icon: BarChart3 },
     { name: "Company Settings", href: "/organizationadmin/settings", icon: Settings },
 ];
@@ -100,17 +104,16 @@ export default function Sidebar() {
                 })}
             </div>
 
-            {/* Logout / Footer */}
+            {/* Logout */}
             <div className="p-3 border-t border-gray-100 bg-white">
                 <Link
                     href="/login"
-                    className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                    className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-medium text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                 >
                     <LogOut className="w-4 h-4 text-red-500" />
                     <span>Sign out</span>
                 </Link>
             </div>
-
         </aside>
     );
 }

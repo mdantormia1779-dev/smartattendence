@@ -1,6 +1,7 @@
 "use client"
 import React from 'react';
-import { Bell, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
+import NotificationDropdown from "@/components/NotificationDropdown";
 
 const Header = () => {
     return (
@@ -10,18 +11,19 @@ const Header = () => {
                 <Search className="w-4 h-4 text-gray-400" />
                 <input 
                     type="text" 
-                    placeholder="Search anything..." 
+                    placeholder="Search organizations, plans, payments..." 
                     className="bg-transparent text-sm outline-none w-full text-gray-700"
                 />
             </div>
 
             {/* Right Side Actions */}
             <div className="flex items-center gap-4">
-                {/* Notification Bell */}
-                <button className="relative p-2 rounded-xl text-gray-500 hover:bg-gray-100 transition-colors">
-                    <Bell className="w-5 h-5" />
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#00B050] rounded-full"></span>
-                </button>
+                {/* Live Scoped Notification Dropdown */}
+                <NotificationDropdown 
+                    userId="user-super-1" 
+                    role="SUPER_ADMIN" 
+                    organizationId={null} 
+                />
 
                 {/* Profile Avatar */}
                 <div className="flex items-center gap-3 pl-4 border-l border-gray-200">

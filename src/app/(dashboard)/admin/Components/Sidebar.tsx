@@ -11,7 +11,9 @@ import {
     UserX, 
     FileText, 
     Settings, 
-    LogOut 
+    LogOut,
+    Share2,
+    BellRing
 } from 'lucide-react';
 
 const menuItems = [
@@ -21,6 +23,8 @@ const menuItems = [
     { name: 'Approve Payments', href: '/admin/approve-payments', icon: DollarSign },
     { name: 'Manage Coupons', href: '/admin/coupons', icon: Ticket },
     { name: 'View Revenue', href: '/admin/revenue', icon: DollarSign },
+    { name: 'Referrals & Affiliates', href: '/admin/referrals', icon: Share2 },
+    { name: 'Notification Center', href: '/admin/notifications', icon: BellRing },
     { name: 'Suspend Organizations', href: '/admin/suspend', icon: UserX },
     { name: 'View Audit Logs', href: '/admin/audit-logs', icon: FileText },
     { name: 'System Settings', href: '/admin/settings', icon: Settings },
@@ -54,7 +58,7 @@ const Sidebar = () => {
                             href={item.href}
                             className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
                                 isActive 
-                                    ? 'bg-[#00B050]/10 text-[#00B050]' 
+                                    ? 'bg-[#00B050]/10 text-[#00B050] font-bold' 
                                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                             }`}
                         >
@@ -69,7 +73,6 @@ const Sidebar = () => {
             <div className="p-4 border-t border-gray-100">
                 <Link 
                     href="/login"
-                    onClick={() => console.log('Logout')}
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
                 >
                     <LogOut className="w-5 h-5 text-red-500" />
