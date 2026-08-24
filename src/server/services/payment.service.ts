@@ -79,6 +79,7 @@ export class PaymentService {
     transactionId: string;
     senderNumber?: string;
     provider?: string;
+    couponCode?: string | null;
     referralCode?: string | null;
   }): Promise<PaymentTransactionData> {
     const paymentId = data.transactionId?.trim() || `pay-${Date.now()}`;
@@ -118,6 +119,8 @@ export class PaymentService {
       }
     }
 
+    const appliedPromo = (data.couponCode || data.referralCode)?.trim().toUpperCase() || null;
+
     const createdPayment = await prisma.payments.create({
       data: {
         id: paymentId,
@@ -126,7 +129,7 @@ export class PaymentService {
         currency: "BDT",
         provider: data.provider || "bKash",
         status: "PENDING",
-        couponCode: data.referralCode || null,
+        couponCode: appliedPromo,
         createdAt: new Date(),
       },
       include: {
@@ -138,6 +141,18 @@ export class PaymentService {
         },
       },
     });
+
+    // Increment coupon redemption count if applicable
+    if (appliedPromo) {
+      await prisma.coupons
+        .updateMany({
+          where: { code: appliedPromo },
+          data: {
+            usedCount: { increment: 1 },
+          },
+        })
+        .catch(() => {});
+    }
 
     return {
       id: createdPayment.id,
@@ -151,7 +166,7 @@ export class PaymentService {
       senderNumber: data.senderNumber || "+880 1700-000000",
       provider: createdPayment.provider || "bKash",
       status: "PENDING",
-      referralCode: data.referralCode,
+      referralCode: appliedPromo,
       createdAt: createdPayment.createdAt.toISOString().split("T")[0],
     };
   }

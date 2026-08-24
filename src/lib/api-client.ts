@@ -239,6 +239,15 @@ class ApiClient {
     updateStatus: (id: string, status: string) => this.patch(`/api/payments/${id}`, { status }),
   };
 
+  coupons = {
+    getAll: () => this.get("/api/coupons"),
+    getById: (id: string) => this.get(`/api/coupons/${id}`),
+    create: (body: any) => this.post("/api/coupons", body),
+    update: (id: string, body: any) => this.patch(`/api/coupons/${id}`, body),
+    delete: (id: string) => this.delete(`/api/coupons/${id}`),
+    validate: (code: string, amount?: number) => this.post("/api/coupons/validate", { code, amount }),
+  };
+
   referrals = {
     getAccount: () => this.get("/api/referrals"),
     getLink: () => this.get("/api/referrals/link"),

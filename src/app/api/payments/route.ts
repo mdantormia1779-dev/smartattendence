@@ -34,6 +34,7 @@ export async function POST(request: Request) {
       transactionId,
       senderNumber,
       provider,
+      couponCode,
       referralCode,
     } = body;
 
@@ -51,7 +52,8 @@ export async function POST(request: Request) {
       transactionId: transactionId || `TXN-${Date.now()}`,
       senderNumber: senderNumber || "+880 1700-000000",
       provider: provider || "bKash",
-      referralCode: referralCode || null,
+      couponCode: couponCode || null,
+      referralCode: referralCode || couponCode || null,
     });
 
     return apiSuccess(newPayment, "Payment submitted for verification successfully", undefined, 201, {

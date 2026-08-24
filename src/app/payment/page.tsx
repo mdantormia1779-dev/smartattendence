@@ -3,13 +3,32 @@
 import React, { useState, Suspense, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useSearchParams, useRouter } from "next/navigation";
-import { ShieldCheck, CheckCircle2, Copy, Smartphone, X, Loader2, ArrowRight } from "lucide-react";
+import { 
+  ShieldCheck, 
+  CheckCircle2, 
+  Copy, 
+  Smartphone, 
+  X, 
+  Loader2, 
+  ArrowRight,
+  Tag,
+  Percent,
+  Check
+} from "lucide-react";
 import { api } from "@/lib/api-client";
 
 interface PaymentFormData {
     organization: string;
     senderNumber: string;
     transactionId: string;
+}
+
+interface AppliedCoupon {
+    code: string;
+    discountType: "percentage" | "fixed";
+    discountValue: number;
+    discountAmount: number;
+    finalAmount: number;
 }
 
 function ManualPaymentContent() {
@@ -29,6 +48,12 @@ function ManualPaymentContent() {
         yearlyPrice: number;
     } | null>(null);
     const [plansLoading, setPlansLoading] = useState(true);
+
+    // Coupon / Promo Code States
+    const [couponInput, setCouponInput] = useState("");
+    const [validatingCoupon, setValidatingCoupon] = useState(false);
+    const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
+    const [couponError, setCouponError] = useState<string | null>(null);
 
     const [copied, setCopied] = useState(false);
     const [submitted, setSubmitted] = useState(false);
@@ -90,8 +115,8 @@ function ManualPaymentContent() {
     const fallback = defaultPrices[rawPlan] || defaultPrices.business;
     const displayName = livePlan?.name || fallback.name;
 
-    // Calculate final payable amount (respects URL query if explicitly given, else uses live API plan price)
-    const rawNumberAmount: number = (() => {
+    // Calculate base plan price before discount
+    const baseNumberAmount: number = (() => {
         if (urlAmount && !isNaN(Number(urlAmount)) && Number(urlAmount) > 0) {
             return Number(urlAmount);
         }
@@ -101,7 +126,46 @@ function ManualPaymentContent() {
         return isYearly ? fallback.yearly : fallback.monthly;
     })();
 
-    const formattedAmount = `৳${rawNumberAmount.toLocaleString()}`;
+    // Final amount after coupon deduction
+    const finalPayableAmount: number = appliedCoupon
+        ? appliedCoupon.finalAmount
+        : baseNumberAmount;
+
+    const formattedFinalAmount = `৳${finalPayableAmount.toLocaleString()}`;
+    const formattedBaseAmount = `৳${baseNumberAmount.toLocaleString()}`;
+
+    // Apply Coupon Code via API
+    const handleApplyCoupon = async () => {
+        if (!couponInput.trim()) return;
+        try {
+            setValidatingCoupon(true);
+            setCouponError(null);
+
+            const res = await api.coupons.validate(couponInput.trim().toUpperCase(), baseNumberAmount);
+            if (res.success && res.data && res.data.valid) {
+                setAppliedCoupon({
+                    code: res.data.coupon.code,
+                    discountType: res.data.coupon.discountType,
+                    discountValue: res.data.coupon.discountValue,
+                    discountAmount: res.data.discountAmount,
+                    finalAmount: res.data.finalAmount,
+                });
+                setCouponInput("");
+            } else {
+                setCouponError(res.message || "Invalid or expired coupon code");
+            }
+        } catch (err: any) {
+            setCouponError(err?.message || "Failed to validate coupon code");
+        } finally {
+            setValidatingCoupon(false);
+        }
+    };
+
+    const handleRemoveCoupon = () => {
+        setAppliedCoupon(null);
+        setCouponError(null);
+        setCouponInput("");
+    };
 
     // Handle ESC key press & background click to close modal
     useEffect(() => {
@@ -127,11 +191,13 @@ function ManualPaymentContent() {
                 organization: data.organization.trim(),
                 organizationName: data.organization.trim(),
                 planName: displayName,
-                amount: rawNumberAmount,
+                amount: finalPayableAmount,
                 billingCycle: isYearly ? "Yearly" : "Monthly",
                 transactionId: data.transactionId.trim(),
                 senderNumber: data.senderNumber.trim(),
                 provider: "bKash",
+                couponCode: appliedCoupon?.code || null,
+                referralCode: appliedCoupon?.code || null,
             });
 
             if (res && (res.success || res.data)) {
@@ -178,8 +244,13 @@ function ManualPaymentContent() {
                         </span>
                         <h2 className="text-xl font-bold text-neutral-900">Payment Submitted Successfully</h2>
                         <p className="text-xs text-neutral-500 leading-relaxed">
-                            Your payment request for <span className="font-semibold text-neutral-800">{displayName} ({formattedAmount})</span> has been received and added to the admin verification queue.
+                            Your payment request for <span className="font-semibold text-neutral-800">{displayName} ({formattedFinalAmount})</span> has been received and added to the admin verification queue.
                         </p>
+                        {appliedCoupon && (
+                            <p className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 py-1 px-3 rounded-lg inline-block mt-2">
+                                Promo Code Applied: {appliedCoupon.code} (-৳{appliedCoupon.discountAmount.toLocaleString()})
+                            </p>
+                        )}
                     </div>
 
                     <button
@@ -248,8 +319,13 @@ function ManualPaymentContent() {
                                     <li>
                                         Enter exact amount:{" "}
                                         <span className="font-mono font-bold text-neutral-900">
-                                            {plansLoading ? "Loading..." : formattedAmount}
+                                            {plansLoading ? "Loading..." : formattedFinalAmount}
                                         </span>
+                                        {appliedCoupon && (
+                                            <span className="ml-1.5 line-through text-[11px] text-neutral-400">
+                                                {formattedBaseAmount}
+                                            </span>
+                                        )}
                                     </li>
                                     <li>Save the <span className="font-semibold text-neutral-900">TrxID</span> after completion</li>
                                 </ol>
@@ -339,14 +415,82 @@ function ManualPaymentContent() {
                                             <Loader2 className="w-4 h-4 animate-spin" /> Submitting to Admin...
                                         </>
                                     ) : (
-                                        `Submit Payment for Verification (${formattedAmount})`
+                                        `Submit Payment for Verification (${formattedFinalAmount})`
                                     )}
                                 </button>
                             </form>
                         </div>
 
-                        {/* Right Column: Order Summary & Notice */}
+                        {/* Right Column: Order Summary & Coupon Promo Code */}
                         <div className="lg:col-span-5 space-y-4">
+                            {/* Promo Code Card */}
+                            <div className="bg-white rounded-2xl p-4.5 border border-neutral-200/80 shadow-2xs space-y-3">
+                                <div className="flex items-center gap-2 text-neutral-800 font-bold text-xs uppercase tracking-wider">
+                                    <Tag className="w-4 h-4 text-[#10b981]" /> Promo / Coupon Code
+                                </div>
+
+                                {appliedCoupon ? (
+                                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center">
+                                                <Check className="w-3.5 h-3.5" />
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-emerald-800 font-mono">
+                                                    {appliedCoupon.code}
+                                                </p>
+                                                <p className="text-[10px] text-emerald-600 font-medium">
+                                                    {appliedCoupon.discountType === "percentage"
+                                                        ? `${appliedCoupon.discountValue}% OFF (-৳${appliedCoupon.discountAmount.toLocaleString()})`
+                                                        : `Fixed ৳${appliedCoupon.discountValue.toLocaleString()} OFF`}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleRemoveCoupon}
+                                            className="text-emerald-700 hover:text-rose-600 text-xs font-bold p-1 rounded-md hover:bg-emerald-100 transition-colors cursor-pointer"
+                                            title="Remove coupon"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                placeholder="e.g. WELCOME20"
+                                                value={couponInput}
+                                                onChange={(e) => {
+                                                    setCouponInput(e.target.value.toUpperCase());
+                                                    setCouponError(null);
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter") {
+                                                        e.preventDefault();
+                                                        handleApplyCoupon();
+                                                    }
+                                                }}
+                                                className="flex-1 px-3 py-2 bg-neutral-50/80 border border-neutral-200 rounded-xl text-xs uppercase font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981]"
+                                            />
+                                            <button
+                                                type="button"
+                                                disabled={validatingCoupon || !couponInput.trim()}
+                                                onClick={handleApplyCoupon}
+                                                className="px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                                            >
+                                                {validatingCoupon ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Apply"}
+                                            </button>
+                                        </div>
+                                        {couponError && (
+                                            <p className="text-[11px] text-rose-500 font-medium">{couponError}</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Plan Summary Card */}
                             <div className="bg-neutral-50/80 rounded-2xl p-5 border border-neutral-200/80 space-y-3 shadow-2xs">
                                 <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-wider border-b border-neutral-200 pb-2">
                                     Plan Summary
@@ -362,11 +506,30 @@ function ManualPaymentContent() {
                                     <span className="font-bold text-neutral-900 capitalize">{billingParam}</span>
                                 </div>
 
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-neutral-500 font-medium">Plan Price</span>
+                                    <span className="font-semibold text-neutral-700">{formattedBaseAmount}</span>
+                                </div>
+
+                                {appliedCoupon && (
+                                    <div className="flex justify-between items-center text-xs text-emerald-600 font-medium">
+                                        <span>Coupon Discount ({appliedCoupon.code})</span>
+                                        <span>-৳{appliedCoupon.discountAmount.toLocaleString()}</span>
+                                    </div>
+                                )}
+
                                 <div className="border-t border-neutral-200 pt-3 flex justify-between items-center">
                                     <span className="text-xs font-bold text-neutral-900">Total Payable</span>
-                                    <span className="text-xl font-extrabold text-[#10b981]">
-                                        {plansLoading ? <Loader2 className="w-4 h-4 animate-spin inline" /> : formattedAmount}
-                                    </span>
+                                    <div className="text-right">
+                                        <span className="text-xl font-extrabold text-[#10b981]">
+                                            {plansLoading ? <Loader2 className="w-4 h-4 animate-spin inline" /> : formattedFinalAmount}
+                                        </span>
+                                        {appliedCoupon && (
+                                            <p className="text-[10px] text-neutral-400 line-through">
+                                                {formattedBaseAmount}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
