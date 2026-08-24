@@ -1,13 +1,23 @@
-import { NextResponse } from "next/server";
 import { SubscriptionService } from "@/server/services/subscription.service";
-import { handleApiError } from "@/server/errors";
+import { requireRole } from "@/server/authorization";
+import { apiSuccess, apiError } from "@/server/errors";
 
 export async function GET() {
   try {
     const plans = await SubscriptionService.getPlans();
-    return NextResponse.json({ success: true, data: plans });
+    return apiSuccess(plans, "Subscription plans retrieved successfully");
   } catch (error: any) {
-    const err = handleApiError(error);
-    return NextResponse.json(err.body, { status: err.statusCode });
+    return apiError(error);
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    requireRole(request, ["SUPER_ADMIN"]);
+    const body = await request.json();
+    const created = await SubscriptionService.createPlan(body);
+    return apiSuccess(created, "Subscription plan created successfully", 201);
+  } catch (error: any) {
+    return apiError(error);
   }
 }

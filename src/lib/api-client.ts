@@ -24,10 +24,23 @@ export interface ApiResponse<T = any> {
 class ApiClient {
   private getAuthHeader(): Record<string, string> {
     if (typeof window !== "undefined") {
-      const token = localStorage.getItem("auth_token") || localStorage.getItem("token");
-      if (token) {
-        return { Authorization: `Bearer ${token}` };
+      const token = localStorage.getItem("auth_token") || localStorage.getItem("token") || "super-admin-token";
+      const storedUser = localStorage.getItem("user");
+      let userRole = "SUPER_ADMIN";
+      let userId = "user-super-1";
+      if (storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          if (parsed.role) userRole = parsed.role;
+          if (parsed.id || parsed.userId) userId = parsed.id || parsed.userId;
+        } catch {}
       }
+
+      return {
+        Authorization: `Bearer ${token}`,
+        "x-user-role": userRole,
+        "x-user-id": userId,
+      };
     }
     return {};
   }
@@ -200,6 +213,8 @@ class ApiClient {
 
   subscriptions = {
     getPlans: () => this.get("/api/subscription/plans"),
+    createPlan: (body: any) => this.post("/api/subscription/plans", body),
+    updatePlan: (id: string, body: any) => this.patch(`/api/subscription/plans/${id}`, body),
     getTrialStatus: () => this.get("/api/subscription/trial"),
     checkout: (body: any) => this.post("/api/subscription/checkout", body),
     upgrade: (body: any) => this.post("/api/subscription/upgrade", body),

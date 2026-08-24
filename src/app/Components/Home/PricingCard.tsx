@@ -1,8 +1,9 @@
 'use client';
+
 import React from 'react';
 import { Check } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { Plan, StatItem } from '../../../../src/data/pricingData'; // Path apnar structure onujayi adjust kore neben
+import { Plan, StatItem } from '@/data/pricingData';
 
 interface PricingCardProps {
     plan: Plan;
@@ -12,13 +13,15 @@ interface PricingCardProps {
 export const PricingCard: React.FC<PricingCardProps> = ({ plan, isYearly }) => {
     const router = useRouter();
 
-    const currentPrice = plan.name === "Free" 
+    const isFree = plan.name.toLowerCase().includes("free") || plan.monthlyPrice === 0;
+
+    const currentPrice = isFree
         ? "৳0" 
         : isYearly 
-            ? `৳${plan.yearlyPrice}` 
-            : `৳${plan.monthlyPrice}`;
+            ? `৳${Number(plan.yearlyPrice || 0).toLocaleString()}` 
+            : `৳${Number(plan.monthlyPrice || 0).toLocaleString()}`;
     
-    const currentPeriod = plan.name === "Free" 
+    const currentPeriod = isFree 
         ? plan.periodMonthly 
         : isYearly 
             ? plan.periodYearly 
@@ -26,13 +29,12 @@ export const PricingCard: React.FC<PricingCardProps> = ({ plan, isYearly }) => {
 
     const handlePlanSelect = () => {
         const billingCycle = isYearly ? 'yearly' : 'monthly';
+        const planSlug = plan.name.toLowerCase().replace(/\s+plan/g, "").trim();
         
-        if (plan.name === "Free") {
-            // Free plan er jonno Signup page
+        if (isFree) {
             router.push(`/signup?plan=free`);
         } else {
-            // Paid plan gulo er jonno Payment page
-            router.push(`/payment?plan=${plan.name.toLowerCase()}&billing=${billingCycle}`);
+            router.push(`/payment?plan=${encodeURIComponent(planSlug)}&billing=${billingCycle}`);
         }
     };
 
@@ -57,25 +59,29 @@ export const PricingCard: React.FC<PricingCardProps> = ({ plan, isYearly }) => {
                     </div>
                 </div>
 
-                <div className="bg-[#FBF9F5] rounded-xl p-4 grid grid-cols-2 gap-3 border border-gray-100">
-                    {plan.stats.map((stat: StatItem, sIndex: number) => (
-                        <div key={sIndex} className="space-y-0.5">
-                            <p className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">{stat.label}</p>
-                            <p className="text-sm font-bold text-gray-900">{stat.value}</p>
-                        </div>
-                    ))}
-                </div>
+                {Array.isArray(plan.stats) && plan.stats.length > 0 && (
+                    <div className="bg-[#FBF9F5] rounded-xl p-4 grid grid-cols-2 gap-3 border border-gray-100">
+                        {plan.stats.map((stat: StatItem, sIndex: number) => (
+                            <div key={sIndex} className="space-y-0.5">
+                                <p className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">{stat.label}</p>
+                                <p className="text-sm font-bold text-gray-900">{stat.value}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
 
-                <ul className="space-y-3 pt-2">
-                    {plan.features.map((feature: string, fIndex: number) => (
-                        <li key={fIndex} className="flex items-center gap-3 text-sm text-gray-700">
-                            <span className="w-5 h-5 rounded-full bg-[#00B050]/10 flex items-center justify-center shrink-0">
-                                <Check className="w-3.5 h-3.5 text-[#00B050]" />
-                            </span>
-                            {feature}
-                        </li>
-                    ))}
-                </ul>
+                {Array.isArray(plan.features) && plan.features.length > 0 && (
+                    <ul className="space-y-3 pt-2">
+                        {plan.features.map((feature: string, fIndex: number) => (
+                            <li key={fIndex} className="flex items-center gap-3 text-sm text-gray-700">
+                                <span className="w-5 h-5 rounded-full bg-[#00B050]/10 flex items-center justify-center shrink-0">
+                                    <Check className="w-3.5 h-3.5 text-[#00B050]" />
+                                </span>
+                                {feature}
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </div>
 
             <div className="pt-8">
@@ -83,7 +89,7 @@ export const PricingCard: React.FC<PricingCardProps> = ({ plan, isYearly }) => {
                     onClick={handlePlanSelect}
                     className={`w-full py-2.5 px-4 rounded-xl font-medium text-sm transition-all shadow-sm cursor-pointer ${plan.buttonStyle}`}
                 >
-                    {plan.buttonText}
+                    {plan.buttonText || (isFree ? "Start Free" : "Choose Plan")}
                 </button>
             </div>
         </div>

@@ -27,28 +27,35 @@ export default function SubscriptionPage() {
       setLoading(true);
       const res = await api.subscriptions.getPlans();
       if (res.success && Array.isArray(res.data)) {
-        const mapped: Plan[] = res.data.map((p: any) => ({
-          id: p.id || p.type?.toLowerCase(),
-          name: p.name || p.type,
-          priceMonthly: `৳${Number(p.price || 0).toLocaleString()}`,
-          priceYearly: `৳${(Number(p.price || 0) * 10).toLocaleString()}`,
-          period: p.billingCycle || "month",
-          limits: [
-            { label: "Branches", value: p.maxBranches ? String(p.maxBranches) : "Unlimited" },
-            { label: "Managers", value: p.maxManagers ? String(p.maxManagers) : "Unlimited" },
-            { label: "Employees", value: p.maxEmployees ? String(p.maxEmployees) : "Unlimited" },
-          ],
-          features: [
-            p.faceRecognition ? "Face Recognition" : null,
-            p.gpsVerification ? "GPS Verification" : null,
-            p.payroll ? "Payroll & Payslips" : null,
-            p.analytics ? "Advanced Analytics" : null,
-            p.customDomain ? "Custom Domain" : null,
-            p.whiteLabel ? "White Label" : null,
-          ].filter(Boolean) as string[],
-          isPopular: p.type === "BUSINESS",
-          usageCount: p.activeSubscribers || 0,
-        }));
+        const mapped: Plan[] = res.data.map((p: any) => {
+          const priceNum = Number(p.price || p.monthlyPrice || 0);
+          const yearlyNum = Number(p.yearlyPrice || priceNum * 10);
+          const typeTier = (p.type || p.tier || "STARTER").toUpperCase();
+
+          return {
+            id: p.id || typeTier.toLowerCase(),
+            name: p.name || `${typeTier} Plan`,
+            priceMonthly: `৳${priceNum.toLocaleString()}`,
+            priceYearly: `৳${yearlyNum.toLocaleString()}`,
+            period: p.billingCycle || "month",
+            limits: [
+              { label: "Branches", value: p.maxBranches ? String(p.maxBranches) : "Unlimited" },
+              { label: "Managers", value: p.maxManagers ? String(p.maxManagers) : "Unlimited" },
+              { label: "Employees", value: p.maxEmployees ? String(p.maxEmployees) : "Unlimited" },
+            ],
+            features: [
+              p.faceRecognition || p.hasFaceRecog ? "Face Recognition" : null,
+              p.gpsVerification || p.hasGpsGeofence ? "GPS Verification" : null,
+              p.payroll || p.hasPayroll ? "Payroll & Payslips" : null,
+              p.analytics || p.hasAnalytics ? "Advanced Analytics" : null,
+              p.customDomain || p.hasCustomDomain ? "Custom Domain" : null,
+              p.whiteLabel || p.hasWhiteLabel ? "White Label" : null,
+              p.prioritySupport ? "24/7 Priority Support" : null,
+            ].filter(Boolean) as string[],
+            isPopular: typeTier === "BUSINESS",
+            usageCount: p.activeSubscribers || 0,
+          };
+        });
         setPlans(mapped);
       }
     } catch (e) {
@@ -63,24 +70,19 @@ export default function SubscriptionPage() {
   }, []);
 
   useEffect(() => {
-    if (!loading) {
+    if (!loading && containerRef.current && plans.length > 0) {
       const ctx = gsap.context(() => {
-        gsap.from(".animate-header", {
-          opacity: 0,
-          y: -20,
-          duration: 0.7,
-          ease: "power3.out",
-          stagger: 0.1,
-        });
+        gsap.fromTo(
+          ".animate-header",
+          { opacity: 0, y: -20 },
+          { opacity: 1, y: 0, duration: 0.5, ease: "power2.out", stagger: 0.1 }
+        );
 
-        gsap.from(".animate-card", {
-          opacity: 0,
-          y: 30,
-          duration: 0.7,
-          ease: "power3.out",
-          stagger: 0.1,
-          delay: 0.2,
-        });
+        gsap.fromTo(
+          ".animate-card",
+          { opacity: 0, y: 30 },
+          { opacity: 1, y: 0, duration: 0.5, ease: "power2.out", stagger: 0.1, delay: 0.1 }
+        );
       }, containerRef);
 
       return () => ctx.revert();
@@ -116,11 +118,47 @@ export default function SubscriptionPage() {
 
   const handleSavePlan = async (planData: Plan) => {
     try {
+      const branchesLimit = planData.limits.find((l) => l.label.toLowerCase().includes("branch"))?.value;
+      const managersLimit = planData.limits.find((l) => l.label.toLowerCase().includes("manager"))?.value;
+      const employeesLimit = planData.limits.find((l) => l.label.toLowerCase().includes("employee"))?.value;
+
+      const priceNumeric = parseFloat(planData.priceMonthly.replace(/[^0-9.]/g, "")) || 0;
+
+      const payload = {
+        name: planData.name,
+        price: priceNumeric,
+        billingCycle: planData.period || "monthly",
+        maxBranches: branchesLimit && branchesLimit !== "Unlimited" ? parseInt(branchesLimit, 10) : null,
+        maxManagers: managersLimit && managersLimit !== "Unlimited" ? parseInt(managersLimit, 10) : null,
+        maxEmployees: employeesLimit && employeesLimit !== "Unlimited" ? parseInt(employeesLimit, 10) : null,
+        faceRecognition: planData.features.some((f) => f.toLowerCase().includes("face")),
+        gpsVerification: planData.features.some((f) => f.toLowerCase().includes("gps")),
+        payroll: planData.features.some((f) => f.toLowerCase().includes("payroll")),
+        analytics: planData.features.some((f) => f.toLowerCase().includes("analytic")),
+        customDomain: planData.features.some((f) => f.toLowerCase().includes("domain")),
+        whiteLabel: planData.features.some((f) => f.toLowerCase().includes("white")),
+        prioritySupport: planData.features.some((f) => f.toLowerCase().includes("priority")),
+      };
+
+      if (editingPlan && editingPlan.id) {
+        await api.subscriptions.updatePlan(editingPlan.id, payload);
+      } else {
+        const typeDerived = planData.name.toUpperCase().includes("ENTERPRISE")
+          ? "ENTERPRISE"
+          : planData.name.toUpperCase().includes("BUSINESS")
+          ? "BUSINESS"
+          : planData.name.toUpperCase().includes("FREE")
+          ? "FREE"
+          : "STARTER";
+        await api.subscriptions.createPlan({ ...payload, type: typeDerived });
+      }
+
       await fetchPlans();
     } catch (e) {
       console.error("Failed to save plan", e);
     } finally {
       setIsModalOpen(false);
+      setEditingPlan(null);
     }
   };
 
@@ -128,12 +166,12 @@ export default function SubscriptionPage() {
     <div ref={containerRef} className="min-h-screen bg-[#FBFBFA] p-8 text-neutral-800">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
-        <div className="animate-header opacity-0">
+        <div className="animate-header">
           <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Subscription & SaaS Plans</h1>
           <p className="text-sm text-neutral-500 mt-1">Configure pricing tiers, employee quota limits, and billing intervals</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4 animate-header opacity-0">
+        <div className="flex flex-wrap items-center gap-4 animate-header">
           {/* Monthly / Yearly Toggle */}
           <div className="bg-neutral-200/60 p-1 rounded-xl flex items-center border border-neutral-200 text-xs font-semibold">
             <button
@@ -155,7 +193,7 @@ export default function SubscriptionPage() {
               }`}
             >
               Yearly Billing
-              <span className="bg-[#10b981]/15 text-[#10b981] text-[10px] px-1.5 py-0.5 rounded-md font-bold">Save 20%</span>
+              <span className="bg-[#00B050]/15 text-[#00B050] text-[10px] px-1.5 py-0.5 rounded-md font-bold">Save 20%</span>
             </button>
           </div>
 
@@ -180,11 +218,11 @@ export default function SubscriptionPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
           {plans.length === 0 ? (
             <div className="col-span-4 bg-white p-12 rounded-2xl border border-neutral-200 text-center text-xs text-neutral-400">
-              No active subscription plans defined.
+              No active subscription plans defined. Click &quot;Create Plan Tier&quot; to get started.
             </div>
           ) : (
             plans.map((plan) => (
-              <div key={plan.id} className="animate-card opacity-0 h-full flex flex-col">
+              <div key={plan.id} className="animate-card h-full flex flex-col">
                 <PlanCard
                   plan={plan}
                   billingCycle={billingCycle}
@@ -200,7 +238,10 @@ export default function SubscriptionPage() {
       {/* Plan Create/Edit Modal */}
       <PlanModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingPlan(null);
+        }}
         onSave={handleSavePlan}
         editingPlan={editingPlan}
       />
