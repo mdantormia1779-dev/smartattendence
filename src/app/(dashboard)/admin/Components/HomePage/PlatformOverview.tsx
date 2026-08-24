@@ -14,12 +14,12 @@ import { api } from '@/lib/api-client';
 
 export const PlatformOverview = () => {
     const [stats, setStats] = useState({
-        totalOrganizations: 63,
-        totalBranches: 214,
-        totalManagers: 356,
-        totalEmployees: 18402,
-        activeSubscriptions: 51,
-        monthlyRevenue: 16800,
+        totalOrganizations: 0,
+        totalBranches: 0,
+        totalManagers: 0,
+        totalEmployees: 0,
+        activeSubscriptions: 0,
+        monthlyRevenue: 0,
     });
     const [loading, setLoading] = useState(true);
 
@@ -29,12 +29,12 @@ export const PlatformOverview = () => {
                 const res = await api.analytics.admin();
                 if (res.success && res.data) {
                     setStats({
-                        totalOrganizations: res.data.totalOrganizations ?? 63,
-                        totalBranches: res.data.totalBranches ?? 214,
-                        totalManagers: res.data.totalManagers ?? 356,
-                        totalEmployees: res.data.totalEmployees ?? 18402,
-                        activeSubscriptions: res.data.activeSubscriptions ?? 51,
-                        monthlyRevenue: res.data.monthlyRevenue ?? 16800,
+                        totalOrganizations: res.data.totalOrganizations ?? 0,
+                        totalBranches: res.data.totalBranches ?? 0,
+                        totalManagers: res.data.totalManagers ?? 0,
+                        totalEmployees: res.data.totalEmployees ?? 0,
+                        activeSubscriptions: res.data.activeSubscriptions ?? 0,
+                        monthlyRevenue: res.data.monthlyRevenue ?? 0,
                     });
                 }
             } catch (e) {
