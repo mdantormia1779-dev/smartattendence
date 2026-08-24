@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { Search, ChevronDown } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Search, ChevronDown, Building2 } from "lucide-react";
 import NotificationDropdown from "@/components/NotificationDropdown";
 
 interface HeaderProps {
@@ -9,6 +9,51 @@ interface HeaderProps {
 }
 
 export default function Header({ title = "Dashboard" }: HeaderProps) {
+    const [userName, setUserName] = useState("Organization Admin");
+    const [userEmail, setUserEmail] = useState("admin@company.com");
+    const [companyName, setCompanyName] = useState("Company Admin");
+
+    const loadProfile = () => {
+        if (typeof window !== "undefined") {
+            const stored = localStorage.getItem("user");
+            if (stored) {
+                try {
+                    const parsed = JSON.parse(stored);
+                    if (parsed.name || parsed.fullName) setUserName(parsed.name || parsed.fullName);
+                    if (parsed.email) setUserEmail(parsed.email);
+                    if (parsed.companyName || parsed.organizationName) {
+                        setCompanyName(parsed.companyName || parsed.organizationName);
+                    }
+                } catch {}
+            }
+        }
+    };
+
+    useEffect(() => {
+        loadProfile();
+        const handleUpdate = (e: any) => {
+            if (e.detail) {
+                if (e.detail.name || e.detail.fullName) setUserName(e.detail.name || e.detail.fullName);
+                if (e.detail.email) setUserEmail(e.detail.email);
+                if (e.detail.companyName) setCompanyName(e.detail.companyName);
+            } else {
+                loadProfile();
+            }
+        };
+
+        window.addEventListener("user-profile-updated", handleUpdate);
+        return () => window.removeEventListener("user-profile-updated", handleUpdate);
+    }, []);
+
+    const getInitials = (name: string) => {
+        if (!name) return "OA";
+        const parts = name.trim().split(" ");
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+        }
+        return name.slice(0, 2).toUpperCase();
+    };
+
     return (
         <header className="h-16 bg-white border-b border-neutral-200 px-6 flex items-center justify-between sticky top-0 z-20">
             {/* Page Title */}
@@ -37,14 +82,12 @@ export default function Header({ title = "Dashboard" }: HeaderProps) {
 
                 {/* Admin Profile Dropdown Pill */}
                 <div className="flex items-center gap-3 pl-2 border-l border-neutral-200 cursor-pointer">
-                    <img
-                        src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces"
-                        alt="Sarah Rahman"
-                        className="w-9 h-9 rounded-full object-cover ring-2 ring-neutral-100"
-                    />
+                    <div className="w-9 h-9 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-xs shadow-2xs">
+                        {getInitials(userName)}
+                    </div>
                     <div className="hidden sm:block text-left">
-                        <p className="text-xs font-bold text-neutral-900 leading-tight">Sarah Rahman</p>
-                        <p className="text-[10px] text-neutral-400 font-medium">Vertex Tech · Org Admin</p>
+                        <p className="text-xs font-bold text-neutral-900 leading-tight">{userName}</p>
+                        <p className="text-[10px] text-neutral-400 font-medium">{companyName} · Org Admin</p>
                     </div>
                     <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
                 </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Search, ChevronDown, Building2 } from "lucide-react";
 import NotificationDropdown from "@/components/NotificationDropdown";
 
@@ -9,13 +9,52 @@ interface HeaderProps {
 }
 
 export default function ManagerHeader({ title = "Manager Dashboard" }: HeaderProps) {
+    const [managerName, setManagerName] = useState("Manager");
+    const [deptName, setDeptName] = useState("Operations Department");
+
+    const loadProfile = () => {
+        if (typeof window !== "undefined") {
+            const stored = localStorage.getItem("user");
+            if (stored) {
+                try {
+                    const parsed = JSON.parse(stored);
+                    if (parsed.name || parsed.fullName) setManagerName(parsed.name || parsed.fullName);
+                    if (parsed.department || parsed.departmentName) setDeptName(parsed.department || parsed.departmentName);
+                } catch {}
+            }
+        }
+    };
+
+    useEffect(() => {
+        loadProfile();
+        const handleUpdate = (e: any) => {
+            if (e.detail) {
+                if (e.detail.name || e.detail.fullName) setManagerName(e.detail.name || e.detail.fullName);
+            } else {
+                loadProfile();
+            }
+        };
+
+        window.addEventListener("user-profile-updated", handleUpdate);
+        return () => window.removeEventListener("user-profile-updated", handleUpdate);
+    }, []);
+
+    const getInitials = (name: string) => {
+        if (!name) return "MG";
+        const parts = name.trim().split(" ");
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+        }
+        return name.slice(0, 2).toUpperCase();
+    };
+
     return (
         <header className="h-16 bg-white border-b border-neutral-200 px-6 flex items-center justify-between sticky top-0 z-20">
             {/* Page Title & Assigned Dept */}
             <div className="flex items-center gap-3">
                 <h1 className="text-base font-bold text-neutral-900">{title}</h1>
-                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-[#00B050] px-2.5 py-0.5 rounded-full border border-emerald-200/60">
-                    <Building2 className="w-3 h-3" /> Head Office – IT Dept
+                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-[#10b981] px-2.5 py-0.5 rounded-full border border-emerald-200/60">
+                    <Building2 className="w-3 h-3" /> {deptName}
                 </span>
             </div>
 
@@ -40,13 +79,11 @@ export default function ManagerHeader({ title = "Manager Dashboard" }: HeaderPro
 
                 {/* Manager Profile */}
                 <div className="flex items-center gap-2.5 pl-2 border-l border-neutral-200 cursor-pointer">
-                    <img
-                        src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces"
-                        alt="Tanvir Ahmed"
-                        className="w-9 h-9 rounded-full object-cover ring-2 ring-neutral-100"
-                    />
+                    <div className="w-9 h-9 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 font-bold text-xs shadow-2xs">
+                        {getInitials(managerName)}
+                    </div>
                     <div className="hidden sm:block text-left">
-                        <p className="text-xs font-bold text-neutral-900 leading-tight">Tanvir Ahmed</p>
+                        <p className="text-xs font-bold text-neutral-900 leading-tight">{managerName}</p>
                         <p className="text-[10px] text-neutral-400 font-medium">Team Lead & Manager</p>
                     </div>
                     <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />

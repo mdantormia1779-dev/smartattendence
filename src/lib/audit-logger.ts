@@ -1,75 +1,140 @@
+import { prisma } from "@/lib/prisma";
+import { UserRole } from "@prisma/client";
+
 /**
  * Enterprise Audit Logging Service
  * 
- * Records tamper-evident audit logs across the application for security & compliance.
+ * Records tamper-evident audit logs directly to PostgreSQL Prisma
+ * for enterprise security & compliance.
  */
 
 export interface AuditLogEntry {
-  id?: string;
+  id: string;
   organizationId?: string | null;
+  organizationName?: string | null;
   userId?: string | null;
   userName: string;
+  userEmail: string;
   userRole: "SUPER_ADMIN" | "ORG_ADMIN" | "MANAGER" | "EMPLOYEE";
   action: string;
-  module: "Auth" | "Attendance" | "Employees" | "Branches" | "Leaves" | "Overtime" | "Payroll" | "Settings" | "Subscriptions" | "Referral";
+  module: "Auth" | "Attendance" | "Employees" | "Branches" | "Leaves" | "Overtime" | "Payroll" | "Settings" | "Subscriptions" | "Referral" | "System";
+  details: string;
+  ipAddress: string;
+  userAgent?: string;
+  createdAt: string;
+}
+
+// In-memory buffer for ultra-low-latency aggregation
+let inMemoryAuditLogs: AuditLogEntry[] = [];
+
+export async function logAuditEvent(entry: {
+  organizationId?: string | null;
+  userId?: string | null;
+  userName?: string;
+  userEmail?: string;
+  userRole?: "SUPER_ADMIN" | "ORG_ADMIN" | "MANAGER" | "EMPLOYEE";
+  action: string;
+  module?: AuditLogEntry["module"];
   details: string;
   ipAddress?: string;
   userAgent?: string;
-  createdAt?: string;
-}
+}): Promise<AuditLogEntry> {
+  const logId = `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const now = new Date();
 
-// In-memory buffer for real-time aggregation + DB persistence handler
-const inMemoryAuditLogs: AuditLogEntry[] = [
-  {
-    id: "log-1",
-    organizationId: "org-1",
-    userName: "Sarah Jenkins",
-    userRole: "ORG_ADMIN",
-    action: "LOCK_PAYROLL",
-    module: "Payroll",
-    details: "Locked August 2026 payroll batch for 142 employees. Total payout: ৳12,442,500.00",
-    ipAddress: "103.14.24.12",
-    createdAt: "2026-08-18 10:30:15",
-  },
-  {
-    id: "log-2",
-    organizationId: "org-1",
-    userName: "Tanvir Ahmed",
-    userRole: "MANAGER",
-    action: "REGULARIZE_ATTENDANCE",
-    module: "Attendance",
-    details: "Manual regularization for Arif Chowdhury (EMP-1042) on Aug 16: Device punch synced",
-    ipAddress: "103.14.24.18",
-    createdAt: "2026-08-18 09:14:22",
-  },
-  {
-    id: "log-3",
-    organizationId: "org-1",
-    userName: "Sarah Jenkins",
-    userRole: "ORG_ADMIN",
-    action: "APPROVE_LEAVE",
-    module: "Leaves",
-    details: "Approved Annual Leave for Arif Chowdhury (EMP-1042) from 2026-08-25 to 2026-08-28 (4 Days)",
-    ipAddress: "103.14.24.12",
-    createdAt: "2026-08-18 08:45:00",
-  },
-];
-
-export async function logAuditEvent(entry: Omit<AuditLogEntry, "id" | "createdAt">): Promise<AuditLogEntry> {
   const newLog: AuditLogEntry = {
-    ...entry,
-    id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-    createdAt: new Date().toISOString().replace("T", " ").substring(0, 19),
+    id: logId,
+    organizationId: entry.organizationId || null,
+    userId: entry.userId || null,
+    userName: entry.userName || "System User",
+    userEmail: entry.userEmail || (entry.userId ? `${entry.userId}@erp.com` : "system@platform.io"),
+    userRole: entry.userRole || "SUPER_ADMIN",
+    action: entry.action,
+    module: entry.module || "System",
+    details: entry.details,
+    ipAddress: entry.ipAddress || "127.0.0.1",
+    userAgent: entry.userAgent,
+    createdAt: now.toISOString().replace("T", " ").substring(0, 19),
   };
 
   inMemoryAuditLogs.unshift(newLog);
-  console.info(`[AUDIT_LOG][${newLog.module}][${newLog.action}] by ${newLog.userName} (${newLog.userRole}): ${newLog.details}`);
+
+  // Persist directly to PostgreSQL Prisma
+  try {
+    let roleEnum: UserRole | undefined;
+    if (entry.userRole === "SUPER_ADMIN") roleEnum = UserRole.SUPER_ADMIN;
+    else if (entry.userRole === "ORG_ADMIN") roleEnum = UserRole.ORG_ADMIN;
+    else if (entry.userRole === "MANAGER") roleEnum = UserRole.MANAGER;
+    else if (entry.userRole === "EMPLOYEE") roleEnum = UserRole.EMPLOYEE;
+
+    await prisma.audit_logs.create({
+      data: {
+        id: logId,
+        actorId: entry.userId || null,
+        actorEmail: entry.userEmail || null,
+        actorRole: roleEnum,
+        action: entry.action,
+        entityType: entry.module || "System",
+        metadata: {
+          details: entry.details,
+          userName: entry.userName,
+          userAgent: entry.userAgent,
+        },
+        ipAddress: entry.ipAddress || "127.0.0.1",
+        organizationId: entry.organizationId || null,
+        createdAt: now,
+      },
+    });
+  } catch (err) {
+    console.warn("[AUDIT_LOG_PERSIST_WARN]", err);
+  }
+
   return newLog;
 }
 
-export function getAuditLogs(organizationId?: string): AuditLogEntry[] {
-  if (!organizationId) {
-    return inMemoryAuditLogs;
+export async function getAuditLogs(organizationId?: string): Promise<AuditLogEntry[]> {
+  try {
+    const dbLogs = await prisma.audit_logs.findMany({
+      where: organizationId ? { organizationId } : {},
+      include: {
+        organizations: {
+          select: { name: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+
+    if (dbLogs.length > 0) {
+      const mappedDb: AuditLogEntry[] = dbLogs.map((l) => {
+        const meta = typeof l.metadata === "object" && l.metadata !== null ? (l.metadata as any) : {};
+        return {
+          id: l.id,
+          organizationId: l.organizationId,
+          organizationName: l.organizations?.name || null,
+          userId: l.actorId,
+          userName: meta.userName || l.actorEmail?.split("@")[0] || "System Actor",
+          userEmail: l.actorEmail || "system@platform.io",
+          userRole: (l.actorRole as any) || "SUPER_ADMIN",
+          action: l.action,
+          module: (l.entityType as any) || "System",
+          details: meta.details || `${l.action} on ${l.entityType}`,
+          ipAddress: l.ipAddress || "127.0.0.1",
+          createdAt: l.createdAt.toISOString().replace("T", " ").substring(0, 19),
+        };
+      });
+
+      // Merge memory logs not yet in DB
+      const existingIds = new Set(mappedDb.map((m) => m.id));
+      const recentUnsaved = inMemoryAuditLogs.filter((m) => !existingIds.has(m.id));
+      return [...recentUnsaved, ...mappedDb];
+    }
+  } catch (err) {
+    console.warn("[AUDIT_LOG_FETCH_WARN]", err);
   }
-  return inMemoryAuditLogs.filter(log => !log.organizationId || log.organizationId === organizationId);
+
+  if (organizationId) {
+    return inMemoryAuditLogs.filter((l) => !l.organizationId || l.organizationId === organizationId);
+  }
+  return inMemoryAuditLogs;
 }
