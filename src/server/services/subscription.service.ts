@@ -191,33 +191,8 @@ export class SubscriptionService {
    * Ensure default plans exist in database and return all plans with active subscriber count
    */
   static async getPlans(): Promise<SubscriptionPlanData[]> {
-    let plans = await prisma.subscription_plans.findMany({
-      include: {
-        _count: {
-          select: {
-            subscriptions: true,
-          },
-        },
-      },
-      orderBy: {
-        price: "asc",
-      },
-    });
-
-    // Auto-seed if table is empty
-    if (plans.length === 0) {
-      for (const p of DEFAULT_PLANS) {
-        await prisma.subscription_plans.upsert({
-          where: { type: p.type },
-          create: {
-            ...p,
-            updatedAt: new Date(),
-          },
-          update: {},
-        });
-      }
-
-      plans = await prisma.subscription_plans.findMany({
+    try {
+      let plans = await prisma.subscription_plans.findMany({
         include: {
           _count: {
             select: {
@@ -229,9 +204,42 @@ export class SubscriptionService {
           price: "asc",
         },
       });
+
+      // Auto-seed if table is empty
+      if (plans.length === 0) {
+        for (const p of DEFAULT_PLANS) {
+          await prisma.subscription_plans.upsert({
+            where: { type: p.type },
+            create: {
+              ...p,
+              updatedAt: new Date(),
+            },
+            update: {},
+          }).catch(() => {});
+        }
+
+        plans = await prisma.subscription_plans.findMany({
+          include: {
+            _count: {
+              select: {
+                subscriptions: true,
+              },
+            },
+          },
+          orderBy: {
+            price: "asc",
+          },
+        }).catch(() => []);
+      }
+
+      if (plans && plans.length > 0) {
+        return plans.map(mapToPlanData);
+      }
+    } catch (err) {
+      console.warn("[SubscriptionService] Database connection slow or unavailable, returning default plans fallback:", err);
     }
 
-    return plans.map(mapToPlanData);
+    return DEFAULT_PLANS.map(mapToPlanData);
   }
 
   static async getPlanById(id: string): Promise<SubscriptionPlanData> {

@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
 
-/**
- * Centralized Application Error Classes & HTTP Helpers
- * Provides clean HTTP status mapping without leaking database internals.
- */
-
 export class AppError extends Error {
   public statusCode: number;
   public code: string;
   public details?: any;
 
-  constructor(message: string, statusCode: number = 500, code: string = "INTERNAL_SERVER_ERROR", details?: any) {
+  constructor(message: string, statusCode: number = 500, code: string = "INTERNAL_ERROR", details?: any) {
     super(message);
     this.name = this.constructor.name;
     this.statusCode = statusCode;
@@ -20,33 +15,33 @@ export class AppError extends Error {
   }
 }
 
-export class ValidationError extends AppError {
-  constructor(message: string = "Validation failed", details?: any) {
-    super(message, 400, "VALIDATION_ERROR", details);
+export class NotFoundError extends AppError {
+  constructor(resource: string = "Resource") {
+    super(`${resource} not found`, 404, "NOT_FOUND");
   }
 }
 
 export class UnauthorizedError extends AppError {
-  constructor(message: string = "Authentication required") {
+  constructor(message: string = "Unauthorized. Please authenticate.") {
     super(message, 401, "UNAUTHORIZED");
   }
 }
 
 export class ForbiddenError extends AppError {
-  constructor(message: string = "Permission denied: Insufficient role or access rights") {
+  constructor(message: string = "Forbidden. You do not have permission to access this resource.") {
     super(message, 403, "FORBIDDEN");
   }
 }
 
 export class TenantSecurityError extends AppError {
-  constructor(message: string = "Cross-tenant access violation: Data isolated") {
-    super(message, 403, "TENANT_ACCESS_DENIED");
+  constructor(message: string = "Cross-tenant access violation detected") {
+    super(message, 403, "TENANT_SECURITY_VIOLATION");
   }
 }
 
-export class NotFoundError extends AppError {
-  constructor(resource: string = "Resource") {
-    super(`${resource} not found`, 404, "NOT_FOUND");
+export class ValidationError extends AppError {
+  constructor(message: string = "Validation failed", details?: any) {
+    super(message, 400, "VALIDATION_ERROR", details);
   }
 }
 
@@ -62,7 +57,19 @@ export class PlanLimitExceededError extends AppError {
   }
 }
 
-export function apiSuccess<T = any>(data: T, message: string = "Success", meta?: any, status: number = 200) {
+const NO_CACHE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+  Pragma: "no-cache",
+  Expires: "0",
+};
+
+export function apiSuccess<T = any>(
+  data: T,
+  message: string = "Success",
+  meta?: any,
+  status: number = 200,
+  customHeaders?: Record<string, string>
+) {
   return NextResponse.json(
     {
       success: true,
@@ -70,7 +77,13 @@ export function apiSuccess<T = any>(data: T, message: string = "Success", meta?:
       data,
       ...(meta ? { meta } : {}),
     },
-    { status }
+    {
+      status,
+      headers: {
+        ...NO_CACHE_HEADERS,
+        ...(customHeaders || {}),
+      },
+    }
   );
 }
 
@@ -89,7 +102,10 @@ export function apiError(error: any) {
           details: error.details,
         },
       },
-      { status: error.statusCode }
+      {
+        status: error.statusCode,
+        headers: NO_CACHE_HEADERS,
+      }
     );
   }
 
@@ -111,7 +127,10 @@ export function apiError(error: any) {
           details: formattedErrors,
         },
       },
-      { status: 400 }
+      {
+        status: 400,
+        headers: NO_CACHE_HEADERS,
+      }
     );
   }
 
@@ -125,7 +144,10 @@ export function apiError(error: any) {
         message: "An unexpected server error occurred. Please try again later.",
       },
     },
-    { status: 500 }
+    {
+      status: 500,
+      headers: NO_CACHE_HEADERS,
+    }
   );
 }
 

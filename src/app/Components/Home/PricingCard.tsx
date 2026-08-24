@@ -30,11 +30,12 @@ export const PricingCard: React.FC<PricingCardProps> = ({ plan, isYearly }) => {
     const handlePlanSelect = () => {
         const billingCycle = isYearly ? 'yearly' : 'monthly';
         const planSlug = plan.name.toLowerCase().replace(/\s+plan/g, "").trim();
+        const selectedAmount = isYearly ? (plan.yearlyPrice || 0) : (plan.monthlyPrice || 0);
         
         if (isFree) {
             router.push(`/signup?plan=free`);
         } else {
-            router.push(`/payment?plan=${encodeURIComponent(planSlug)}&billing=${billingCycle}`);
+            router.push(`/payment?plan=${encodeURIComponent(planSlug)}&billing=${billingCycle}&amount=${encodeURIComponent(selectedAmount)}`);
         }
     };
 

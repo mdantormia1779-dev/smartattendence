@@ -88,31 +88,41 @@ function mapToOrganizationData(org: any): OrganizationData {
   };
 }
 
+let cachedOrganizations: OrganizationData[] = [];
+
 export class OrganizationService {
   /**
    * Fetch all organizations from database with relational employee and branch counts
    */
   static async getAllOrganizations(): Promise<OrganizationData[]> {
-    const orgs = await prisma.organizations.findMany({
-      include: {
-        subscriptions: {
-          include: {
-            subscription_plans: true,
+    try {
+      const orgs = await prisma.organizations.findMany({
+        include: {
+          subscriptions: {
+            include: {
+              subscription_plans: true,
+            },
+          },
+          _count: {
+            select: {
+              employees: true,
+              branches: true,
+            },
           },
         },
-        _count: {
-          select: {
-            employees: true,
-            branches: true,
-          },
+        orderBy: {
+          createdAt: "desc",
         },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+      });
 
-    return orgs.map(mapToOrganizationData);
+      const mapped = orgs.map(mapToOrganizationData);
+      cachedOrganizations = mapped;
+      return mapped;
+    } catch (err) {
+      console.warn("[OrganizationService] Database query error or connection timeout, returning cached fallback:", err);
+      if (cachedOrganizations.length > 0) return cachedOrganizations;
+      return [];
+    }
   }
 
   /**

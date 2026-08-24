@@ -4,6 +4,7 @@ import React, { useState, Suspense, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ShieldCheck, CheckCircle2, Copy, Smartphone, X, Loader2, ArrowRight } from "lucide-react";
+import { api } from "@/lib/api-client";
 
 interface PaymentFormData {
     organization: string;
@@ -15,25 +16,23 @@ function ManualPaymentContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
-    const rawPlan = searchParams.get('plan') || 'business';
-    const billingParam = searchParams.get('billing') || 'monthly';
-    
-    // Capitalize first letter for display (e.g. "starter" -> "Starter")
-    const planNameParam = rawPlan.charAt(0).toUpperCase() + rawPlan.slice(1).toLowerCase();
+    const rawPlan = (searchParams.get("plan") || "business").toLowerCase();
+    const billingParam = (searchParams.get("billing") || "monthly").toLowerCase();
+    const urlAmount = searchParams.get("amount");
 
-    // Plan pricing config
-    const planPrices: Record<string, { monthly: string; yearly: string }> = {
-        starter: { monthly: "৳4,999", yearly: "৳47,990" },
-        business: { monthly: "৳14,999", yearly: "৳143,990" },
-        enterprise: { monthly: "৳39,999", yearly: "৳383,990" },
-    };
+    const isYearly = billingParam === "yearly";
 
-    const isYearly = billingParam.toLowerCase() === 'yearly';
-    const currentPrices = planPrices[rawPlan.toLowerCase()] || planPrices.business;
-    const amount = isYearly ? currentPrices.yearly : currentPrices.monthly;
+    // Dynamic Plan Data from API
+    const [livePlan, setLivePlan] = useState<{
+        name: string;
+        monthlyPrice: number;
+        yearlyPrice: number;
+    } | null>(null);
+    const [plansLoading, setPlansLoading] = useState(true);
 
     const [copied, setCopied] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
 
     // bKash Merchant/Personal Number for manual payment
     const bkashNumber = "01318964063";
@@ -43,6 +42,66 @@ function ManualPaymentContent() {
         handleSubmit,
         formState: { errors, isSubmitting },
     } = useForm<PaymentFormData>();
+
+    // Fetch dynamic plan price from database / SubscriptionService API
+    useEffect(() => {
+        let isMounted = true;
+        const fetchPlanDetails = async () => {
+            try {
+                setPlansLoading(true);
+                const res = await api.subscriptions.getPlans();
+                if (isMounted && res.success && Array.isArray(res.data)) {
+                    const found = res.data.find(
+                        (p: any) =>
+                            p.id?.toLowerCase() === rawPlan ||
+                            p.tier?.toLowerCase() === rawPlan ||
+                            p.name?.toLowerCase().replace(/\s+plan/g, "").trim() === rawPlan ||
+                            p.name?.toLowerCase().includes(rawPlan)
+                    );
+
+                    if (found) {
+                        setLivePlan({
+                            name: found.name || "Plan",
+                            monthlyPrice: Number(found.monthlyPrice ?? found.price ?? 0),
+                            yearlyPrice: Number(found.yearlyPrice ?? (found.price ? found.price * 10 : 0)),
+                        });
+                    }
+                }
+            } catch (err) {
+                console.warn("Could not fetch live plan details, using query parameters:", err);
+            } finally {
+                if (isMounted) setPlansLoading(false);
+            }
+        };
+
+        fetchPlanDetails();
+        return () => {
+            isMounted = false;
+        };
+    }, [rawPlan]);
+
+    // Fallback static pricing map
+    const defaultPrices: Record<string, { name: string; monthly: number; yearly: number }> = {
+        starter: { name: "Starter Plan", monthly: 4999, yearly: 47990 },
+        business: { name: "Business Plan", monthly: 14999, yearly: 143990 },
+        enterprise: { name: "Enterprise Plan", monthly: 39999, yearly: 383990 },
+    };
+
+    const fallback = defaultPrices[rawPlan] || defaultPrices.business;
+    const displayName = livePlan?.name || fallback.name;
+
+    // Calculate final payable amount (respects URL query if explicitly given, else uses live API plan price)
+    const rawNumberAmount: number = (() => {
+        if (urlAmount && !isNaN(Number(urlAmount)) && Number(urlAmount) > 0) {
+            return Number(urlAmount);
+        }
+        if (livePlan) {
+            return isYearly ? livePlan.yearlyPrice : livePlan.monthlyPrice;
+        }
+        return isYearly ? fallback.yearly : fallback.monthly;
+    })();
+
+    const formattedAmount = `৳${rawNumberAmount.toLocaleString()}`;
 
     // Handle ESC key press & background click to close modal
     useEffect(() => {
@@ -61,23 +120,29 @@ function ManualPaymentContent() {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const onSubmit = (data: PaymentFormData) => {
-        const newRequest = {
-            id: `pay-${Date.now()}`,
-            organization: data.organization.trim(),
-            planName: `${planNameParam} Plan`,
-            amount: amount,
-            billingCycle: isYearly ? "Yearly" : "Monthly",
-            date: new Date().toISOString().split('T')[0],
-            status: "Pending",
-            transactionId: data.transactionId.trim(),
-            senderNumber: data.senderNumber.trim(),
-        };
+    const onSubmit = async (data: PaymentFormData) => {
+        try {
+            setSubmitError(null);
+            const res = await api.payments.create({
+                organization: data.organization.trim(),
+                organizationName: data.organization.trim(),
+                planName: displayName,
+                amount: rawNumberAmount,
+                billingCycle: isYearly ? "Yearly" : "Monthly",
+                transactionId: data.transactionId.trim(),
+                senderNumber: data.senderNumber.trim(),
+                provider: "bKash",
+            });
 
-        const existingRequests = JSON.parse(localStorage.getItem("payment_requests") || "[]");
-        localStorage.setItem("payment_requests", JSON.stringify([newRequest, ...existingRequests]));
-
-        setSubmitted(true);
+            if (res && (res.success || res.data)) {
+                setSubmitted(true);
+            } else {
+                setSubmitError(res?.message || "Failed to record payment verification. Please try again.");
+            }
+        } catch (err: any) {
+            console.error("Payment submission failed:", err);
+            setSubmitError(err?.message || "Failed to connect to verification server. Please try again.");
+        }
     };
 
     // Close Handler
@@ -113,7 +178,7 @@ function ManualPaymentContent() {
                         </span>
                         <h2 className="text-xl font-bold text-neutral-900">Payment Submitted Successfully</h2>
                         <p className="text-xs text-neutral-500 leading-relaxed">
-                            Your payment request for <span className="font-semibold text-neutral-800">{planNameParam} Plan ({amount})</span> has been received. Our admin team will verify your transaction ID shortly.
+                            Your payment request for <span className="font-semibold text-neutral-800">{displayName} ({formattedAmount})</span> has been received and added to the admin verification queue.
                         </p>
                     </div>
 
@@ -180,7 +245,12 @@ function ManualPaymentContent() {
                                     <li>Open bKash App or dial <span className="font-mono font-bold text-neutral-900">*247#</span></li>
                                     <li>Select <span className="font-semibold text-neutral-900">Send Money</span></li>
                                     <li>Enter bKash Number: <span className="font-mono font-bold text-neutral-900">{bkashNumber}</span></li>
-                                    <li>Enter exact amount: <span className="font-mono font-bold text-neutral-900">{amount}</span></li>
+                                    <li>
+                                        Enter exact amount:{" "}
+                                        <span className="font-mono font-bold text-neutral-900">
+                                            {plansLoading ? "Loading..." : formattedAmount}
+                                        </span>
+                                    </li>
                                     <li>Save the <span className="font-semibold text-neutral-900">TrxID</span> after completion</li>
                                 </ol>
 
@@ -201,6 +271,12 @@ function ManualPaymentContent() {
 
                             {/* Form Input Fields */}
                             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                                {submitError && (
+                                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-600 font-medium">
+                                        {submitError}
+                                    </div>
+                                )}
+
                                 <div>
                                     <label className="block text-[11px] font-bold text-neutral-600 uppercase tracking-wider mb-1.5">
                                         Organization Name <span className="text-rose-500">*</span>
@@ -229,7 +305,7 @@ function ManualPaymentContent() {
                                             pattern: {
                                                 value: /^01[3-9]\d{8}$/,
                                                 message: "Please enter a valid 11-digit bKash number",
-                                            },
+                                             },
                                         })}
                                         className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-xs md:text-sm bg-neutral-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] transition-all duration-200"
                                     />
@@ -255,15 +331,15 @@ function ManualPaymentContent() {
 
                                 <button
                                     type="submit"
-                                    disabled={isSubmitting}
+                                    disabled={isSubmitting || plansLoading}
                                     className="w-full mt-2 py-3 bg-[#10b981] hover:bg-emerald-600 text-white font-medium rounded-xl transition-all duration-300 shadow-md hover:shadow-lg active:scale-[0.98] cursor-pointer text-xs md:text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isSubmitting ? (
                                         <>
-                                            <Loader2 className="w-4 h-4 animate-spin" /> Processing...
+                                            <Loader2 className="w-4 h-4 animate-spin" /> Submitting to Admin...
                                         </>
                                     ) : (
-                                        "Submit Payment for Verification"
+                                        `Submit Payment for Verification (${formattedAmount})`
                                     )}
                                 </button>
                             </form>
@@ -278,7 +354,7 @@ function ManualPaymentContent() {
 
                                 <div className="flex justify-between items-center text-xs">
                                     <span className="text-neutral-500 font-medium">Selected Plan</span>
-                                    <span className="font-bold text-neutral-900">{planNameParam} Plan</span>
+                                    <span className="font-bold text-neutral-900">{displayName}</span>
                                 </div>
 
                                 <div className="flex justify-between items-center text-xs">
@@ -288,7 +364,9 @@ function ManualPaymentContent() {
 
                                 <div className="border-t border-neutral-200 pt-3 flex justify-between items-center">
                                     <span className="text-xs font-bold text-neutral-900">Total Payable</span>
-                                    <span className="text-xl font-extrabold text-[#10b981]">{amount}</span>
+                                    <span className="text-xl font-extrabold text-[#10b981]">
+                                        {plansLoading ? <Loader2 className="w-4 h-4 animate-spin inline" /> : formattedAmount}
+                                    </span>
                                 </div>
                             </div>
 

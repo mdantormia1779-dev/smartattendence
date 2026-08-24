@@ -49,8 +49,12 @@ class ApiClient {
     try {
       const authHeaders = this.getAuthHeader();
       const res = await fetch(url, {
+        cache: "no-store",
         headers: {
           "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+          Pragma: "no-cache",
+          Expires: "0",
           ...authHeaders,
           ...options.headers,
         },
@@ -73,19 +77,24 @@ class ApiClient {
   }
 
   async get<T = any>(url: string, queryParams?: Record<string, any>): Promise<ApiResponse<T>> {
-    let finalUrl = url;
+    const searchParams = new URLSearchParams();
     if (queryParams) {
-      const searchParams = new URLSearchParams();
       Object.entries(queryParams).forEach(([key, val]) => {
         if (val !== undefined && val !== null && val !== "") {
           searchParams.append(key, String(val));
         }
       });
-      const qs = searchParams.toString();
-      if (qs) finalUrl += `?${qs}`;
     }
+    // Cache-busting parameter to prevent browser & proxy caches
+    searchParams.append("_t", Date.now().toString());
 
-    return this.request<T>(finalUrl, { method: "GET" });
+    const separator = url.includes("?") ? "&" : "?";
+    const finalUrl = `${url}${separator}${searchParams.toString()}`;
+
+    return this.request<T>(finalUrl, {
+      method: "GET",
+      cache: "no-store",
+    });
   }
 
   async post<T = any>(url: string, body?: any): Promise<ApiResponse<T>> {
@@ -226,6 +235,7 @@ class ApiClient {
   payments = {
     getAll: () => this.get("/api/payments"),
     getById: (id: string) => this.get(`/api/payments/${id}`),
+    create: (body: any) => this.post("/api/payments", body),
     updateStatus: (id: string, status: string) => this.patch(`/api/payments/${id}`, { status }),
   };
 
