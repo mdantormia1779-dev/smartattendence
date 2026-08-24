@@ -24,27 +24,32 @@ export const PlatformOverview = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        let isMounted = true;
         async function fetchOverview() {
             try {
+                setLoading(true);
                 const res = await api.analytics.admin();
-                if (res.success && res.data) {
+                if (isMounted && res.success && res.data) {
                     setStats({
                         totalOrganizations: res.data.totalOrganizations ?? 0,
                         totalBranches: res.data.totalBranches ?? 0,
                         totalManagers: res.data.totalManagers ?? 0,
                         totalEmployees: res.data.totalEmployees ?? 0,
                         activeSubscriptions: res.data.activeSubscriptions ?? 0,
-                        monthlyRevenue: res.data.monthlyRevenue ?? 0,
+                        monthlyRevenue: res.data.monthlyRevenue ?? res.data.totalRevenue ?? 0,
                     });
                 }
             } catch (e) {
                 console.error("Failed to load admin analytics", e);
             } finally {
-                setLoading(false);
+                if (isMounted) setLoading(false);
             }
         }
 
         fetchOverview();
+        return () => {
+            isMounted = false;
+        };
     }, []);
 
     const platformStats = [
@@ -60,7 +65,7 @@ export const PlatformOverview = () => {
         <div className="space-y-4 pt-4">
             <div>
                 <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">Platform Overview</h2>
-                <p className="text-xs text-gray-500 mt-0.5">Real-time health metrics of all organizations, subscriptions, and revenue.</p>
+                <p className="text-xs text-gray-500 mt-0.5">Real-time live health metrics across all organizations, subscriptions, and revenue.</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -86,7 +91,13 @@ export const PlatformOverview = () => {
                             </div>
 
                             <div className="mt-5">
-                                <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight">{item.count}</h3>
+                                {loading ? (
+                                    <div className="h-8 flex items-center">
+                                        <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                                    </div>
+                                ) : (
+                                    <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight">{item.count}</h3>
+                                )}
                                 <p className="text-xs font-medium text-gray-500 mt-1">{item.title}</p>
                             </div>
                         </motion.div>
