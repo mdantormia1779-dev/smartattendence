@@ -1,11 +1,43 @@
+import { prisma } from "@/lib/prisma";
 import { PaymentService } from "@/server/services/payment.service";
 import { requireRole } from "@/server/authorization";
 import { apiSuccess, apiError } from "@/server/errors";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
 export async function GET(request: Request) {
   try {
     requireRole(request, ["SUPER_ADMIN"]);
-    const payments = await PaymentService.getPayments();
+
+    const [payments, activeSubscriptionsCount, pendingPaymentsAgg] = await Promise.all([
+      PaymentService.getPayments(),
+      prisma.subscriptions
+        .count({
+          where: {
+            status: "ACTIVE",
+          },
+        })
+        .catch(async () => {
+          return prisma.organizations.count({
+            where: {
+              status: "ACTIVE",
+            },
+          }).catch(() => 0);
+        }),
+      prisma.payments
+        .aggregate({
+          where: {
+            status: "PENDING",
+          },
+          _sum: {
+            amount: true,
+          },
+          _count: true,
+        })
+        .catch(() => ({ _sum: { amount: 0 }, _count: 0 })),
+    ]);
 
     const approvedPayments = payments.filter((p) => p.status === "APPROVED");
     const totalRevenue = approvedPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
@@ -51,37 +83,51 @@ export async function GET(request: Request) {
         year: m.year,
         rawAmount: m.rawAmount,
         amount:
-          m.rawAmount >= 1000
-            ? `$${(m.rawAmount / 1000).toFixed(1)}k`
-            : `$${m.rawAmount.toLocaleString()}`,
+          m.rawAmount >= 100000
+            ? `৳${(m.rawAmount / 1000).toFixed(0)}k`
+            : m.rawAmount >= 1000
+            ? `৳${(m.rawAmount / 1000).toFixed(1)}k`
+            : `৳${m.rawAmount.toLocaleString()}`,
         height: `${heightPercentage}%`,
       };
     });
 
-    // Dynamic grid scale
-    const gridMax = Math.ceil(maxRaw / 100) * 100;
-    const gridIntervals = [
-      `$${gridMax >= 1000 ? (gridMax / 1000).toFixed(1) + "k" : gridMax}`,
-      `$${(gridMax * 0.75) >= 1000 ? ((gridMax * 0.75) / 1000).toFixed(1) + "k" : Math.round(gridMax * 0.75)}`,
-      `$${(gridMax * 0.5) >= 1000 ? ((gridMax * 0.5) / 1000).toFixed(1) + "k" : Math.round(gridMax * 0.5)}`,
-      `$${(gridMax * 0.25) >= 1000 ? ((gridMax * 0.25) / 1000).toFixed(1) + "k" : Math.round(gridMax * 0.25)}`,
-      `$0`,
-    ];
+    const currentMonthAmount = last6Months[last6Months.length - 1]?.rawAmount ?? 0;
+    const previousMonthAmount = last6Months[last6Months.length - 2]?.rawAmount ?? 0;
 
-    const currentMonthAmount = last6Months[last6Months.length - 1]?.rawAmount ?? totalRevenue;
+    let monthlyGrowth = "+0.0%";
+    if (previousMonthAmount > 0) {
+      const diff = ((currentMonthAmount - previousMonthAmount) / previousMonthAmount) * 100;
+      monthlyGrowth = `${diff >= 0 ? "+" : ""}${diff.toFixed(1)}%`;
+    } else if (currentMonthAmount > 0) {
+      monthlyGrowth = "+100.0%";
+    }
+
+    const pendingPayoutsAmount = Number(pendingPaymentsAgg?._sum?.amount || 0);
 
     const summary = {
       totalRevenue,
+      formattedTotalRevenue: `৳${totalRevenue.toLocaleString()}`,
       mrr: currentMonthAmount || totalRevenue,
+      formattedMrr: `৳${(currentMonthAmount || totalRevenue).toLocaleString()}`,
       arr: (currentMonthAmount || totalRevenue) * 12,
+      formattedArr: `৳${((currentMonthAmount || totalRevenue) * 12).toLocaleString()}`,
+      monthlyGrowth,
+      activeSubscriptions: activeSubscriptionsCount,
+      pendingPayouts: pendingPayoutsAmount,
+      formattedPendingPayouts: `৳${pendingPayoutsAmount.toLocaleString()}`,
+      pendingPayoutsCount: pendingPaymentsAgg?._count || 0,
       paymentsCount: payments.length,
       chartData,
-      gridIntervals,
       currentYear: now.getFullYear(),
-      payments,
+      payments: payments.slice(0, 10),
     };
 
-    return apiSuccess(summary, "Platform revenue report generated successfully");
+    return apiSuccess(summary, "Platform revenue report generated successfully", undefined, 200, {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0",
+    });
   } catch (error: any) {
     return apiError(error);
   }
