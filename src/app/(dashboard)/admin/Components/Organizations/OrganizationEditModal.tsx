@@ -30,7 +30,7 @@ export const OrganizationEditModal: React.FC<OrganizationEditModalProps> = ({
     const [currency, setCurrency] = useState('BDT (৳)');
     const [timeZone, setTimeZone] = useState('Asia/Dhaka (GMT+6)');
     const [workingDays, setWorkingDays] = useState('Sun - Thu');
-    const [plan, setPlan] = useState('Business');
+    const [plan, setPlan] = useState('BUSINESS');
     const [officeStart, setOfficeStart] = useState('09:00 AM');
     const [officeEnd, setOfficeEnd] = useState('05:00 PM');
 
@@ -51,7 +51,7 @@ export const OrganizationEditModal: React.FC<OrganizationEditModalProps> = ({
             setCurrency(organization.currency || 'BDT (৳)');
             setTimeZone(organization.timeZone || 'Asia/Dhaka (GMT+6)');
             setWorkingDays(organization.workingDays || 'Sun - Thu');
-            setPlan(organization.plan || 'Business');
+            setPlan(organization.plan ? organization.plan.toUpperCase() : 'BUSINESS');
 
             if (organization.officeHours && organization.officeHours.includes(' - ')) {
                 const parts = organization.officeHours.split(' - ');
@@ -96,7 +96,7 @@ export const OrganizationEditModal: React.FC<OrganizationEditModalProps> = ({
                 currency,
                 timeZone,
                 workingDays,
-                plan,
+                plan: plan.toUpperCase(),
                 officeHours: `${officeStart.trim()} - ${officeEnd.trim()}`,
             };
 
@@ -209,10 +209,10 @@ export const OrganizationEditModal: React.FC<OrganizationEditModalProps> = ({
                                         onChange={(e) => setPlan(e.target.value)}
                                         className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050]"
                                     >
-                                        <option value="Free">Free Tier</option>
-                                        <option value="Starter">Starter Plan</option>
-                                        <option value="Business">Business Plan</option>
-                                        <option value="Enterprise">Enterprise Plan</option>
+                                        <option value="FREE">Free Tier</option>
+                                        <option value="STARTER">Starter Plan</option>
+                                        <option value="BUSINESS">Business Plan</option>
+                                        <option value="ENTERPRISE">Enterprise Plan</option>
                                     </select>
                                 </div>
 

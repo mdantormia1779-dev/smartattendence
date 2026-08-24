@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError, PlanLimitExceededError } from "../errors";
-import { OrgStatus } from "@prisma/client";
+import { OrgStatus, SubscriptionPlanType } from "@prisma/client";
 
 export interface OrganizationData {
   id: string;
@@ -193,6 +193,24 @@ export class OrganizationService {
         .filter(Boolean);
     }
 
+    const tier = (data.planTier?.toUpperCase() as SubscriptionPlanType) || SubscriptionPlanType.STARTER;
+    let targetPlan = await prisma.subscription_plans.findFirst({
+      where: { type: tier },
+    });
+
+    if (!targetPlan) {
+      targetPlan = await prisma.subscription_plans.create({
+        data: {
+          id: `plan-${tier.toLowerCase()}`,
+          name: `${tier.charAt(0) + tier.slice(1).toLowerCase()} Plan`,
+          type: tier,
+          price: tier === "FREE" ? 0 : tier === "STARTER" ? 29 : tier === "BUSINESS" ? 99 : 299,
+          billingCycle: "monthly",
+          updatedAt: new Date(),
+        },
+      });
+    }
+
     const created = await prisma.organizations.create({
       data: {
         id: orgId,
@@ -218,6 +236,14 @@ export class OrganizationService {
           antiSpoofingMode: "High",
         },
         updatedAt: new Date(),
+        subscriptions: {
+          create: {
+            id: `sub-${Date.now()}`,
+            planId: targetPlan.id,
+            status: "ACTIVE",
+            updatedAt: new Date(),
+          },
+        },
       },
       include: {
         subscriptions: {
@@ -264,6 +290,43 @@ export class OrganizationService {
       throw new PlanLimitExceededError(
         "Custom domain is an Enterprise-only feature. Please upgrade your subscription."
       );
+    }
+
+    // 1. Handle Plan Tier & Subscription Upsert if planTier is provided
+    if (settings.planTier) {
+      const planType = settings.planTier.toUpperCase() as SubscriptionPlanType;
+      let targetPlan = await prisma.subscription_plans.findFirst({
+        where: { type: planType },
+      });
+
+      if (!targetPlan) {
+        targetPlan = await prisma.subscription_plans.create({
+          data: {
+            id: `plan-${planType.toLowerCase()}`,
+            name: `${planType.charAt(0) + planType.slice(1).toLowerCase()} Plan`,
+            type: planType,
+            price: planType === "FREE" ? 0 : planType === "STARTER" ? 29 : planType === "BUSINESS" ? 99 : 299,
+            billingCycle: "monthly",
+            updatedAt: new Date(),
+          },
+        });
+      }
+
+      await prisma.subscriptions.upsert({
+        where: { organizationId: id },
+        create: {
+          id: `sub-${Date.now()}`,
+          organizationId: id,
+          planId: targetPlan.id,
+          status: "ACTIVE",
+          updatedAt: new Date(),
+        },
+        update: {
+          planId: targetPlan.id,
+          status: "ACTIVE",
+          updatedAt: new Date(),
+        },
+      });
     }
 
     const currentTheme =
