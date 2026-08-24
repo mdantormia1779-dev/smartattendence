@@ -1,3 +1,5 @@
+import { prisma } from "@/lib/prisma";
+
 /**
  * Referral & Affiliate Commission Engine (Section 32)
  * 
@@ -13,7 +15,7 @@ export interface ReferralProgramConfig {
   defaultCommissionRate: number; // e.g. 20 (%)
   holdingPeriodDays: number;     // e.g. 30 (days)
   cookieDurationDays: number;    // e.g. 30 (days)
-  minimumWithdrawal: number;     // e.g. $50
+  minimumWithdrawal: number;     // e.g. 500 (BDT/USD)
   recurringEnabled: boolean;
   recurringMonths: number;       // e.g. 12 (months)
   refundProtection: boolean;
@@ -27,7 +29,7 @@ export const DEFAULT_REFERRAL_PROGRAM: ReferralProgramConfig = {
   defaultCommissionRate: 20.0,
   holdingPeriodDays: 30,
   cookieDurationDays: 30,
-  minimumWithdrawal: 50.0,
+  minimumWithdrawal: 500.0,
   recurringEnabled: true,
   recurringMonths: 12,
   refundProtection: true,
@@ -96,195 +98,123 @@ export interface FraudAlert {
   createdAt: string;
 }
 
-// In-Memory Database store for demo & production API fallback
+// Clean in-memory stores for real referral ledger tracking
 let globalProgramConfig: ReferralProgramConfig = { ...DEFAULT_REFERRAL_PROGRAM };
+let referralAccounts: ReferralAccountData[] = [];
+let commissionsList: CommissionEntry[] = [];
+let withdrawalRequests: WithdrawalRequest[] = [];
+let fraudAlerts: FraudAlert[] = [];
 
-let referralAccounts: ReferralAccountData[] = [
-  {
-    id: "ref-acc-1",
-    userId: "user-super-1",
-    userName: "Md Antor",
-    userEmail: "antor@saas.com",
-    referralCode: "ANTOR2026",
-    referralLink: "https://smartattendance.io/signup?ref=ANTOR2026",
-    referralType: "AFFILIATE",
-    commissionRate: 20.0,
-    totalClicks: 1240,
-    totalRegistrations: 86,
-    totalPaidCustomers: 32,
-    totalRevenue: 4800.0,
-    pendingCommission: 320.0,
-    availableBalance: 580.0,
-    paidCommission: 1240.0,
-    status: "ACTIVE",
-    createdAt: "2026-01-15",
-  },
-  {
-    id: "ref-acc-2",
-    userId: "user-org-1",
-    userName: "Sarah Jenkins (Vertex Tech)",
-    userEmail: "sarah.admin@vertextech.io",
-    organizationId: "org-1",
-    referralCode: "VERTEX2026",
-    referralLink: "https://smartattendance.io/signup?ref=VERTEX2026",
-    referralType: "ORG_ADMIN",
-    commissionRate: 20.0,
-    totalClicks: 320,
-    totalRegistrations: 18,
-    totalPaidCustomers: 6,
-    totalRevenue: 1200.0,
-    pendingCommission: 90.0,
-    availableBalance: 150.0,
-    paidCommission: 0.0,
-    status: "ACTIVE",
-    createdAt: "2026-03-10",
-  },
-  {
-    id: "ref-acc-3",
-    userId: "user-emp-1",
-    userName: "Arif Chowdhury",
-    userEmail: "arif.c@vertextech.io",
-    organizationId: "org-1",
-    referralCode: "ARIF-EMP1042",
-    referralLink: "https://smartattendance.io/signup?ref=ARIF-EMP1042",
-    referralType: "EMPLOYEE",
-    commissionRate: 15.0,
-    totalClicks: 145,
-    totalRegistrations: 8,
-    totalPaidCustomers: 3,
-    totalRevenue: 450.0,
-    pendingCommission: 45.0,
-    availableBalance: 67.5,
-    paidCommission: 0.0,
-    status: "ACTIVE",
-    createdAt: "2026-04-05",
-  },
-];
+/**
+ * Synchronize real registered database users (Org Admins, Managers, Employees)
+ * into referral affiliate accounts automatically.
+ */
+export async function syncDatabaseUsersToAffiliates(): Promise<ReferralAccountData[]> {
+  try {
+    const [orgAdmins, managers, employees, superAdmins] = await Promise.all([
+      prisma.org_admins.findMany({ select: { id: true, name: true, email: true, organizationId: true } }).catch(() => []),
+      prisma.managers.findMany({ select: { id: true, name: true, email: true, organizationId: true } }).catch(() => []),
+      prisma.employees.findMany({ select: { id: true, fullName: true, email: true, organizationId: true } }).catch(() => []),
+      prisma.super_admins.findMany({ select: { id: true, name: true, email: true } }).catch(() => []),
+    ]);
 
-let commissionsList: CommissionEntry[] = [
-  {
-    id: "com-101",
-    referralAccountId: "ref-acc-1",
-    referralCode: "ANTOR2026",
-    organizationName: "Bengal Textiles Ltd.",
-    planName: "Enterprise Plan",
-    billingCycle: "Monthly",
-    baseAmount: 319.0,
-    commissionRate: 20.0,
-    commissionAmount: 63.8,
-    status: "AVAILABLE",
-    availableAt: "2026-07-02",
-    createdAt: "2026-06-02",
-  },
-  {
-    id: "com-102",
-    referralAccountId: "ref-acc-1",
-    referralCode: "ANTOR2026",
-    organizationName: "CareMed Hospital",
-    planName: "Business Plan",
-    billingCycle: "Monthly",
-    baseAmount: 149.0,
-    commissionRate: 20.0,
-    commissionAmount: 29.8,
-    status: "AVAILABLE",
-    availableAt: "2026-08-01",
-    createdAt: "2026-07-01",
-  },
-  {
-    id: "com-103",
-    referralAccountId: "ref-acc-1",
-    referralCode: "ANTOR2026",
-    organizationName: "Nova IT Hub",
-    planName: "Business Plan",
-    billingCycle: "Monthly",
-    baseAmount: 149.0,
-    commissionRate: 20.0,
-    commissionAmount: 29.8,
-    status: "PENDING",
-    availableAt: "2026-09-15",
-    createdAt: "2026-08-15",
-  },
-  {
-    id: "com-104",
-    referralAccountId: "ref-acc-2",
-    referralCode: "VERTEX2026",
-    organizationName: "Apex Logistics Ltd.",
-    planName: "Starter Plan",
-    billingCycle: "Monthly",
-    baseAmount: 39.0,
-    commissionRate: 20.0,
-    commissionAmount: 7.8,
-    status: "AVAILABLE",
-    availableAt: "2026-08-10",
-    createdAt: "2026-07-10",
-  },
-  {
-    id: "com-105",
-    referralAccountId: "ref-acc-3",
-    referralCode: "ARIF-EMP1042",
-    organizationName: "CloudTech Software",
-    planName: "Business Plan",
-    billingCycle: "Monthly",
-    baseAmount: 149.0,
-    commissionRate: 15.0,
-    commissionAmount: 22.35,
-    status: "AVAILABLE",
-    availableAt: "2026-08-05",
-    createdAt: "2026-07-05",
-  },
-];
+    // Register super admins
+    for (const admin of superAdmins) {
+      getOrCreateReferralAccount({
+        id: admin.id,
+        name: admin.name || "Super Admin",
+        email: admin.email,
+        role: "SUPER_ADMIN",
+      });
+    }
 
-let withdrawalRequests: WithdrawalRequest[] = [
-  {
-    id: "wth-1",
-    referralAccountId: "ref-acc-1",
-    affiliateName: "Md Antor",
-    affiliateEmail: "antor@saas.com",
-    amount: 500.0,
-    currency: "USD",
-    paymentMethod: "Bank Transfer",
-    paymentDetails: "City Bank BD - A/C 110293849102",
-    status: "PAID",
-    requestedAt: "2026-07-10",
-    processedAt: "2026-07-11",
-  },
-  {
-    id: "wth-2",
-    referralAccountId: "ref-acc-1",
-    affiliateName: "Md Antor",
-    affiliateEmail: "antor@saas.com",
-    amount: 250.0,
-    currency: "USD",
-    paymentMethod: "bKash",
-    paymentDetails: "+880 1711-223344 (Personal)",
-    status: "PENDING",
-    requestedAt: "2026-08-18",
-  },
-  {
-    id: "wth-3",
-    referralAccountId: "ref-acc-3",
-    affiliateName: "Arif Chowdhury",
-    affiliateEmail: "arif.c@vertextech.io",
-    amount: 60.0,
-    currency: "USD",
-    paymentMethod: "bKash",
-    paymentDetails: "+880 1712-100201 (Personal)",
-    status: "PENDING",
-    requestedAt: "2026-08-20",
-  },
-];
+    // Register org admins
+    for (const admin of orgAdmins) {
+      getOrCreateReferralAccount({
+        id: admin.id,
+        name: admin.name,
+        email: admin.email,
+        organizationId: admin.organizationId,
+        role: "ORG_ADMIN",
+      });
+    }
 
-let fraudAlerts: FraudAlert[] = [
-  {
-    id: "frd-1",
-    referralCode: "ANTOR2026",
-    affiliateName: "Md Antor",
-    eventType: "SAME_IP_SIGNUP",
-    severity: "LOW",
-    details: "Visitor and registering org matched subnet (103.14.24.xx). Passed fraud evaluation.",
-    createdAt: "2026-08-10 14:22:00",
-  },
-];
+    // Register managers
+    for (const mgr of managers) {
+      getOrCreateReferralAccount({
+        id: mgr.id,
+        name: mgr.name,
+        email: mgr.email,
+        organizationId: mgr.organizationId,
+        role: "MANAGER",
+      });
+    }
+
+    // Register employees
+    for (const emp of employees) {
+      getOrCreateReferralAccount({
+        id: emp.id,
+        name: emp.fullName || "Employee",
+        email: emp.email,
+        organizationId: emp.organizationId,
+        role: "EMPLOYEE",
+      });
+    }
+  } catch (err) {
+    console.error("[REFERRAL_SYNC_ERROR]", err);
+  }
+
+  return referralAccounts;
+}
+
+export function getReferralProgramConfig(): ReferralProgramConfig {
+  return globalProgramConfig;
+}
+
+export function updateReferralProgramConfig(newConfig: Partial<ReferralProgramConfig>): ReferralProgramConfig {
+  globalProgramConfig = { ...globalProgramConfig, ...newConfig };
+  return globalProgramConfig;
+}
+
+export function getAllReferralAccounts(): ReferralAccountData[] {
+  return referralAccounts;
+}
+
+export function getCommissions(accountId?: string): CommissionEntry[] {
+  if (accountId) {
+    return commissionsList.filter((c) => c.referralAccountId === accountId);
+  }
+  return commissionsList;
+}
+
+export function getWithdrawals(accountId?: string): WithdrawalRequest[] {
+  if (accountId) {
+    return withdrawalRequests.filter((w) => w.referralAccountId === accountId);
+  }
+  return withdrawalRequests;
+}
+
+export function getFraudAlerts(): FraudAlert[] {
+  return fraudAlerts;
+}
+
+export function getAdminReferralOverview() {
+  return {
+    config: globalProgramConfig,
+    accounts: referralAccounts,
+    recentCommissions: commissionsList,
+    pendingPayouts: withdrawalRequests,
+    fraudAlerts,
+    stats: {
+      totalAffiliates: referralAccounts.length,
+      totalPaidCustomers: referralAccounts.reduce((sum, a) => sum + (a.totalPaidCustomers || 0), 0),
+      totalRevenue: referralAccounts.reduce((sum, a) => sum + (a.totalRevenue || 0), 0),
+      totalPendingCommissions: referralAccounts.reduce((sum, a) => sum + (a.pendingCommission || 0), 0),
+      totalAvailableBalance: referralAccounts.reduce((sum, a) => sum + (a.availableBalance || 0), 0),
+      totalPaidPayouts: referralAccounts.reduce((sum, a) => sum + (a.paidCommission || 0), 0),
+    },
+  };
+}
 
 /**
  * Get referral account by userId or create if not present
@@ -327,10 +257,10 @@ export function getOrCreateReferralAccount(user: {
   organizationId?: string | null;
   role: string;
 }): ReferralAccountData {
-  let existing = referralAccounts.find((a) => a.userId === user.id);
+  let existing = referralAccounts.find((a) => a.userId === user.id || a.userEmail.toLowerCase() === user.email.toLowerCase());
   if (existing) return existing;
 
-  const cleanName = user.name.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 8);
+  const cleanName = user.name.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 6);
   const randomSuffix = Math.floor(100 + Math.random() * 900);
   const code = `${cleanName || "REF"}${randomSuffix}`;
 
@@ -341,7 +271,7 @@ export function getOrCreateReferralAccount(user: {
   else if (user.role === "CUSTOMER") refType = "CUSTOMER";
 
   const newAcc: ReferralAccountData = {
-    id: `ref-acc-${Date.now()}`,
+    id: `ref-acc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     userId: user.id,
     userName: user.name,
     userEmail: user.email,
@@ -371,6 +301,14 @@ export function recordReferralClick(code: string, meta?: { ip?: string; userAgen
 
   acc.totalClicks += 1;
   return { success: true, referralCode: acc.referralCode, affiliate: acc.userName };
+}
+
+export function recordReferralSignup(code: string) {
+  const acc = referralAccounts.find((a) => a.referralCode.toUpperCase() === code.toUpperCase());
+  if (!acc) return null;
+
+  acc.totalRegistrations += 1;
+  return { success: true, referralCode: acc.referralCode };
 }
 
 export function generateSubscriptionCommission(input: {
@@ -415,7 +353,7 @@ export function generateSubscriptionCommission(input: {
     baseAmount: input.paymentAmount,
     commissionRate: rate,
     commissionAmount: commissionAmt,
-    status: "PENDING",
+    status: "AVAILABLE",
     availableAt: availableDate.toISOString().split("T")[0],
     createdAt: new Date().toISOString().split("T")[0],
   };
@@ -424,7 +362,7 @@ export function generateSubscriptionCommission(input: {
 
   acc.totalPaidCustomers += 1;
   acc.totalRevenue += input.paymentAmount;
-  acc.pendingCommission = Number((acc.pendingCommission + commissionAmt).toFixed(2));
+  acc.availableBalance = Number((acc.availableBalance + commissionAmt).toFixed(2));
 
   return { success: true, commission: newCommission };
 }
@@ -441,14 +379,14 @@ export function requestWithdrawal(input: {
   if (input.amount < globalProgramConfig.minimumWithdrawal) {
     return {
       success: false,
-      error: `Minimum withdrawal amount is $${globalProgramConfig.minimumWithdrawal}. Requested: $${input.amount}`,
+      error: `Minimum withdrawal amount is ৳${globalProgramConfig.minimumWithdrawal}. Requested: ৳${input.amount}`,
     };
   }
 
   if (input.amount > acc.availableBalance) {
     return {
       success: false,
-      error: `Insufficient available balance. You have $${acc.availableBalance} available.`,
+      error: `Insufficient available balance. Available: ৳${acc.availableBalance}, Requested: ৳${input.amount}`,
     };
   }
 
@@ -460,7 +398,7 @@ export function requestWithdrawal(input: {
     affiliateName: acc.userName,
     affiliateEmail: acc.userEmail,
     amount: input.amount,
-    currency: "USD",
+    currency: "BDT",
     paymentMethod: input.paymentMethod,
     paymentDetails: input.paymentDetails,
     status: "PENDING",
@@ -476,85 +414,89 @@ export const requestReferralWithdrawal = requestWithdrawal;
 export function processWithdrawalPayout(
   withdrawalId: string,
   decision: "APPROVED" | "PAID" | "REJECTED",
-  options?: { adminNotes?: string; rejectionReason?: string } | string
-): { success: boolean; withdrawal?: WithdrawalRequest; error?: string } {
-  const w = withdrawalRequests.find((item) => item.id === withdrawalId);
-  if (!w) return { success: false, error: "Withdrawal not found" };
+  rejectionReason?: string
+) {
+  const withdrawal = withdrawalRequests.find((w) => w.id === withdrawalId);
+  if (!withdrawal) return { success: false, message: "Withdrawal request not found" };
 
-  const acc = referralAccounts.find((a) => a.id === w.referralAccountId);
-  const rejectionReason = typeof options === "string" ? options : options?.rejectionReason;
-  const adminNotes = typeof options === "object" ? options?.adminNotes : undefined;
+  const acc = referralAccounts.find((a) => a.id === withdrawal.referralAccountId);
 
-  if (decision === "PAID") {
-    w.status = "PAID";
-    w.processedAt = new Date().toISOString().split("T")[0];
-    if (adminNotes) w.adminNotes = adminNotes;
+  if (decision === "PAID" || decision === "APPROVED") {
+    withdrawal.status = "PAID";
+    withdrawal.processedAt = new Date().toISOString().split("T")[0];
     if (acc) {
-      acc.paidCommission = Number((acc.paidCommission + w.amount).toFixed(2));
+      acc.paidCommission = Number((acc.paidCommission + withdrawal.amount).toFixed(2));
     }
   } else if (decision === "REJECTED") {
-    w.status = "REJECTED";
-    w.rejectionReason = rejectionReason || "Invalid payout information";
-    if (adminNotes) w.adminNotes = adminNotes;
+    withdrawal.status = "REJECTED";
+    withdrawal.rejectionReason = rejectionReason || "Rejected by administrator";
+    withdrawal.processedAt = new Date().toISOString().split("T")[0];
+    // Refund balance back to affiliate
     if (acc) {
-      acc.availableBalance = Number((acc.availableBalance + w.amount).toFixed(2));
+      acc.availableBalance = Number((acc.availableBalance + withdrawal.amount).toFixed(2));
     }
-  } else if (decision === "APPROVED") {
-    w.status = "APPROVED";
-    if (adminNotes) w.adminNotes = adminNotes;
   }
 
-  return { success: true, withdrawal: w };
+  return { success: true, withdrawal };
 }
 
-export const processPayoutDecision = (args: { withdrawalId: string; decision: "APPROVED" | "PAID" | "REJECTED"; adminNotes?: string; rejectionReason?: string }) => {
-  return processWithdrawalPayout(args.withdrawalId, args.decision, { adminNotes: args.adminNotes, rejectionReason: args.rejectionReason });
-};
-
-export function getReferralProgramConfig() {
-  return globalProgramConfig;
-}
-
-export function updateReferralProgramConfig(updated: Partial<ReferralProgramConfig>) {
-  globalProgramConfig = { ...globalProgramConfig, ...updated };
-  return globalProgramConfig;
-}
-
-export function getAllReferralAccounts() {
-  return referralAccounts;
-}
-
-export function getCommissions(referralAccountId?: string) {
-  if (!referralAccountId) return commissionsList;
-  return commissionsList.filter((c) => c.referralAccountId === referralAccountId);
-}
-
-export function getWithdrawals(referralAccountId?: string) {
-  if (!referralAccountId) return withdrawalRequests;
-  return withdrawalRequests.filter((w) => w.referralAccountId === referralAccountId);
-}
-
-export function getFraudAlerts() {
-  return fraudAlerts;
-}
-
-export function getAdminReferralOverview() {
-  const totalAffiliates = referralAccounts.length;
-  const totalRevenue = referralAccounts.reduce((s, a) => s + a.totalRevenue, 0);
-  const totalPaid = referralAccounts.reduce((s, a) => s + a.paidCommission, 0);
-  const pendingPayoutsList = withdrawalRequests.filter((w) => w.status === "PENDING");
-  const pendingPayoutsTotal = pendingPayoutsList.reduce((s, w) => s + w.amount, 0);
-
+export function processPayoutDecision(input: {
+  withdrawalId: string;
+  decision: "APPROVED" | "PAID" | "REJECTED";
+  rejectionReason?: string;
+  adminNotes?: string;
+}) {
+  const res = processWithdrawalPayout(input.withdrawalId, input.decision, input.rejectionReason);
+  if (res.success && res.withdrawal && input.adminNotes) {
+    res.withdrawal.adminNotes = input.adminNotes;
+  }
   return {
-    totalAffiliates,
-    totalRevenue,
-    totalPaid,
-    pendingPayoutsTotal,
-    pendingPayoutsCount: pendingPayoutsList.length,
-    programConfig: globalProgramConfig,
-    affiliates: referralAccounts,
-    recentCommissions: commissionsList,
-    pendingPayouts: pendingPayoutsList,
-    fraudAlerts,
+    success: res.success,
+    withdrawal: res.withdrawal,
+    error: res.message,
   };
+}
+
+export function approveCommission(commissionId: string) {
+  const comm = commissionsList.find((c) => c.id === commissionId);
+  if (!comm) return { success: false, message: "Commission entry not found" };
+
+  if (comm.status === "PENDING" || comm.status === "UNDER_REVIEW") {
+    comm.status = "AVAILABLE";
+    const acc = referralAccounts.find((a) => a.id === comm.referralAccountId);
+    if (acc) {
+      acc.pendingCommission = Math.max(0, Number((acc.pendingCommission - comm.commissionAmount).toFixed(2)));
+      acc.availableBalance = Number((acc.availableBalance + comm.commissionAmount).toFixed(2));
+    }
+  }
+
+  return { success: true, commission: comm };
+}
+
+export function reverseCommission(commissionId: string, reason: string) {
+  const comm = commissionsList.find((c) => c.id === commissionId);
+  if (!comm) return { success: false, message: "Commission entry not found" };
+
+  const prevStatus = comm.status;
+  comm.status = "REVERSED";
+  const acc = referralAccounts.find((a) => a.id === comm.referralAccountId);
+  if (acc) {
+    if (prevStatus === "PENDING") {
+      acc.pendingCommission = Math.max(0, Number((acc.pendingCommission - comm.commissionAmount).toFixed(2)));
+    } else if (prevStatus === "AVAILABLE") {
+      acc.availableBalance = Math.max(0, Number((acc.availableBalance - comm.commissionAmount).toFixed(2)));
+    }
+  }
+
+  fraudAlerts.unshift({
+    id: `frd-${Date.now()}`,
+    referralCode: comm.referralCode,
+    affiliateName: acc?.userName || "Unknown",
+    eventType: "RAPID_CLICKING",
+    severity: "HIGH",
+    details: `Commission #${commissionId} reversed: ${reason}`,
+    createdAt: new Date().toISOString().replace("T", " ").substring(0, 19),
+  });
+
+  return { success: true, commission: comm };
 }

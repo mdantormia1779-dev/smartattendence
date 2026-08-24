@@ -1,3 +1,5 @@
+import { prisma } from "@/lib/prisma";
+
 /**
  * Dynamic Multi-Tenant Scoped Notification Service
  * 
@@ -5,6 +7,7 @@
  * - Super Admin: Global broadcasts, Org-specific targeting, Role-specific targeting, User targeting
  * - Org Admin: Scoped strictly to direct organization members (all, by role, or direct user)
  * - Strict multi-tenant isolation guard preventing cross-tenant leakage.
+ * - Full CRUD: Create, Read/Filter, Update (Edit), Delete.
  */
 
 export type RoleType = "SUPER_ADMIN" | "ORG_ADMIN" | "MANAGER" | "EMPLOYEE";
@@ -30,75 +33,13 @@ export interface AppNotification {
   createdAt: string;
 }
 
-// Global In-Memory Notification Store (Persisted alongside Prisma DB)
-let notificationsStore: AppNotification[] = [
-  {
-    id: "notif-1",
-    organizationId: null, // Super Admin Global Broadcast
-    senderId: "super-1",
-    senderName: "Super Admin (Platform)",
-    senderRole: "SUPER_ADMIN",
-    scope: "GLOBAL_BROADCAST",
-    title: "⚡ Scheduled Maintenance Notice",
-    message: "Smart Attendance Cloud will undergo server speed optimization on Sunday at 02:00 AM UTC. Estimated downtime: 15 minutes.",
-    category: "SYSTEM",
-    type: "INFO",
-    isRead: false,
-    createdAt: "2026-08-23 10:00:00",
-  },
-  {
-    id: "notif-2",
-    organizationId: "org-1", // Vertex Technologies Org
-    senderId: "user-org-1",
-    senderName: "Sarah Jenkins (Org Admin)",
-    senderRole: "ORG_ADMIN",
-    scope: "ORG_BROADCAST",
-    targetOrgId: "org-1",
-    title: "🏢 Vertex Tech: Public Holiday Announcement",
-    message: "Office will remain closed on National Mourning Day. Shifts will be exempted automatically without leave deduction.",
-    category: "ATTENDANCE",
-    type: "SUCCESS",
-    isRead: false,
-    createdAt: "2026-08-22 09:30:00",
-  },
-  {
-    id: "notif-3",
-    organizationId: null,
-    senderId: "system",
-    senderName: "Affiliate Engine",
-    senderRole: "SUPER_ADMIN",
-    scope: "TARGETED_USER",
-    recipientUserId: "user-emp-1", // Arif Chowdhury
-    title: "💰 Referral Commission Generated!",
-    message: "Your referral code ARIF-EMP1042 was used by CloudTech Software. $22.35 added to pending balance.",
-    category: "REFERRAL",
-    type: "SUCCESS",
-    link: "/employee/referrals",
-    isRead: false,
-    createdAt: "2026-08-21 16:45:00",
-  },
-  {
-    id: "notif-4",
-    organizationId: "org-1",
-    senderId: "mgr-1",
-    senderName: "Tanvir Ahmed (Manager)",
-    senderRole: "MANAGER",
-    scope: "TARGETED_USER",
-    recipientUserId: "user-emp-1",
-    title: "✅ Leave Request Approved",
-    message: "Your Annual Leave request for Aug 25 - Aug 28 (4 days) has been approved by management.",
-    category: "LEAVE",
-    type: "SUCCESS",
-    link: "/employee/leaves",
-    isRead: false,
-    createdAt: "2026-08-20 11:15:00",
-  },
-];
+// Clean in-memory store for real-time notification dispatch and caching
+let notificationsStore: AppNotification[] = [];
 
 /**
- * Dispatch a Notification with Strict Multi-Tenant Enforcement
+ * Dispatch a Notification with Strict Multi-Tenant Enforcement and Prisma Persistence
  */
-export function sendNotification(input: {
+export async function sendNotification(input: {
   senderId: string;
   senderName: string;
   senderRole: RoleType;
@@ -113,22 +54,17 @@ export function sendNotification(input: {
   type?: AppNotification["type"];
   link?: string;
   dataJson?: string;
-}): { success: boolean; notification?: AppNotification; error?: string } {
+}): Promise<{ success: boolean; notification?: AppNotification; error?: string }> {
   // Security Guard: Check Tenant Isolation
   if (input.senderRole === "ORG_ADMIN") {
-    // Org Admin can ONLY send within their own organization
     if (!input.senderOrgId) {
       return { success: false, error: "Unauthorized: Missing organization identity" };
     }
-
     if (input.scope === "GLOBAL_BROADCAST") {
       return { success: false, error: "Permission Denied: Only Super Admin can send global platform broadcasts" };
     }
-
-    // Force targetOrgId to be the sender's own org
     input.targetOrgId = input.senderOrgId;
   } else if (input.senderRole === "MANAGER") {
-    // Manager can only send to employees within their own org
     if (!input.senderOrgId) {
       return { success: false, error: "Unauthorized: Missing organization identity" };
     }
@@ -138,9 +74,12 @@ export function sendNotification(input: {
     }
   }
 
+  const notifId = `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const targetOrg = input.senderRole === "SUPER_ADMIN" ? (input.targetOrgId || null) : (input.senderOrgId || null);
+
   const newNotif: AppNotification = {
-    id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    organizationId: input.senderRole === "SUPER_ADMIN" ? (input.targetOrgId || null) : (input.senderOrgId || null),
+    id: notifId,
+    organizationId: targetOrg,
     senderId: input.senderId,
     senderName: input.senderName,
     senderRole: input.senderRole,
@@ -159,17 +98,103 @@ export function sendNotification(input: {
   };
 
   notificationsStore.unshift(newNotif);
-  console.info(`[NOTIFICATION_SENT] Scope: ${newNotif.scope} by ${newNotif.senderName} (${newNotif.senderRole}) -> "${newNotif.title}"`);
+
+  // Persist to PostgreSQL Prisma if target organization or recipient is valid
+  try {
+    const dbRecipientId = input.recipientUserId || input.targetRole || (input.scope === "GLOBAL_BROADCAST" ? "ALL" : "ORG_ALL");
+    
+    let validOrgId: string | null = null;
+    if (targetOrg) {
+      const orgExists = await prisma.organizations.findUnique({
+        where: { id: targetOrg },
+        select: { id: true },
+      });
+      if (orgExists) validOrgId = orgExists.id;
+    }
+
+    await prisma.notifications.create({
+      data: {
+        id: notifId,
+        organizationId: validOrgId,
+        recipientType: input.scope,
+        recipientId: dbRecipientId,
+        type: "IN_APP",
+        title: input.title,
+        message: input.message,
+        isRead: false,
+        createdAt: new Date(),
+      },
+    });
+  } catch (dbErr) {
+    console.warn("[NOTIFICATION_DB_PERSIST_WARN]", dbErr);
+  }
+
   return { success: true, notification: newNotif };
 }
 
 /**
+ * Update an existing notification (Edit Title, Message, Category, Severity, Link, Target)
+ */
+export async function updateNotification(
+  id: string,
+  updates: Partial<AppNotification>
+): Promise<{ success: boolean; notification?: AppNotification; error?: string }> {
+  const index = notificationsStore.findIndex((n) => n.id === id);
+  if (index === -1) {
+    return { success: false, error: "Notification not found" };
+  }
+
+  const existing = notificationsStore[index];
+  const updated: AppNotification = {
+    ...existing,
+    ...updates,
+    id: existing.id,
+    createdAt: existing.createdAt,
+  };
+
+  notificationsStore[index] = updated;
+
+  try {
+    await prisma.notifications.update({
+      where: { id },
+      data: {
+        title: updated.title,
+        message: updated.message,
+        recipientType: updated.scope,
+        recipientId: updated.recipientUserId || updated.targetRole || (updated.scope === "GLOBAL_BROADCAST" ? "ALL" : "ORG_ALL"),
+      },
+    }).catch(() => {});
+  } catch (err) {
+    console.warn("[NOTIFICATION_DB_UPDATE_WARN]", err);
+  }
+
+  return { success: true, notification: updated };
+}
+
+/**
+ * Delete a notification
+ */
+export async function deleteNotification(id: string): Promise<{ success: boolean; error?: string }> {
+  const index = notificationsStore.findIndex((n) => n.id === id);
+  if (index === -1) {
+    return { success: false, error: "Notification not found" };
+  }
+
+  notificationsStore.splice(index, 1);
+
+  try {
+    await prisma.notifications.delete({
+      where: { id },
+    }).catch(() => {});
+  } catch (err) {
+    console.warn("[NOTIFICATION_DB_DELETE_WARN]", err);
+  }
+
+  return { success: true };
+}
+
+/**
  * Get Scoped Notifications for a User
- * Ensures:
- * 1. Super Admin sees all platform and audit notifications
- * 2. Org Admin sees Super Admin broadcasts + their own organization notifications
- * 3. Manager/Employee sees Super Admin broadcasts + their org broadcasts + direct messages
- * 4. NEVER sees another organization's scoped notifications!
  */
 export function getUserNotifications(user: {
   userId: string;
@@ -177,7 +202,7 @@ export function getUserNotifications(user: {
   organizationId?: string | null;
 }): AppNotification[] {
   return notificationsStore.filter((n) => {
-    // 1. Super Admin sees all
+    // 1. Super Admin sees all platform and audit notifications
     if (user.role === "SUPER_ADMIN") {
       return true;
     }
@@ -187,9 +212,8 @@ export function getUserNotifications(user: {
       return true;
     }
 
-    // 3. Global broadcast from Super Admin (no specific org)
+    // 3. Global broadcast from Super Admin
     if (n.scope === "GLOBAL_BROADCAST") {
-      // Check if it has a role filter
       if (n.targetRole && n.targetRole !== user.role) {
         return false;
       }
@@ -198,21 +222,17 @@ export function getUserNotifications(user: {
 
     // 4. Org-scoped notifications: Must strictly match the user's organizationId
     if (user.organizationId && (n.organizationId === user.organizationId || n.targetOrgId === user.organizationId)) {
-      // If scoped to all in org
       if (n.scope === "ORG_BROADCAST") {
         return true;
       }
-      // If scoped to role within org
       if (n.scope === "ROLE_BROADCAST" && n.targetRole === user.role) {
         return true;
       }
-      // If direct user
       if (n.recipientUserId === user.userId) {
         return true;
       }
     }
 
-    // Otherwise, blocked by tenant boundary
     return false;
   });
 }
@@ -225,6 +245,12 @@ export function markNotificationAsRead(id: string): boolean {
   if (notif) {
     notif.isRead = true;
     notif.readAt = new Date().toISOString();
+
+    prisma.notifications.update({
+      where: { id },
+      data: { isRead: true },
+    }).catch(() => {});
+
     return true;
   }
   return false;
@@ -243,5 +269,14 @@ export function markAllNotificationsAsRead(user: { userId: string; role: RoleTyp
       count++;
     }
   });
+
+  const notifIds = userNotifs.map((n) => n.id);
+  if (notifIds.length > 0) {
+    prisma.notifications.updateMany({
+      where: { id: { in: notifIds } },
+      data: { isRead: true },
+    }).catch(() => {});
+  }
+
   return count;
 }

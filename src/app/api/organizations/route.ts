@@ -1,9 +1,12 @@
-import { NextResponse } from "next/server";
 import { OrganizationService } from "@/server/services/organization.service";
 import { AuthService } from "@/server/services/auth.service";
 import { CreateOrganizationSchema } from "@/server/validators";
 import { requireRole, requireAuth } from "@/server/authorization";
-import { handleApiError } from "@/server/errors";
+import { apiSuccess, apiError } from "@/server/errors";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export async function GET(request: Request) {
   try {
@@ -11,18 +14,29 @@ export async function GET(request: Request) {
 
     if (session.role === "SUPER_ADMIN") {
       const orgs = await OrganizationService.getAllOrganizations();
-      return NextResponse.json({ success: true, data: orgs });
+      return apiSuccess(orgs, "Organizations retrieved successfully", undefined, 200, {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+        Pragma: "no-cache",
+        Expires: "0",
+      });
     }
 
     if (session.organizationId) {
       const org = await OrganizationService.getOrganizationById(session.organizationId);
-      return NextResponse.json({ success: true, data: [org] });
+      return apiSuccess([org], "Organization retrieved successfully", undefined, 200, {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+        Pragma: "no-cache",
+        Expires: "0",
+      });
     }
 
-    return NextResponse.json({ success: true, data: [] });
+    return apiSuccess([], "No organizations accessible", undefined, 200, {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0",
+    });
   } catch (error: any) {
-    const err = handleApiError(error);
-    return NextResponse.json(err.body, { status: err.statusCode });
+    return apiError(error);
   }
 }
 
@@ -43,9 +57,12 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ success: true, data: newOrg }, { status: 201 });
+    return apiSuccess(newOrg, "Organization created successfully", undefined, 201, {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0",
+    });
   } catch (error: any) {
-    const err = handleApiError(error);
-    return NextResponse.json(err.body, { status: err.statusCode });
+    return apiError(error);
   }
 }
