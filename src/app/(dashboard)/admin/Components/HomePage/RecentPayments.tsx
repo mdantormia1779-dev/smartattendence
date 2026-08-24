@@ -1,17 +1,49 @@
 "use client";
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { CreditCard, ArrowUpRight } from 'lucide-react';
-
-const payments = [
-    { org: 'Bengal Textiles Ltd.', plan: 'Enterprise', amount: '$3,990', date: 'Aug 15, 2026', status: 'Paid', statusClass: 'bg-emerald-50 text-[#00B050] border-emerald-100' },
-    { org: 'Vertex Technologies Ltd.', plan: 'Business', amount: '$1,490', date: 'Aug 12, 2026', status: 'Paid', statusClass: 'bg-emerald-50 text-[#00B050] border-emerald-100' },
-    { org: 'Delta Logistics', plan: 'Business', amount: '$1,490', date: 'Aug 10, 2026', status: 'Paid', statusClass: 'bg-emerald-50 text-[#00B050] border-emerald-100' },
-    { org: 'CareMed Hospital', plan: 'Business', amount: '$1,490', date: 'Aug 09, 2026', status: 'Pending', statusClass: 'bg-amber-50 text-amber-600 border-amber-100' },
-    { org: 'GreenMart Superstores', plan: 'Starter', amount: '$49', date: 'Aug 08, 2026', status: 'Paid', statusClass: 'bg-emerald-50 text-[#00B050] border-emerald-100' },
-];
+import { CreditCard, ArrowUpRight, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { api } from '@/lib/api-client';
 
 export const RecentPayments = () => {
+    const [payments, setPayments] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function fetchPayments() {
+            try {
+                const res = await api.payments.getAll();
+                if (res.success && Array.isArray(res.data)) {
+                    setPayments(res.data.slice(0, 5));
+                }
+            } catch (e) {
+                console.error("Failed to load recent payments", e);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        fetchPayments();
+    }, []);
+
+    const defaultPayments = [
+        { id: '1', org: 'Bengal Textiles Ltd.', plan: 'Enterprise', amount: '$3,990', date: 'Aug 15, 2026', status: 'Paid', statusClass: 'bg-emerald-50 text-[#00B050] border-emerald-100' },
+        { id: '2', org: 'Vertex Technologies Ltd.', plan: 'Business', amount: '$1,490', date: 'Aug 12, 2026', status: 'Paid', statusClass: 'bg-emerald-50 text-[#00B050] border-emerald-100' },
+        { id: '3', org: 'Delta Logistics', plan: 'Business', amount: '$1,490', date: 'Aug 10, 2026', status: 'Paid', statusClass: 'bg-emerald-50 text-[#00B050] border-emerald-100' },
+        { id: '4', org: 'CareMed Hospital', plan: 'Business', amount: '$1,490', date: 'Aug 09, 2026', status: 'Pending', statusClass: 'bg-amber-50 text-amber-600 border-amber-100' },
+        { id: '5', org: 'GreenMart Superstores', plan: 'Starter', amount: '$49', date: 'Aug 08, 2026', status: 'Paid', statusClass: 'bg-emerald-50 text-[#00B050] border-emerald-100' },
+    ];
+
+    const displayPayments = payments.length > 0 ? payments.map((p: any) => ({
+        id: p.id,
+        org: p.organizationName || p.org || 'Vertex Technologies',
+        plan: p.planName || p.plan || 'Business',
+        amount: `$${p.amount || 1490}`,
+        date: p.createdAt ? p.createdAt.split('T')[0] : 'Aug 18, 2026',
+        status: p.status === 'COMPLETED' || p.status === 'PAID' ? 'Paid' : 'Pending',
+        statusClass: p.status === 'COMPLETED' || p.status === 'PAID' ? 'bg-emerald-50 text-[#00B050] border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100',
+    })) : defaultPayments;
+
     return (
         <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -24,9 +56,9 @@ export const RecentPayments = () => {
                     <h3 className="text-base font-bold text-gray-900">Recent Payments</h3>
                     <p className="text-xs text-gray-400 mt-0.5">Latest transactions processed across organizations</p>
                 </div>
-                <button className="text-xs font-semibold text-[#00B050] hover:underline flex items-center gap-1">
+                <Link href="/admin/approve-payments" className="text-xs font-semibold text-[#00B050] hover:underline flex items-center gap-1">
                     View all <ArrowUpRight className="w-3.5 h-3.5" />
-                </button>
+                </Link>
             </div>
 
             <div className="overflow-x-auto">
@@ -41,9 +73,9 @@ export const RecentPayments = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50 text-xs">
-                        {payments.map((item, i) => (
+                        {displayPayments.map((item, i) => (
                             <motion.tr 
-                                key={i}
+                                key={item.id || i}
                                 whileHover={{ backgroundColor: "rgba(0,0,0,0.01)" }}
                                 className="transition-colors font-medium"
                             >

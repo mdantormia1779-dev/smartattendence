@@ -7,9 +7,10 @@ import { useRouter } from 'next/navigation';
 interface OrganizationsHeaderProps {
     totalShown: number;
     totalCount: number;
+    onCreateClick?: () => void;
 }
 
-export const OrganizationsHeader: React.FC<OrganizationsHeaderProps> = ({ totalShown, totalCount }) => {
+export const OrganizationsHeader: React.FC<OrganizationsHeaderProps> = ({ totalShown, totalCount, onCreateClick }) => {
     const router = useRouter();
 
     return (
@@ -26,8 +27,8 @@ export const OrganizationsHeader: React.FC<OrganizationsHeaderProps> = ({ totalS
             <motion.button 
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => router.push('/signup')}
-                className="inline-flex items-center justify-center gap-2 bg-[#00B050] hover:bg-[#009845] text-white px-4 py-2.5 rounded-xl font-semibold text-xs shadow-sm transition-all"
+                onClick={() => onCreateClick ? onCreateClick() : router.push('/signup')}
+                className="inline-flex items-center justify-center gap-2 bg-[#00B050] hover:bg-[#009845] text-white px-4 py-2.5 rounded-xl font-semibold text-xs shadow-sm transition-all cursor-pointer"
             >
                 <Plus className="w-4 h-4" />
                 Create Organization

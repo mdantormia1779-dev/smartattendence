@@ -23,6 +23,7 @@ import gsap from 'gsap';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { api } from '@/lib/api-client';
 
 const loginSchema = z.object({
     email: z.string().min(1, { message: "Email is required" }).email({ message: "Invalid email address" }),
@@ -36,8 +37,8 @@ const demoRoles = [
     {
         title: "Super Admin",
         role: "Platform Owner",
-        email: "superadmin@saas.com",
-        password: "password123",
+        email: "superadmin@erp.com",
+        password: "admin123",
         path: "/admin",
         icon: Crown,
         color: "from-amber-500/20 to-amber-600/20 border-amber-300 text-amber-900",
@@ -46,7 +47,7 @@ const demoRoles = [
         title: "Org Admin",
         role: "Vertex Technologies",
         email: "sarah.admin@vertextech.io",
-        password: "password123",
+        password: "admin123",
         path: "/organizationadmin",
         icon: Building2,
         color: "from-emerald-500/20 to-emerald-600/20 border-emerald-300 text-emerald-900",
@@ -118,26 +119,45 @@ const LoginPage: React.FC = () => {
         "Employee": "EMPLOYEE",
     };
 
+    const [loginError, setLoginError] = useState<string | null>(null);
+
     const handleSelectDemoRole = (roleItem: typeof demoRoles[0]) => {
         setSelectedRole(roleItem.title);
         setValue("email", roleItem.email);
         setValue("password", roleItem.password);
-        if (typeof document !== "undefined") {
-            const role = roleCookieMap[roleItem.title] || "ORG_ADMIN";
-            document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`;
-            document.cookie = `auth_session=demo_session_active; path=/; max-age=86400; SameSite=Lax`;
-        }
+        setLoginError(null);
     };
 
-    const onSubmit: SubmitHandler<LoginFormData> = (data) => {
-        const matchingRole = demoRoles.find(r => r.title === selectedRole);
-        const destination = matchingRole ? matchingRole.path : "/organizationadmin";
-        if (typeof document !== "undefined") {
-            const role = roleCookieMap[selectedRole] || "ORG_ADMIN";
-            document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`;
-            document.cookie = `auth_session=session_${Date.now()}; path=/; max-age=86400; SameSite=Lax`;
+    const onSubmit: SubmitHandler<LoginFormData> = async (data) => {
+        try {
+            setLoginError(null);
+            const res = await api.auth.login({
+                email: data.email,
+                password: data.password,
+            });
+
+            if (res.success && res.data) {
+                const userRole = res.data.user?.role || "ORG_ADMIN";
+                if (typeof window !== "undefined") {
+                    if (res.data.token) {
+                        localStorage.setItem("auth_token", res.data.token);
+                    }
+                    localStorage.setItem("user_info", JSON.stringify(res.data.user || {}));
+                    document.cookie = `user_role=${userRole}; path=/; max-age=86400; SameSite=Lax`;
+                    document.cookie = `auth_session=${res.data.token || "active"}; path=/; max-age=86400; SameSite=Lax`;
+                }
+
+                if (userRole === "SUPER_ADMIN") router.push("/admin");
+                else if (userRole === "MANAGER") router.push("/manager");
+                else if (userRole === "EMPLOYEE") router.push("/employee");
+                else router.push("/organizationadmin");
+                return;
+            } else {
+                setLoginError(res.message || "Invalid email or password");
+            }
+        } catch (e: any) {
+            setLoginError(e.message || "Authentication failed. Please check your credentials.");
         }
-        router.push(destination);
     };
 
     return (
@@ -263,6 +283,13 @@ const LoginPage: React.FC = () => {
 
                     {/* Form */}
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                        {loginError && (
+                            <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-xs font-semibold flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                                <span>{loginError}</span>
+                            </div>
+                        )}
+
                         {/* Email Field */}
                         <div className="space-y-1">
                             <label className="text-xs font-semibold uppercase tracking-wider text-gray-700">

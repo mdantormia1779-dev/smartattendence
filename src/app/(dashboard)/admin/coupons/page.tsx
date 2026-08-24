@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Plus, Tag, Calendar, Users, Trash2, Edit, CheckCircle2, XCircle, Search } from "lucide-react";
+import { Plus, Tag, Calendar, Users, Trash2, Edit, CheckCircle2, XCircle, Search, Loader2 } from "lucide-react";
 import gsap from "gsap";
 
 interface Coupon {
@@ -15,41 +15,9 @@ interface Coupon {
   status: "Active" | "Expired";
 }
 
-const initialCoupons: Coupon[] = [
-  {
-    id: "coup-1",
-    code: "WELCOME20",
-    discountType: "percentage",
-    value: "20%",
-    expiryDate: "2026-12-31",
-    usageLimit: "100",
-    usedCount: 42,
-    status: "Active",
-  },
-  {
-    id: "coup-2",
-    code: "SUMMER50",
-    discountType: "fixed",
-    value: "$50",
-    expiryDate: "2026-08-30",
-    usageLimit: "50",
-    usedCount: 50,
-    status: "Expired",
-  },
-  {
-    id: "coup-3",
-    code: "STARTUP10",
-    discountType: "percentage",
-    value: "10%",
-    expiryDate: "2026-10-15",
-    usageLimit: "200",
-    usedCount: 18,
-    status: "Active",
-  },
-];
-
 export default function CouponsPage() {
-  const [coupons, setCoupons] = useState<Coupon[]>(initialCoupons);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   
   // Modal States
@@ -67,24 +35,43 @@ export default function CouponsPage() {
   const modalRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
 
-  // Initial Page Load Animations (Flicker fixed with initial opacity 0 set via CSS/GSAP)
   useEffect(() => {
-    const ctx = gsap.context(() => {
-      gsap.fromTo(
-        ".animate-header",
-        { opacity: 0, y: -20 },
-        { opacity: 1, y: 0, duration: 0.7, ease: "power3.out", stagger: 0.1 }
-      );
-
-      gsap.fromTo(
-        ".animate-card",
-        { opacity: 0, y: 25 },
-        { opacity: 1, y: 0, duration: 0.6, ease: "power2.out", stagger: 0.1, delay: 0.2 }
-      );
-    }, containerRef);
-
-    return () => ctx.revert();
+    // Initial fetch
+    setCoupons([
+      {
+        id: "coup-1",
+        code: "WELCOME20",
+        discountType: "percentage",
+        value: "20%",
+        expiryDate: "2026-12-31",
+        usageLimit: "100",
+        usedCount: 0,
+        status: "Active",
+      },
+    ]);
+    setLoading(false);
   }, []);
+
+  // Initial Page Load Animations
+  useEffect(() => {
+    if (!loading) {
+      const ctx = gsap.context(() => {
+        gsap.fromTo(
+          ".animate-header",
+          { opacity: 0, y: -20 },
+          { opacity: 1, y: 0, duration: 0.7, ease: "power3.out", stagger: 0.1 }
+        );
+
+        gsap.fromTo(
+          ".animate-card",
+          { opacity: 0, y: 25 },
+          { opacity: 1, y: 0, duration: 0.6, ease: "power2.out", stagger: 0.1, delay: 0.2 }
+        );
+      }, containerRef);
+
+      return () => ctx.revert();
+    }
+  }, [loading, coupons]);
 
   // Modal Open GSAP Animation
   useEffect(() => {
@@ -195,80 +182,84 @@ export default function CouponsPage() {
         </div>
       </div>
 
-      {/* Coupons Grid or Empty Message */}
-      {filteredCoupons.length > 0 ? (
+      {/* Coupons Grid */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20 text-neutral-400">
+          <Loader2 className="w-8 h-8 animate-spin text-[#00B050] mr-2" />
+          <span className="text-xs">Loading coupons...</span>
+        </div>
+      ) : filteredCoupons.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredCoupons.map((coupon) => (
             <div
               key={coupon.id}
-              className="animate-card opacity-0 bg-white rounded-2xl p-6 border border-neutral-200/80 shadow-sm flex flex-col justify-between hover:border-[#10b981]/40 transition-all"
+              className="animate-card opacity-0 bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
             >
               <div>
                 <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-[#10b981] flex items-center justify-center font-bold">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-emerald-50 text-[#10b981] rounded-xl">
                       <Tag className="w-5 h-5" />
                     </div>
                     <div>
-                      <span className="font-mono font-extrabold text-lg text-neutral-900 tracking-wider">
+                      <h3 className="font-bold text-neutral-900 text-base tracking-wide font-mono">
                         {coupon.code}
-                      </span>
-                      <div className="text-xs text-neutral-400">
+                      </h3>
+                      <p className="text-xs text-neutral-400">
                         {coupon.discountType === "percentage" ? "Percentage Discount" : "Fixed Amount"}
-                      </div>
+                      </p>
                     </div>
                   </div>
 
                   <span
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
                       coupon.status === "Active"
-                        ? "bg-emerald-50 text-[#10b981]"
-                        : "bg-neutral-100 text-neutral-500"
+                        ? "bg-emerald-50 text-[#10b981] border border-emerald-100"
+                        : "bg-neutral-100 text-neutral-500 border border-neutral-200"
                     }`}
                   >
-                    {coupon.status === "Active" ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                    {coupon.status === "Active" ? (
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    ) : (
+                      <XCircle className="w-3.5 h-3.5" />
+                    )}
                     {coupon.status}
                   </span>
                 </div>
 
-                {/* Discount Value Display */}
-                <div className="my-4 p-3 bg-neutral-50 rounded-xl flex items-center justify-between">
-                  <span className="text-xs font-semibold text-neutral-500">Discount Value</span>
-                  <span className="text-xl font-extrabold text-[#10b981]">{coupon.value}</span>
+                <div className="text-3xl font-extrabold text-neutral-900 mb-6">
+                  {coupon.value} <span className="text-sm font-normal text-neutral-400">OFF</span>
                 </div>
 
-                {/* Details Meta */}
-                <div className="space-y-2 text-xs text-neutral-500 mb-6">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-neutral-400" /> Expires On:
+                <div className="space-y-2.5 text-xs text-neutral-500 border-t border-neutral-100 pt-4 mb-6">
+                  <div className="flex justify-between items-center">
+                    <span className="flex items-center gap-1.5 text-neutral-400">
+                      <Calendar className="w-4 h-4" /> Expires On:
                     </span>
-                    <span className="font-medium text-neutral-800">{coupon.expiryDate}</span>
+                    <span className="font-medium text-neutral-700">{coupon.expiryDate}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Users className="w-3.5 h-3.5 text-neutral-400" /> Usage Limit:
+
+                  <div className="flex justify-between items-center">
+                    <span className="flex items-center gap-1.5 text-neutral-400">
+                      <Users className="w-4 h-4" /> Usage:
                     </span>
-                    <span className="font-medium text-neutral-800">
-                      {coupon.usedCount} / {coupon.usageLimit} used
+                    <span className="font-medium text-neutral-700">
+                      {coupon.usedCount} / {coupon.usageLimit}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-100">
+              <div className="flex items-center justify-end gap-2 border-t border-neutral-100 pt-4">
                 <button
                   onClick={() => handleOpenEdit(coupon)}
-                  className="p-2 border border-neutral-200 hover:bg-neutral-50 text-neutral-600 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-                  title="Edit Coupon"
+                  className="p-2 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-50 rounded-xl transition-colors cursor-pointer"
                 >
                   <Edit className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => handleDelete(coupon.id)}
-                  className="p-2 border border-rose-200 hover:bg-rose-50 text-rose-600 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-                  title="Delete Coupon"
+                  className="p-2 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -277,107 +268,100 @@ export default function CouponsPage() {
           ))}
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-neutral-200/80 p-12 text-center shadow-sm">
-          <div className="w-12 h-12 rounded-full bg-emerald-50 text-[#10b981] flex items-center justify-center mx-auto mb-3">
-            <Tag className="w-6 h-6" />
-          </div>
-          <h3 className="text-base font-bold text-neutral-900">No coupons found</h3>
-          <p className="text-xs text-neutral-500 mt-1">
-            {searchQuery ? "No coupon matches your search query." : "You don't have any active discount coupons right now."}
-          </p>
+        <div className="bg-white rounded-2xl border border-neutral-200/80 p-12 text-center">
+          <p className="text-neutral-500 text-sm">No coupons found.</p>
         </div>
       )}
 
-      {/* Create / Edit Modal with GSAP Bounce Animation */}
+      {/* Modal */}
       {isModalOpen && (
         <div
           ref={backdropRef}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          className="fixed inset-0 bg-neutral-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4"
         >
           <div
             ref={modalRef}
-            className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl border border-neutral-100"
+            className="bg-white rounded-2xl border border-neutral-200 max-w-md w-full p-6 shadow-2xl space-y-4"
           >
-            <h2 className="text-lg font-bold text-neutral-900 mb-4">
+            <h3 className="text-base font-bold text-neutral-900">
               {editingCoupon ? "Edit Coupon" : "Create New Coupon"}
-            </h2>
+            </h3>
 
             <form onSubmit={handleSaveCoupon} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-neutral-600 mb-1">Coupon Code</label>
+                <label className="block text-xs font-semibold text-neutral-700 mb-1">Coupon Code</label>
                 <input
                   type="text"
                   required
+                  placeholder="e.g. SUMMER25"
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  placeholder="e.g. SAVE30"
-                  className="w-full px-3.5 py-2 uppercase border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981]"
+                  className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-xs uppercase font-mono font-bold"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-600 mb-1">Discount Type</label>
+                  <label className="block text-xs font-semibold text-neutral-700 mb-1">Type</label>
                   <select
                     value={discountType}
-                    onChange={(e) => setDiscountType(e.target.value as "percentage" | "fixed")}
-                    className="w-full px-3.5 py-2 border border-neutral-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981]"
+                    onChange={(e) => setDiscountType(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-xs"
                   >
                     <option value="percentage">Percentage (%)</option>
-                    <option value="fixed">Fixed ($)</option>
+                    <option value="fixed">Fixed Amount ($)</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-600 mb-1">
-                    Value {discountType === "percentage" ? "(%)" : "($)"}
-                  </label>
+                  <label className="block text-xs font-semibold text-neutral-700 mb-1">Discount Value</label>
                   <input
-                    type="text"
+                    type="number"
                     required
+                    placeholder="e.g. 20"
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
-                    placeholder={discountType === "percentage" ? "e.g. 25" : "e.g. 50"}
-                    className="w-full px-3.5 py-2 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981]"
+                    className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-xs font-bold"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-neutral-600 mb-1">Expiry Date</label>
-                <input
-                  type="date"
-                  required
-                  value={expiryDate}
-                  onChange={(e) => setExpiryDate(e.target.value)}
-                  className="w-full px-3.5 py-2 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981]"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-700 mb-1">Expiry Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={expiryDate}
+                    onChange={(e) => setExpiryDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-700 mb-1">Usage Limit</label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="e.g. 100"
+                    value={usageLimit}
+                    onChange={(e) => setUsageLimit(e.target.value)}
+                    className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-xs"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-neutral-600 mb-1">Usage Limit (Max Uses)</label>
-                <input
-                  type="number"
-                  required
-                  value={usageLimit}
-                  onChange={(e) => setUsageLimit(e.target.value)}
-                  placeholder="e.g. 100"
-                  className="w-full px-3.5 py-2 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981]"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 mt-6 pt-3 border-t border-neutral-100">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-100">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-neutral-200 rounded-xl text-xs font-semibold text-neutral-600 hover:bg-neutral-50 transition-colors cursor-pointer"
+                  className="px-4 py-2 text-xs font-semibold text-neutral-600 hover:bg-neutral-100 rounded-xl cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[#10b981] hover:bg-emerald-600 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                  className="px-4 py-2 text-xs font-semibold bg-[#10b981] hover:bg-emerald-600 text-white rounded-xl shadow-xs cursor-pointer"
                 >
-                  {editingCoupon ? "Update Coupon" : "Save Coupon"}
+                  Save Coupon
                 </button>
               </div>
             </form>

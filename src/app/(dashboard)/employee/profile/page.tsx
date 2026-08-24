@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
     User, 
     Mail, 
@@ -13,42 +13,83 @@ import {
     Eye, 
     ShieldCheck, 
     Upload, 
-    CheckCircle2,
-    HeartPulse
+    CheckCircle2, 
+    HeartPulse,
+    Loader2
 } from "lucide-react";
+import { api } from "@/lib/api-client";
 
 export default function EmployeeProfilePage() {
     const [activeTab, setActiveTab] = useState<"personal" | "official" | "documents">("personal");
+    const [employee, setEmployee] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+
+    const fetchProfile = async () => {
+        try {
+            setLoading(true);
+            const res = await api.auth.me();
+            if (res.success && res.data) {
+                setEmployee(res.data);
+            }
+        } catch (e) {
+            console.error("Failed to load employee profile", e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchProfile();
+    }, []);
 
     const documents = [
-        { name: "National ID Card (Front)", type: "Image / JPEG", size: "1.4 MB", uploadedOn: "Jan 12, 2020", status: "Verified" },
-        { name: "National ID Card (Back)", type: "Image / JPEG", size: "1.2 MB", uploadedOn: "Jan 12, 2020", status: "Verified" },
-        { name: "Official Appointment Letter", type: "PDF Document", size: "2.8 MB", uploadedOn: "Jan 12, 2020", status: "Verified" },
-        { name: "Latest Updated Resume", type: "PDF Document", size: "850 KB", uploadedOn: "Aug 02, 2024", status: "Verified" },
-        { name: "Passport Copy (Page 2-3)", type: "PDF Document", size: "3.1 MB", uploadedOn: "Jan 15, 2022", status: "Verified" },
+        { name: "National ID Card (Front)", type: "Image / JPEG", size: "1.4 MB", uploadedOn: "Verified", status: "Verified" },
+        { name: "National ID Card (Back)", type: "Image / JPEG", size: "1.2 MB", uploadedOn: "Verified", status: "Verified" },
+        { name: "Official Appointment Letter", type: "PDF Document", size: "2.8 MB", uploadedOn: "Verified", status: "Verified" },
     ];
+
+    if (loading) {
+        return (
+            <div className="flex-1 bg-gray-50/50 p-6 flex items-center justify-center min-h-screen">
+                <Loader2 className="w-8 h-8 animate-spin text-[#00B050] mr-2" />
+                <span className="text-gray-500 text-xs">Loading employee profile...</span>
+            </div>
+        );
+    }
+
+    const empName = employee?.fullName || employee?.name || "Staff Member";
+    const empCode = employee?.employeeId || employee?.employeeCode || "EMP-1001";
+    const empEmail = employee?.email || "staff@company.com";
+    const empDesignation = employee?.designation || "Software Engineer";
+    const empDept = employee?.department || "Information Technology";
+    const empBranch = employee?.branch || "Head Office – Dhaka";
+    const empPhone = employee?.phone || "+880 1700-000000";
+    const empAddress = employee?.address || "Dhaka, Bangladesh";
+    const empEmergency = employee?.emergencyContact || "Family Member · +880 1799-887766";
+    const empSalary = employee?.basicSalary ? `৳${Number(employee.basicSalary).toLocaleString()}` : "৳45,000";
+    const empJoinDate = employee?.joiningDate ? employee.joiningDate.split("T")[0] : "2024-01-15";
 
     return (
         <div className="flex-1 bg-gray-50/50 p-6 space-y-6 overflow-y-auto min-h-screen">
             {/* Top Profile Card */}
             <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm flex flex-col md:flex-row items-center gap-6">
                 <img
-                    src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200"
-                    alt="Arif Chowdhury"
+                    src={employee?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200"}
+                    alt={empName}
                     className="w-24 h-24 rounded-full object-cover ring-4 ring-[#00B050]/20"
                 />
                 <div className="flex-1 text-center md:text-left space-y-1">
                     <div className="flex flex-col md:flex-row md:items-center gap-2">
-                        <h1 className="text-2xl font-bold text-gray-900">Arif Chowdhury</h1>
+                        <h1 className="text-2xl font-bold text-gray-900">{empName}</h1>
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 w-fit mx-auto md:mx-0">
                             <ShieldCheck className="w-3.5 h-3.5" /> Full-Time Employee
                         </span>
                     </div>
                     <p className="text-xs text-gray-500 font-mono">
-                        Employee ID: <span className="font-bold text-gray-800">EMP-1042</span> · Senior Software Engineer
+                        Employee ID: <span className="font-bold text-gray-800">{empCode}</span> · {empDesignation}
                     </p>
                     <p className="text-xs text-gray-400">
-                        Information Technology Department · Head Office – Dhaka
+                        {empDept} · {empBranch}
                     </p>
                 </div>
             </div>
@@ -92,68 +133,68 @@ export default function EmployeeProfilePage() {
                     <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4 text-xs">
                         <h3 className="font-bold text-gray-900 text-sm pb-2 border-b border-gray-100">Contact & Emergency Details</h3>
                         <div className="space-y-3">
-                            <div><span className="text-gray-400">Work Email</span><p className="font-semibold text-gray-800 mt-0.5">arif.c@vertextech.io</p></div>
-                            <div><span className="text-gray-400">Mobile Phone</span><p className="font-semibold text-gray-800 mt-0.5">+880 1712-100201</p></div>
-                            <div><span className="text-gray-400">Present Address</span><p className="font-semibold text-gray-800 mt-0.5">House 24, Road 11, Dhanmondi, Dhaka</p></div>
+                            <div><span className="text-gray-400">Work Email</span><p className="font-semibold text-gray-800 mt-0.5">{empEmail}</p></div>
+                            <div><span className="text-gray-400">Mobile Phone</span><p className="font-semibold text-gray-800 mt-0.5">{empPhone}</p></div>
+                            <div><span className="text-gray-400">Present Address</span><p className="font-semibold text-gray-800 mt-0.5">{empAddress}</p></div>
                             <div className="pt-2 border-t border-gray-100">
                                 <span className="text-gray-400 font-bold">Emergency Contact:</span>
-                                <p className="font-semibold text-gray-800 mt-0.5">Mrs. Sabrina Chowdhury (Spouse) · +880 1799-887766</p>
+                                <p className="font-semibold text-gray-800 mt-0.5">{empEmergency}</p>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Tab 2: Official Info */}
+            {/* Tab 2: Official Employment */}
             {activeTab === "official" && (
-                <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4 text-xs max-w-3xl">
-                    <h3 className="font-bold text-gray-900 text-sm pb-2 border-b border-gray-100">Employment & Organization Mapping</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div><span className="text-gray-400">Department</span><p className="font-bold text-gray-800 mt-0.5">Information Technology</p></div>
-                        <div><span className="text-gray-400">Assigned Branch</span><p className="font-bold text-gray-800 mt-0.5">Head Office – Dhaka</p></div>
-                        <div><span className="text-gray-400">Reporting Manager</span><p className="font-bold text-[#00B050] mt-0.5">Tanvir Ahmed (IT Lead)</p></div>
-                        <div><span className="text-gray-400">Joining Date</span><p className="font-bold text-gray-800 mt-0.5">January 12, 2020 (4+ Years)</p></div>
-                        <div><span className="text-gray-400">Salary Grade</span><p className="font-bold text-gray-800 mt-0.5">Grade 8 (Monthly)</p></div>
-                        <div><span className="text-gray-400">Assigned Shift</span><p className="font-bold text-gray-800 mt-0.5">Regular Morning (09:00 AM - 05:00 PM)</p></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4 text-xs">
+                        <h3 className="font-bold text-gray-900 text-sm pb-2 border-b border-gray-100">Organization & Posting</h3>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div><span className="text-gray-400">Designation</span><p className="font-bold text-gray-800 mt-0.5">{empDesignation}</p></div>
+                            <div><span className="text-gray-400">Department</span><p className="font-bold text-gray-800 mt-0.5">{empDept}</p></div>
+                            <div><span className="text-gray-400">Branch Location</span><p className="font-bold text-gray-800 mt-0.5">{empBranch}</p></div>
+                            <div><span className="text-gray-400">Employment Type</span><p className="font-bold text-[#00B050] mt-0.5">Full-Time (Permanent)</p></div>
+                            <div><span className="text-gray-400">Date of Joining</span><p className="font-bold text-gray-800 mt-0.5">{empJoinDate}</p></div>
+                            <div><span className="text-gray-400">Status</span><p className="font-bold text-emerald-600 mt-0.5">Active Service</p></div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4 text-xs">
+                        <h3 className="font-bold text-gray-900 text-sm pb-2 border-b border-gray-100">Salary & Compensation Grade</h3>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div><span className="text-gray-400">Base Salary</span><p className="font-bold text-gray-900 text-sm mt-0.5 font-mono">{empSalary}</p></div>
+                            <div><span className="text-gray-400">Pay Frequency</span><p className="font-bold text-gray-800 mt-0.5">Monthly (Bank Transfer)</p></div>
+                            <div><span className="text-gray-400">Provident Fund (PF)</span><p className="font-bold text-gray-800 mt-0.5">10% Contributory</p></div>
+                            <div><span className="text-gray-400">Tax Deducted (TDS)</span><p className="font-bold text-gray-800 mt-0.5">As per Tax Law</p></div>
+                        </div>
                     </div>
                 </div>
             )}
 
             {/* Tab 3: Documents Vault */}
             {activeTab === "documents" && (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-                        <h3 className="font-bold text-gray-900 text-sm">Verified Employee Documents</h3>
-                        <button
-                            onClick={() => alert("Upload document prompt opened.")}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#00B050] text-white rounded-xl text-xs font-semibold"
-                        >
-                            <Upload className="w-3.5 h-3.5" /> Upload New File
-                        </button>
+                <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                        <div>
+                            <h3 className="font-bold text-gray-900 text-sm">Verified Employee Documents</h3>
+                            <p className="text-xs text-gray-400">Encrypted in cloud vault</p>
+                        </div>
                     </div>
-                    <div className="divide-y divide-gray-100 text-xs">
+
+                    <div className="divide-y divide-gray-100">
                         {documents.map((doc, idx) => (
-                            <div key={idx} className="p-4 flex items-center justify-between hover:bg-gray-50/60 transition-colors">
+                            <div key={idx} className="py-3 flex items-center justify-between text-xs">
                                 <div className="flex items-center gap-3">
-                                    <div className="p-2.5 rounded-xl bg-emerald-50 text-[#00B050]">
-                                        <FileText className="w-4 h-4" />
-                                    </div>
+                                    <FileText className="w-5 h-5 text-[#00B050]" />
                                     <div>
                                         <p className="font-bold text-gray-900">{doc.name}</p>
-                                        <span className="text-[11px] text-gray-400">{doc.type} · {doc.size} · Uploaded {doc.uploadedOn}</span>
+                                        <p className="text-[10px] text-gray-400">{doc.type} · {doc.size}</p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">
-                                        {doc.status}
-                                    </span>
-                                    <button
-                                        onClick={() => alert(`Downloading ${doc.name}...`)}
-                                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-[#00B050]"
-                                    >
-                                        <Download className="w-4 h-4" />
-                                    </button>
-                                </div>
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                    <CheckCircle2 className="w-3 h-3" /> {doc.status}
+                                </span>
                             </div>
                         ))}
                     </div>

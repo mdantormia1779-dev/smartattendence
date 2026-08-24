@@ -81,6 +81,7 @@ export interface WithdrawalRequest {
   paymentDetails: string;
   status: "PENDING" | "APPROVED" | "PROCESSING" | "PAID" | "REJECTED";
   rejectionReason?: string;
+  adminNotes?: string;
   requestedAt: string;
   processedAt?: string;
 }
@@ -286,8 +287,39 @@ let fraudAlerts: FraudAlert[] = [
 ];
 
 /**
- * Get or create referral account for a user
+ * Get referral account by userId or create if not present
  */
+export function getReferralAccount(userId: string, options?: {
+  fullName?: string;
+  email?: string;
+  role?: string;
+  organizationId?: string | null;
+  customCode?: string;
+}) {
+  let acc = referralAccounts.find((a) => a.userId === userId || a.id === userId);
+  if (!acc) {
+    acc = getOrCreateReferralAccount({
+      id: userId,
+      name: options?.fullName || "Affiliate Partner",
+      email: options?.email || `${userId}@saas.com`,
+      role: options?.role || "AFFILIATE",
+      organizationId: options?.organizationId,
+    });
+  }
+
+  const commissions = commissionsList.filter((c) => c.referralAccountId === acc!.id);
+  const withdrawals = withdrawalRequests.filter((w) => w.referralAccountId === acc!.id);
+
+  return {
+    ...acc,
+    customCommissionRate: acc.commissionRate,
+    pendingBalance: acc.pendingCommission,
+    lifetimePaid: acc.paidCommission,
+    commissions,
+    withdrawals,
+  };
+}
+
 export function getOrCreateReferralAccount(user: {
   id: string;
   name: string;
@@ -298,7 +330,6 @@ export function getOrCreateReferralAccount(user: {
   let existing = referralAccounts.find((a) => a.userId === user.id);
   if (existing) return existing;
 
-  // Generate unique code based on name or role
   const cleanName = user.name.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 8);
   const randomSuffix = Math.floor(100 + Math.random() * 900);
   const code = `${cleanName || "REF"}${randomSuffix}`;
@@ -334,10 +365,7 @@ export function getOrCreateReferralAccount(user: {
   return newAcc;
 }
 
-/**
- * Record a Referral Click / Visit
- */
-export function recordReferralClick(code: string, meta: { ip?: string; userAgent?: string; landingPage?: string }) {
+export function recordReferralClick(code: string, meta?: { ip?: string; userAgent?: string; landingPage?: string }) {
   const acc = referralAccounts.find((a) => a.referralCode.toUpperCase() === code.toUpperCase());
   if (!acc) return null;
 
@@ -345,9 +373,6 @@ export function recordReferralClick(code: string, meta: { ip?: string; userAgent
   return { success: true, referralCode: acc.referralCode, affiliate: acc.userName };
 }
 
-/**
- * Calculate & Generate Commission on Paid Subscription
- */
 export function generateSubscriptionCommission(input: {
   referralCode: string;
   orgName: string;
@@ -361,7 +386,6 @@ export function generateSubscriptionCommission(input: {
     return { success: false, message: "Invalid referral code" };
   }
 
-  // Self-referral protection check
   if (globalProgramConfig.selfReferralBlocked && acc.userEmail.toLowerCase() === input.orgEmail.toLowerCase()) {
     fraudAlerts.unshift({
       id: `frd-${Date.now()}`,
@@ -378,7 +402,6 @@ export function generateSubscriptionCommission(input: {
   const rate = acc.commissionRate || globalProgramConfig.defaultCommissionRate;
   const commissionAmt = Number(((input.paymentAmount * rate) / 100).toFixed(2));
 
-  // Compute available date after holding period (e.g. 30 days)
   const availableDate = new Date();
   availableDate.setDate(availableDate.getDate() + globalProgramConfig.holdingPeriodDays);
 
@@ -399,7 +422,6 @@ export function generateSubscriptionCommission(input: {
 
   commissionsList.unshift(newCommission);
 
-  // Update account stats
   acc.totalPaidCustomers += 1;
   acc.totalRevenue += input.paymentAmount;
   acc.pendingCommission = Number((acc.pendingCommission + commissionAmt).toFixed(2));
@@ -407,33 +429,29 @@ export function generateSubscriptionCommission(input: {
   return { success: true, commission: newCommission };
 }
 
-/**
- * Submit Withdrawal Request
- */
 export function requestWithdrawal(input: {
   referralAccountId: string;
   amount: number;
   paymentMethod: WithdrawalRequest["paymentMethod"];
   paymentDetails: string;
-}): { success: boolean; withdrawal?: WithdrawalRequest; message?: string } {
-  const acc = referralAccounts.find((a) => a.id === input.referralAccountId);
-  if (!acc) return { success: false, message: "Referral account not found" };
+}): { success: boolean; withdrawal?: WithdrawalRequest; error?: string; message?: string } {
+  const acc = referralAccounts.find((a) => a.id === input.referralAccountId || a.userId === input.referralAccountId);
+  if (!acc) return { success: false, error: "Referral account not found" };
 
   if (input.amount < globalProgramConfig.minimumWithdrawal) {
     return {
       success: false,
-      message: `Minimum withdrawal amount is $${globalProgramConfig.minimumWithdrawal}. Requested: $${input.amount}`,
+      error: `Minimum withdrawal amount is $${globalProgramConfig.minimumWithdrawal}. Requested: $${input.amount}`,
     };
   }
 
   if (input.amount > acc.availableBalance) {
     return {
       success: false,
-      message: `Insufficient available balance. You have $${acc.availableBalance} available.`,
+      error: `Insufficient available balance. You have $${acc.availableBalance} available.`,
     };
   }
 
-  // Deduct from available balance
   acc.availableBalance = Number((acc.availableBalance - input.amount).toFixed(2));
 
   const newWithdrawal: WithdrawalRequest = {
@@ -453,38 +471,45 @@ export function requestWithdrawal(input: {
   return { success: true, withdrawal: newWithdrawal };
 }
 
-/**
- * Process Admin Payout
- */
+export const requestReferralWithdrawal = requestWithdrawal;
+
 export function processWithdrawalPayout(
   withdrawalId: string,
   decision: "APPROVED" | "PAID" | "REJECTED",
-  rejectionReason?: string
-): { success: boolean; withdrawal?: WithdrawalRequest } {
+  options?: { adminNotes?: string; rejectionReason?: string } | string
+): { success: boolean; withdrawal?: WithdrawalRequest; error?: string } {
   const w = withdrawalRequests.find((item) => item.id === withdrawalId);
-  if (!w) return { success: false };
+  if (!w) return { success: false, error: "Withdrawal not found" };
 
   const acc = referralAccounts.find((a) => a.id === w.referralAccountId);
+  const rejectionReason = typeof options === "string" ? options : options?.rejectionReason;
+  const adminNotes = typeof options === "object" ? options?.adminNotes : undefined;
 
   if (decision === "PAID") {
     w.status = "PAID";
     w.processedAt = new Date().toISOString().split("T")[0];
+    if (adminNotes) w.adminNotes = adminNotes;
     if (acc) {
       acc.paidCommission = Number((acc.paidCommission + w.amount).toFixed(2));
     }
   } else if (decision === "REJECTED") {
     w.status = "REJECTED";
     w.rejectionReason = rejectionReason || "Invalid payout information";
-    // Refund back to available balance
+    if (adminNotes) w.adminNotes = adminNotes;
     if (acc) {
       acc.availableBalance = Number((acc.availableBalance + w.amount).toFixed(2));
     }
   } else if (decision === "APPROVED") {
     w.status = "APPROVED";
+    if (adminNotes) w.adminNotes = adminNotes;
   }
 
   return { success: true, withdrawal: w };
 }
+
+export const processPayoutDecision = (args: { withdrawalId: string; decision: "APPROVED" | "PAID" | "REJECTED"; adminNotes?: string; rejectionReason?: string }) => {
+  return processWithdrawalPayout(args.withdrawalId, args.decision, { adminNotes: args.adminNotes, rejectionReason: args.rejectionReason });
+};
 
 export function getReferralProgramConfig() {
   return globalProgramConfig;
@@ -511,4 +536,25 @@ export function getWithdrawals(referralAccountId?: string) {
 
 export function getFraudAlerts() {
   return fraudAlerts;
+}
+
+export function getAdminReferralOverview() {
+  const totalAffiliates = referralAccounts.length;
+  const totalRevenue = referralAccounts.reduce((s, a) => s + a.totalRevenue, 0);
+  const totalPaid = referralAccounts.reduce((s, a) => s + a.paidCommission, 0);
+  const pendingPayoutsList = withdrawalRequests.filter((w) => w.status === "PENDING");
+  const pendingPayoutsTotal = pendingPayoutsList.reduce((s, w) => s + w.amount, 0);
+
+  return {
+    totalAffiliates,
+    totalRevenue,
+    totalPaid,
+    pendingPayoutsTotal,
+    pendingPayoutsCount: pendingPayoutsList.length,
+    programConfig: globalProgramConfig,
+    affiliates: referralAccounts,
+    recentCommissions: commissionsList,
+    pendingPayouts: pendingPayoutsList,
+    fraudAlerts,
+  };
 }

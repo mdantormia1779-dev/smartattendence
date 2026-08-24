@@ -10,6 +10,7 @@ import { OrgStep } from '@/app/Components/Signup/OrgStep';
 import { OperationStep } from '@/app/Components/Signup/OperationStep';
 import { SuccessModal } from '@/app/Components/Signup/SuccessModal';
 import { Sparkles, Gift } from 'lucide-react';
+import { api } from '@/lib/api-client';
 
 const signupSchema = z.object({
     adminName: z.string().min(2, { message: "Admin name is required" }),
@@ -17,11 +18,12 @@ const signupSchema = z.object({
     password: z.string().min(6, { message: "Password must be at least 6 characters" }),
     
     companyName: z.string().min(2, { message: "Company name is required" }),
+    companyLogo: z.string().optional().or(z.literal("")),
     industry: z.string().min(2, { message: "Industry is required" }),
     companyEmail: z.string().email({ message: "Valid company email is required" }),
     phone: z.string().min(6, { message: "Phone number is required" }),
-    website: z.string().url({ message: "Valid URL is required" }),
-    address: z.string().min(5, { message: "Address is required" }),
+    website: z.string().url({ message: "Valid URL is required" }).optional().or(z.literal("")),
+    address: z.string().min(3, { message: "Address is required" }),
     
     country: z.string().min(2, { message: "Country is required" }),
     language: z.string().min(2, { message: "Language is required" }),
@@ -37,6 +39,7 @@ type SignupFormData = z.infer<typeof signupSchema>;
 function SignupContent() {
     const [step, setStep] = useState<number>(1);
     const [isSuccessModalOpen, setIsSuccessModalOpen] = useState<boolean>(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
     const [referralCode, setReferralCode] = useState<string | null>(null);
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -56,7 +59,19 @@ function SignupContent() {
 
     const { register, handleSubmit, trigger, formState: { errors, isSubmitting } } = useForm<SignupFormData>({
         resolver: zodResolver(signupSchema),
-        mode: "onChange"
+        mode: "onChange",
+        defaultValues: {
+            industry: "Software & IT",
+            country: "Bangladesh",
+            language: "English",
+            currency: "BDT (৳)",
+            timezone: "Asia/Dhaka (GMT+6)",
+            workingDays: "Sun - Thu",
+            startTime: "09:00",
+            endTime: "17:00",
+            companyLogo: "",
+            website: "",
+        }
     });
 
     const nextStep = async () => {
@@ -64,7 +79,7 @@ function SignupContent() {
         if (step === 1) {
             fieldsToValidate = ['adminName', 'adminEmail', 'password'];
         } else if (step === 2) {
-            fieldsToValidate = ['companyName', 'industry', 'companyEmail', 'phone', 'website', 'address'];
+            fieldsToValidate = ['companyName', 'industry', 'companyEmail', 'phone', 'website', 'address', 'companyLogo'];
         }
 
         const output = await trigger(fieldsToValidate);
@@ -74,8 +89,21 @@ function SignupContent() {
     const prevStep = () => setStep((prev) => Math.max(prev - 1, 1));
 
     const onSubmit = async (data: SignupFormData) => {
-        console.log("Modular Signup Data with Referral Attribution:", { ...data, referralCode });
-        setIsSuccessModalOpen(true);
+        try {
+            setSubmitError(null);
+            const payload = {
+                ...data,
+                referralCode: referralCode || null,
+            };
+            const res = await api.auth.register(payload);
+            if (res.success) {
+                setIsSuccessModalOpen(true);
+            } else {
+                setSubmitError(res.message || "Registration failed. Please try again.");
+            }
+        } catch (err: any) {
+            setSubmitError(err?.message || "An unexpected error occurred during signup.");
+        }
     };
 
     const handleModalClose = () => {
@@ -116,6 +144,13 @@ function SignupContent() {
                     <div className={`flex-1 h-0.5 mx-4 transition-all ${step > 2 ? 'bg-[#00B050]' : 'bg-gray-200'}`} />
                     <StepIndicator num={3} title="Operations" currentStep={step} />
                 </div>
+
+                {submitError && (
+                    <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center justify-between">
+                        <span>{submitError}</span>
+                        <button onClick={() => setSubmitError(null)} className="text-rose-500 hover:text-rose-700 font-bold ml-4">✕</button>
+                    </div>
+                )}
 
                 <div className="bg-white p-8 md:p-10 rounded-3xl shadow-xl shadow-gray-200/50 border border-gray-100">
                     <form onSubmit={handleSubmit(onSubmit)}>

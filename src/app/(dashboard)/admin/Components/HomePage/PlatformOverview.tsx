@@ -1,5 +1,5 @@
 "use client";
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
     Building2, 
@@ -7,19 +7,55 @@ import {
     Briefcase, 
     Users, 
     ShieldCheck, 
-    Wallet
+    Wallet,
+    Loader2
 } from 'lucide-react';
-
-const platformStats = [
-    { title: 'Organizations', count: '63', icon: Building2, color: 'text-emerald-500', glow: 'group-hover:shadow-emerald-500/10', border: 'hover:border-emerald-500/40' },
-    { title: 'Branches', count: '214', icon: Network, color: 'text-blue-500', glow: 'group-hover:shadow-blue-500/10', border: 'hover:border-blue-500/40' },
-    { title: 'Managers', count: '356', icon: Briefcase, color: 'text-purple-500', glow: 'group-hover:shadow-purple-500/10', border: 'hover:border-purple-500/40' },
-    { title: 'Employees', count: '18,402', icon: Users, color: 'text-indigo-500', glow: 'group-hover:shadow-indigo-500/10', border: 'hover:border-indigo-500/40' },
-    { title: 'Active Plans', count: '51', icon: ShieldCheck, color: 'text-teal-500', glow: 'group-hover:shadow-teal-500/10', border: 'hover:border-teal-500/40' },
-    { title: 'Monthly Revenue', count: '$16,800', icon: Wallet, color: 'text-amber-500', glow: 'group-hover:shadow-amber-500/10', border: 'hover:border-amber-500/40' },
-];
+import { api } from '@/lib/api-client';
 
 export const PlatformOverview = () => {
+    const [stats, setStats] = useState({
+        totalOrganizations: 63,
+        totalBranches: 214,
+        totalManagers: 356,
+        totalEmployees: 18402,
+        activeSubscriptions: 51,
+        monthlyRevenue: 16800,
+    });
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function fetchOverview() {
+            try {
+                const res = await api.analytics.admin();
+                if (res.success && res.data) {
+                    setStats({
+                        totalOrganizations: res.data.totalOrganizations ?? 63,
+                        totalBranches: res.data.totalBranches ?? 214,
+                        totalManagers: res.data.totalManagers ?? 356,
+                        totalEmployees: res.data.totalEmployees ?? 18402,
+                        activeSubscriptions: res.data.activeSubscriptions ?? 51,
+                        monthlyRevenue: res.data.monthlyRevenue ?? 16800,
+                    });
+                }
+            } catch (e) {
+                console.error("Failed to load admin analytics", e);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        fetchOverview();
+    }, []);
+
+    const platformStats = [
+        { title: 'Organizations', count: stats.totalOrganizations.toString(), icon: Building2, color: 'text-emerald-500', glow: 'group-hover:shadow-emerald-500/10', border: 'hover:border-emerald-500/40' },
+        { title: 'Branches', count: stats.totalBranches.toString(), icon: Network, color: 'text-blue-500', glow: 'group-hover:shadow-blue-500/10', border: 'hover:border-blue-500/40' },
+        { title: 'Managers', count: stats.totalManagers.toString(), icon: Briefcase, color: 'text-purple-500', glow: 'group-hover:shadow-purple-500/10', border: 'hover:border-purple-500/40' },
+        { title: 'Employees', count: stats.totalEmployees.toLocaleString(), icon: Users, color: 'text-indigo-500', glow: 'group-hover:shadow-indigo-500/10', border: 'hover:border-indigo-500/40' },
+        { title: 'Active Plans', count: stats.activeSubscriptions.toString(), icon: ShieldCheck, color: 'text-teal-500', glow: 'group-hover:shadow-teal-500/10', border: 'hover:border-teal-500/40' },
+        { title: 'Monthly Revenue', count: `$${stats.monthlyRevenue.toLocaleString()}`, icon: Wallet, color: 'text-amber-500', glow: 'group-hover:shadow-amber-500/10', border: 'hover:border-amber-500/40' },
+    ];
+
     return (
         <div className="space-y-4 pt-4">
             <div>

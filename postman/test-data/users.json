@@ -1,0 +1,43 @@
+[
+  {
+    "name": "Super Admin",
+    "email": "superadmin@erp.com",
+    "password": "admin123",
+    "role": "SUPER_ADMIN"
+  },
+  {
+    "name": "Sarah Rahman",
+    "email": "sarah.admin@vertextech.io",
+    "password": "admin123",
+    "role": "ORG_ADMIN",
+    "organization": "Vertex Technologies Ltd."
+  },
+  {
+    "name": "Kamal Hossain",
+    "email": "admin@bengaltextiles.com",
+    "password": "admin123",
+    "role": "ORG_ADMIN",
+    "organization": "Bengal Textiles Ltd."
+  },
+  {
+    "name": "Tanvir Ahmed",
+    "email": "tanvir.mgr@vertextech.io",
+    "password": "mgr123",
+    "role": "MANAGER",
+    "organization": "Vertex Technologies Ltd."
+  },
+  {
+    "name": "Arif Chowdhury",
+    "email": "arif.c@vertextech.io",
+    "password": "emp123",
+    "role": "EMPLOYEE",
+    "organization": "Vertex Technologies Ltd."
+  },
+  {
+    "name": "Abdur Rahim",
+    "email": "rahim.b@bengaltextiles.com",
+    "password": "emp123",
+    "role": "EMPLOYEE",
+    "organization": "Bengal Textiles Ltd."
+  }
+]

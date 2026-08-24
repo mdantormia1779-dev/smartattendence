@@ -12,9 +12,11 @@ import {
   CheckSquare, 
   CircleDollarSign,
   Filter,
-  History
+  History,
+  Loader2
 } from "lucide-react";
 import gsap from "gsap";
+import { api } from "@/lib/api-client";
 
 type ActionType = 
   | "Login Activity"
@@ -36,41 +38,70 @@ interface AuditLog {
   ipAddress: string;
 }
 
-const initialLogs: AuditLog[] = [
-  { id: "log-001", timestamp: "Aug 20, 2026 - 10:45 AM", user: "Admin User", email: "admin@system.com", actionType: "Payroll Changes", details: "Updated base salary for employee ID EMP-8942", ipAddress: "192.168.1.42" },
-  { id: "log-002", timestamp: "Aug 20, 2026 - 09:30 AM", user: "HR Manager", email: "hr@system.com", actionType: "Employee Creation", details: "Onboarded new software engineer: Sarah Jenkins", ipAddress: "192.168.1.105" },
-  { id: "log-003", timestamp: "Aug 19, 2026 - 04:15 PM", user: "System Auto", email: "system@bot.com", actionType: "Attendance Activity", details: "Processed daily auto-checkout for 45 inactive users", ipAddress: "Localhost" },
-  { id: "log-004", timestamp: "Aug 19, 2026 - 02:10 PM", user: "Admin User", email: "admin@system.com", actionType: "Leave Approval", details: "Approved 3 days sick leave for Michael Scott", ipAddress: "192.168.1.42" },
-  { id: "log-005", timestamp: "Aug 18, 2026 - 11:20 AM", user: "HR Manager", email: "hr@system.com", actionType: "Employee Update", details: "Changed department for David Wallace to 'Management'", ipAddress: "192.168.1.105" },
-  { id: "log-006", timestamp: "Aug 18, 2026 - 09:05 AM", user: "Admin User", email: "admin@system.com", actionType: "Login Activity", details: "Successful login via Web Portal", ipAddress: "103.112.54.12" },
-  { id: "log-007", timestamp: "Aug 17, 2026 - 03:45 PM", user: "Admin User", email: "admin@system.com", actionType: "Employee Deletion", details: "Archived employee record for ID EMP-1023", ipAddress: "192.168.1.42" },
-];
-
 export default function AuditLogsPage() {
-  const [logs] = useState<AuditLog[]>(initialLogs);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<ActionType>("All");
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Initial Page Animations
+  const fetchLogs = async () => {
+    try {
+      setLoading(true);
+      const res = await api.auditLogs.getAll();
+      if (res.success && Array.isArray(res.data)) {
+        const mapped: AuditLog[] = res.data.map((l: any) => {
+          let actType: ActionType = "Login Activity";
+          if (l.action?.includes("EMPLOYEE_CREATE")) actType = "Employee Creation";
+          else if (l.action?.includes("EMPLOYEE_UPDATE")) actType = "Employee Update";
+          else if (l.action?.includes("EMPLOYEE_DELETE")) actType = "Employee Deletion";
+          else if (l.action?.includes("LEAVE")) actType = "Leave Approval";
+          else if (l.action?.includes("PAYROLL")) actType = "Payroll Changes";
+          else if (l.action?.includes("ATTENDANCE")) actType = "Attendance Activity";
+
+          return {
+            id: l.id,
+            timestamp: l.createdAt ? new Date(l.createdAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "Recently",
+            user: l.user?.fullName || l.userName || "System User",
+            email: l.user?.email || l.userEmail || "user@system.com",
+            actionType: actType,
+            details: l.details || l.description || `${l.action} performed on ${l.resource || "resource"}`,
+            ipAddress: l.ipAddress || "127.0.0.1",
+          };
+        });
+        setLogs(mapped);
+      }
+    } catch (e) {
+      console.error("Failed to load audit logs", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const ctx = gsap.context(() => {
-      gsap.fromTo(
-        ".animate-header",
-        { opacity: 0, y: -20 },
-        { opacity: 1, y: 0, duration: 0.7, ease: "power3.out", stagger: 0.1 }
-      );
+    fetchLogs();
+  }, []);
 
-      gsap.fromTo(
-        ".animate-row",
-        { opacity: 0, y: 20 },
-        { opacity: 1, y: 0, duration: 0.6, ease: "power2.out", stagger: 0.05, delay: 0.2 }
-      );
-    }, containerRef);
+  useEffect(() => {
+    if (!loading) {
+      const ctx = gsap.context(() => {
+        gsap.fromTo(
+          ".animate-header",
+          { opacity: 0, y: -20 },
+          { opacity: 1, y: 0, duration: 0.7, ease: "power3.out", stagger: 0.1 }
+        );
 
-    return () => ctx.revert();
-  }, [filterType, searchQuery]); // Re-animate slightly on filter change for smoothness
+        gsap.fromTo(
+          ".animate-row",
+          { opacity: 0, y: 20 },
+          { opacity: 1, y: 0, duration: 0.6, ease: "power2.out", stagger: 0.05, delay: 0.2 }
+        );
+      }, containerRef);
+
+      return () => ctx.revert();
+    }
+  }, [loading, filterType, searchQuery]);
 
   const filteredLogs = logs.filter((log) => {
     const matchesSearch = 
@@ -102,104 +133,133 @@ export default function AuditLogsPage() {
       case "Employee Deletion": return "bg-rose-50 text-rose-600 border-rose-100";
       case "Leave Approval": return "bg-teal-50 text-teal-600 border-teal-100";
       case "Payroll Changes": return "bg-emerald-50 text-emerald-700 border-emerald-100";
-      default: return "bg-neutral-50 text-neutral-600 border-neutral-100";
+      default: return "bg-neutral-50 text-neutral-600 border-neutral-200";
     }
   };
 
+  const handleExportCSV = () => {
+    const headers = "Timestamp,User,Email,Action,Details,IP Address\n";
+    const rows = filteredLogs.map(l => `"${l.timestamp}","${l.user}","${l.email}","${l.actionType}","${l.details}","${l.ipAddress}"`).join("\n");
+    const blob = new Blob([headers + rows], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `security_audit_logs.csv`);
+    document.body.appendChild(link);
+    link.click();
+  };
+
   return (
-    <div ref={containerRef} className="min-h-screen bg-[#FBFBFA] p-8 text-neutral-800 overflow-x-hidden">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 animate-header opacity-0 gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Audit Logs</h1>
-          <p className="text-sm text-neutral-500 mt-1">Track system activities, administrative changes, and user events</p>
+    <div ref={containerRef} className="min-h-screen bg-[#FBFBFA] p-8 text-neutral-800">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div className="animate-header opacity-0">
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Security Audit Logs</h1>
+          <p className="text-sm text-neutral-500 mt-1">Track compliance, user modifications, privileged access, and system events</p>
         </div>
 
-        <button className="flex items-center gap-2 bg-white border border-neutral-200 hover:bg-neutral-50 text-neutral-700 px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm cursor-pointer whitespace-nowrap">
-          <Download className="w-4 h-4" /> Export CSV
+        <button
+          onClick={handleExportCSV}
+          className="flex items-center gap-2 bg-white hover:bg-neutral-50 border border-neutral-200/80 px-4 py-2 rounded-xl text-xs font-semibold shadow-xs transition-all animate-header opacity-0 cursor-pointer"
+        >
+          <Download className="w-4 h-4 text-neutral-500" />
+          Export Audit Trail
         </button>
       </div>
 
-      {/* Filters Section */}
-      <div className="flex flex-col md:flex-row gap-4 mb-6 animate-header opacity-0">
-        <div className="relative w-full md:w-80">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+      {/* Control Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-neutral-200/80 shadow-xs mb-6 flex flex-col md:flex-row gap-4 justify-between items-center animate-header opacity-0">
+        <div className="relative w-full md:w-96">
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
           <input
             type="text"
-            placeholder="Search by user or details..."
+            placeholder="Search by user or description..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] shadow-sm"
+            className="w-full pl-10 pr-4 py-2 bg-neutral-50/60 border border-neutral-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981]"
           />
         </div>
 
-        <div className="relative w-full md:w-56">
-          <Filter className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value as ActionType)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] shadow-sm appearance-none cursor-pointer"
-          >
-            <option value="All">All Activities</option>
-            <option value="Login Activity">Login Activity</option>
-            <option value="Attendance Activity">Attendance Activity</option>
-            <option value="Employee Creation">Employee Creation</option>
-            <option value="Employee Update">Employee Update</option>
-            <option value="Employee Deletion">Employee Deletion</option>
-            <option value="Leave Approval">Leave Approval</option>
-            <option value="Payroll Changes">Payroll Changes</option>
-          </select>
+        <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+          <Filter className="w-3.5 h-3.5 text-neutral-400 mr-1 hidden md:block" />
+          {[
+            "All",
+            "Login Activity",
+            "Attendance Activity",
+            "Employee Creation",
+            "Leave Approval",
+            "Payroll Changes",
+          ].map((type) => (
+            <button
+              key={type}
+              onClick={() => setFilterType(type as ActionType)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                filterType === type
+                  ? "bg-neutral-900 text-white shadow-xs"
+                  : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+              }`}
+            >
+              {type}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Logs Table */}
+      {/* Audit Log Table */}
       <div className="bg-white rounded-2xl border border-neutral-200/80 shadow-sm overflow-hidden animate-header opacity-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-neutral-200 bg-neutral-50/50 text-neutral-400 text-xs font-semibold uppercase tracking-wider">
-                <th className="py-4 px-6">Timestamp & User</th>
-                <th className="py-4 px-6">Event Category</th>
-                <th className="py-4 px-6">Activity Details</th>
-                <th className="py-4 px-6 text-right">IP Address</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-100 text-sm">
-              {filteredLogs.length > 0 ? (
-                filteredLogs.map((log) => (
-                  <tr key={log.id} className="animate-row opacity-0 hover:bg-neutral-50/60 transition-colors">
-                    <td className="py-4 px-6">
-                      <div className="font-semibold text-neutral-900">{log.user}</div>
-                      <div className="text-[11px] text-neutral-400 mt-0.5">{log.timestamp}</div>
-                    </td>
-                    <td className="py-4 px-6">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${getActionBadgeClass(log.actionType)}`}>
-                        {getActionIcon(log.actionType)}
-                        {log.actionType}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 text-neutral-600 font-medium">
-                      {log.details}
-                    </td>
-                    <td className="py-4 px-6 text-right font-mono text-[11px] text-neutral-400">
-                      {log.ipAddress}
+        {loading ? (
+          <div className="flex items-center justify-center py-20 text-neutral-400">
+            <Loader2 className="w-8 h-8 animate-spin text-[#00B050] mr-2" />
+            <span className="text-xs">Loading immutable audit logs...</span>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-neutral-200 bg-neutral-50/50 text-neutral-400 text-xs font-semibold uppercase tracking-wider">
+                  <th className="py-3.5 px-6">Timestamp</th>
+                  <th className="py-3.5 px-6">Actor</th>
+                  <th className="py-3.5 px-6">Event Type</th>
+                  <th className="py-3.5 px-6">Audit Description</th>
+                  <th className="py-3.5 px-6">IP Address</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100 text-sm">
+                {filteredLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-xs text-neutral-400">
+                      No security audit events recorded.
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={4} className="py-16 text-center">
-                    <div className="w-12 h-12 rounded-full bg-neutral-50 text-neutral-400 flex items-center justify-center mx-auto mb-3">
-                      <History className="w-6 h-6" />
-                    </div>
-                    <h3 className="text-sm font-bold text-neutral-900">No logs found</h3>
-                    <p className="text-xs text-neutral-500 mt-1">Try adjusting your filters or search query.</p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                ) : (
+                  filteredLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-neutral-50/60 transition-colors animate-row opacity-0">
+                      <td className="py-4 px-6 text-neutral-500 font-mono text-xs whitespace-nowrap">
+                        {log.timestamp}
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="font-semibold text-neutral-900 text-xs">{log.user}</div>
+                        <div className="text-[11px] text-neutral-400">{log.email}</div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${getActionBadgeClass(log.actionType)}`}>
+                          {getActionIcon(log.actionType)}
+                          {log.actionType}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 text-neutral-700 text-xs font-medium max-w-md">
+                        {log.details}
+                      </td>
+                      <td className="py-4 px-6 font-mono text-[11px] text-neutral-400">
+                        {log.ipAddress}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

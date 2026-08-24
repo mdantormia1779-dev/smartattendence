@@ -11,7 +11,7 @@ export interface AuditLogEntry {
   userName: string;
   userRole: "SUPER_ADMIN" | "ORG_ADMIN" | "MANAGER" | "EMPLOYEE";
   action: string;
-  module: "Auth" | "Attendance" | "Employees" | "Branches" | "Leaves" | "Overtime" | "Payroll" | "Settings" | "Subscriptions";
+  module: "Auth" | "Attendance" | "Employees" | "Branches" | "Leaves" | "Overtime" | "Payroll" | "Settings" | "Subscriptions" | "Referral";
   details: string;
   ipAddress?: string;
   userAgent?: string;

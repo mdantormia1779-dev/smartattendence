@@ -21,8 +21,10 @@ import {
     Plane,
     HeartPulse,
     Baby,
-    Briefcase
+    Briefcase,
+    Loader2
 } from "lucide-react";
+import { api } from "@/lib/api-client";
 
 interface LeaveRequest {
     id: string;
@@ -43,97 +45,9 @@ interface LeaveRequest {
     orgComment?: string;
 }
 
-const initialLeaves: LeaveRequest[] = [
-    {
-        id: "leave-101",
-        employeeName: "Arif Chowdhury",
-        employeeId: "EMP-1042",
-        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
-        department: "Information Technology",
-        branch: "Head Office – Dhaka",
-        leaveType: "Annual Leave",
-        startDate: "2026-08-25",
-        endDate: "2026-08-28",
-        totalDays: 4,
-        reason: "Family vacation to Cox's Bazar and personal downtime.",
-        appliedOn: "2026-08-18",
-        status: "Pending Org Admin",
-        managerApproval: "Approved",
-        managerComment: "All sprint deliverables are on track. Recommended for approval.",
-    },
-    {
-        id: "leave-102",
-        employeeName: "Nusrat Jahan",
-        employeeId: "EMP-1043",
-        avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=100",
-        department: "Accounts & Finance",
-        branch: "Head Office – Dhaka",
-        leaveType: "Sick Leave",
-        startDate: "2026-08-19",
-        endDate: "2026-08-20",
-        totalDays: 2,
-        reason: "Severe viral fever and doctor recommended bed rest.",
-        appliedOn: "2026-08-18",
-        status: "Approved",
-        managerApproval: "Approved",
-        managerComment: "Approved immediately. Medical certificate attached.",
-        orgComment: "Approved with full pay.",
-    },
-    {
-        id: "leave-103",
-        employeeName: "Tanvir Ahmed",
-        employeeId: "EMP-1044",
-        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100",
-        department: "Marketing",
-        branch: "Gulshan Branch",
-        leaveType: "Casual Leave",
-        startDate: "2026-08-22",
-        endDate: "2026-08-22",
-        totalDays: 1,
-        reason: "Urgent personal family obligation in hometown.",
-        appliedOn: "2026-08-17",
-        status: "Pending Org Admin",
-        managerApproval: "Approved",
-        managerComment: "Substitute coordinator assigned for marketing campaigns.",
-    },
-    {
-        id: "leave-104",
-        employeeName: "Sabrina Noor",
-        employeeId: "EMP-1045",
-        avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100",
-        department: "Human Resources",
-        branch: "Head Office – Dhaka",
-        leaveType: "Casual Leave",
-        startDate: "2026-08-10",
-        endDate: "2026-08-11",
-        totalDays: 2,
-        reason: "Personal errands and bank tasks.",
-        appliedOn: "2026-08-08",
-        status: "Approved",
-        managerApproval: "Approved",
-        orgComment: "Leave granted.",
-    },
-    {
-        id: "leave-105",
-        employeeName: "Mahmudul Hasan",
-        employeeId: "EMP-1047",
-        avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100",
-        department: "Information Technology",
-        branch: "Head Office – Dhaka",
-        leaveType: "Unpaid Leave",
-        startDate: "2026-08-01",
-        endDate: "2026-08-05",
-        totalDays: 5,
-        reason: "Attending overseas tech conference.",
-        appliedOn: "2026-07-28",
-        status: "Rejected",
-        managerApproval: "Approved",
-        orgComment: "Critical project release milestone coincided with requested period.",
-    },
-];
-
 export default function OrganizationLeavesPage() {
-    const [leaves, setLeaves] = useState<LeaveRequest[]>(initialLeaves);
+    const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
+    const [loading, setLoading] = useState(true);
     const [selectedStatus, setSelectedStatus] = useState<string>("All");
     const [selectedType, setSelectedType] = useState<string>("All");
     const [searchQuery, setSearchQuery] = useState("");
@@ -145,16 +59,66 @@ export default function OrganizationLeavesPage() {
 
     const containerRef = useRef<HTMLDivElement>(null);
 
+    const fetchLeaves = async () => {
+        try {
+            setLoading(true);
+            const res = await api.leaves.getAll();
+            if (res.success && Array.isArray(res.data)) {
+                const mapped: LeaveRequest[] = res.data.map((l: any) => {
+                    let formattedStatus: LeaveRequest["status"] = "Pending Org Admin";
+                    if (l.orgApproval === "APPROVED") formattedStatus = "Approved";
+                    else if (l.orgApproval === "REJECTED") formattedStatus = "Rejected";
+
+                    let type: LeaveRequest["leaveType"] = "Casual Leave";
+                    if (l.type === "SICK") type = "Sick Leave";
+                    else if (l.type === "ANNUAL") type = "Annual Leave";
+                    else if (l.type === "MATERNITY") type = "Maternity Leave";
+                    else if (l.type === "UNPAID") type = "Unpaid Leave";
+
+                    return {
+                        id: l.id,
+                        employeeName: l.employeeName || l.employeeId,
+                        employeeId: l.employeeId,
+                        avatar: l.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
+                        department: l.department || "Information Technology",
+                        branch: l.branch || "Head Office – Dhaka",
+                        leaveType: type,
+                        startDate: l.startDate,
+                        endDate: l.endDate,
+                        totalDays: l.daysCount || l.totalDays || 1,
+                        reason: l.reason || "Personal Leave",
+                        appliedOn: l.createdAt ? l.createdAt.split("T")[0] : "2026-08-18",
+                        status: formattedStatus,
+                        managerApproval: l.managerApproval === "APPROVED" ? "Approved" : "Pending",
+                        managerComment: l.managerComment,
+                        orgComment: l.orgComment,
+                    };
+                });
+                setLeaves(mapped);
+            }
+        } catch (e) {
+            console.error("Failed to load leaves", e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const ctx = gsap.context(() => {
-            gsap.fromTo(
-                ".leave-card",
-                { opacity: 0, y: 15 },
-                { opacity: 1, y: 0, duration: 0.4, stagger: 0.05, ease: "power2.out" }
-            );
-        }, containerRef);
-        return () => ctx.revert();
-    }, [leaves, selectedStatus, selectedType, searchQuery]);
+        fetchLeaves();
+    }, []);
+
+    useEffect(() => {
+        if (!loading) {
+            const ctx = gsap.context(() => {
+                gsap.fromTo(
+                    ".leave-card",
+                    { opacity: 0, y: 15 },
+                    { opacity: 1, y: 0, duration: 0.4, stagger: 0.05, ease: "power2.out" }
+                );
+            }, containerRef);
+            return () => ctx.revert();
+        }
+    }, [leaves, selectedStatus, selectedType, searchQuery, loading]);
 
     const handleOpenActionModal = (request: LeaveRequest, action: "Approve" | "Reject") => {
         setActiveModalRequest(request);
@@ -162,21 +126,22 @@ export default function OrganizationLeavesPage() {
         setOrgNote("");
     };
 
-    const handleProcessAction = (e: React.FormEvent) => {
+    const handleProcessAction = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!activeModalRequest) return;
 
-        setLeaves(leaves.map(req => {
-            if (req.id === activeModalRequest.id) {
-                return {
-                    ...req,
-                    status: modalAction === "Approve" ? "Approved" : "Rejected",
-                    orgComment: orgNote || (modalAction === "Approve" ? "Approved by Organization Admin" : "Rejected by Organization Admin"),
-                };
+        try {
+            if (modalAction === "Approve") {
+                await api.leaves.approve(activeModalRequest.id, orgNote || "Approved by Org Admin");
+            } else {
+                await api.leaves.reject(activeModalRequest.id, orgNote || "Rejected by Org Admin");
             }
-            return req;
-        }));
-        setActiveModalRequest(null);
+            await fetchLeaves();
+        } catch (e) {
+            console.error("Failed to process leave action", e);
+        } finally {
+            setActiveModalRequest(null);
+        }
     };
 
     const filteredLeaves = leaves.filter(item => {
@@ -228,278 +193,236 @@ export default function OrganizationLeavesPage() {
                 <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
                     <div className="flex items-center justify-between">
                         <p className="text-[11px] font-bold text-gray-500 uppercase">Casual Leave</p>
-                        <div className="w-7 h-7 rounded-lg bg-emerald-50 text-[#00B050] flex items-center justify-center">
-                            <Briefcase className="w-3.5 h-3.5" />
-                        </div>
+                        <Briefcase className="w-4 h-4 text-emerald-600" />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-900 mt-2">10 Days</h3>
-                    <p className="text-[10px] text-gray-400 mt-0.5">Per employee / year</p>
+                    <p className="text-2xl font-extrabold text-gray-900 mt-2">14 <span className="text-xs text-gray-400 font-normal">days/yr</span></p>
                 </div>
-
                 <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
                     <div className="flex items-center justify-between">
                         <p className="text-[11px] font-bold text-gray-500 uppercase">Sick Leave</p>
-                        <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
-                            <HeartPulse className="w-3.5 h-3.5" />
-                        </div>
+                        <HeartPulse className="w-4 h-4 text-rose-600" />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-900 mt-2">14 Days</h3>
-                    <p className="text-[10px] text-gray-400 mt-0.5">Full pay allowance</p>
+                    <p className="text-2xl font-extrabold text-gray-900 mt-2">14 <span className="text-xs text-gray-400 font-normal">days/yr</span></p>
                 </div>
-
                 <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
                     <div className="flex items-center justify-between">
                         <p className="text-[11px] font-bold text-gray-500 uppercase">Annual Leave</p>
-                        <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-                            <Plane className="w-3.5 h-3.5" />
-                        </div>
+                        <Plane className="w-4 h-4 text-blue-600" />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-900 mt-2">20 Days</h3>
-                    <p className="text-[10px] text-gray-400 mt-0.5">Paid vacation</p>
+                    <p className="text-2xl font-extrabold text-gray-900 mt-2">20 <span className="text-xs text-gray-400 font-normal">days/yr</span></p>
                 </div>
-
                 <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
                     <div className="flex items-center justify-between">
-                        <p className="text-[11px] font-bold text-gray-500 uppercase">Maternity</p>
-                        <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
-                            <Baby className="w-3.5 h-3.5" />
-                        </div>
+                        <p className="text-[11px] font-bold text-gray-500 uppercase">Maternity Leave</p>
+                        <Baby className="w-4 h-4 text-purple-600" />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-900 mt-2">112 Days</h3>
-                    <p className="text-[10px] text-gray-400 mt-0.5">Statutory paid</p>
+                    <p className="text-2xl font-extrabold text-gray-900 mt-2">112 <span className="text-xs text-gray-400 font-normal">days (16 wks)</span></p>
                 </div>
-
                 <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
                     <div className="flex items-center justify-between">
-                        <p className="text-[11px] font-bold text-gray-500 uppercase">Pending Action</p>
-                        <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-                            <Clock className="w-3.5 h-3.5" />
-                        </div>
+                        <p className="text-[11px] font-bold text-gray-500 uppercase">Pending Requests</p>
+                        <Clock className="w-4 h-4 text-amber-600" />
                     </div>
-                    <h3 className="text-xl font-bold text-amber-600 mt-2">{pendingCount} Requests</h3>
-                    <p className="text-[10px] text-gray-400 mt-0.5">Awaiting decision</p>
+                    <p className="text-2xl font-extrabold text-amber-600 mt-2">{pendingCount} <span className="text-xs text-gray-400 font-normal">waiting</span></p>
                 </div>
             </div>
 
-            {/* Filter and Search Bar */}
+            {/* Filters */}
             <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-                <div className="relative w-full md:w-80">
-                    <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <div className="relative flex-1 max-w-sm w-full">
+                    <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                         type="text"
                         placeholder="Search employee, ID or dept..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050]"
+                        className="w-full pl-9 pr-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#00B050]/20"
                     />
                 </div>
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                    <select
+                        value={selectedStatus}
+                        onChange={(e) => setSelectedStatus(e.target.value)}
+                        className="px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none"
+                    >
+                        <option value="All">All Statuses</option>
+                        <option value="Pending Org Admin">Pending Org Admin</option>
+                        <option value="Approved">Approved</option>
+                        <option value="Rejected">Rejected</option>
+                    </select>
 
-                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                    {/* Status Tabs */}
-                    <div className="flex items-center gap-1.5">
-                        {["All", "Pending Org Admin", "Approved", "Rejected"].map((tab) => (
-                            <button
-                                key={tab}
-                                onClick={() => setSelectedStatus(tab)}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                                    selectedStatus === tab
-                                        ? "bg-[#00B050] text-white shadow-xs"
-                                        : "bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100"
-                                }`}
-                            >
-                                {tab === "Pending Org Admin" ? "Pending" : tab}
-                            </button>
-                        ))}
-                    </div>
+                    <select
+                        value={selectedType}
+                        onChange={(e) => setSelectedType(e.target.value)}
+                        className="px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none"
+                    >
+                        <option value="All">All Leave Types</option>
+                        <option value="Casual Leave">Casual Leave</option>
+                        <option value="Sick Leave">Sick Leave</option>
+                        <option value="Annual Leave">Annual Leave</option>
+                        <option value="Maternity Leave">Maternity Leave</option>
+                        <option value="Unpaid Leave">Unpaid Leave</option>
+                    </select>
                 </div>
             </div>
 
-            {/* Leave Requests Table */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="border-b border-gray-100 bg-gray-50/70 text-gray-500 text-xs font-semibold uppercase tracking-wider">
-                                <th className="py-4 px-6">Employee</th>
-                                <th className="py-4 px-6">Leave Details</th>
-                                <th className="py-4 px-6">Duration & Dates</th>
-                                <th className="py-4 px-6">Reason</th>
-                                <th className="py-4 px-6">Manager Status</th>
-                                <th className="py-4 px-6">Org Status</th>
-                                <th className="py-4 px-6 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 text-sm">
-                            {filteredLeaves.length > 0 ? (
-                                filteredLeaves.map((item) => (
-                                    <tr key={item.id} className="leave-card hover:bg-gray-50/60 transition-colors">
-                                        {/* Employee info */}
-                                        <td className="py-4 px-6">
-                                            <div className="flex items-center gap-3">
-                                                <img
-                                                    src={item.avatar}
-                                                    alt={item.employeeName}
-                                                    className="w-10 h-10 rounded-full object-cover ring-2 ring-gray-100"
-                                                />
-                                                <div>
-                                                    <p className="font-bold text-gray-900 leading-tight">{item.employeeName}</p>
-                                                    <p className="text-xs text-gray-400">{item.department}</p>
-                                                </div>
-                                            </div>
-                                        </td>
-
-                                        {/* Leave Type */}
-                                        <td className="py-4 px-6">
-                                            <div className="flex items-center gap-1.5 font-bold text-gray-800 text-xs">
-                                                {getLeaveIcon(item.leaveType)}
-                                                {item.leaveType}
-                                            </div>
-                                            <span className="text-[11px] text-gray-400 mt-0.5">Applied: {item.appliedOn}</span>
-                                        </td>
-
-                                        {/* Duration */}
-                                        <td className="py-4 px-6">
-                                            <div className="font-bold text-gray-900 text-xs">
-                                                {item.totalDays} {item.totalDays === 1 ? "Day" : "Days"}
-                                            </div>
-                                            <div className="text-[11px] text-gray-500 font-mono mt-0.5">
-                                                {item.startDate} → {item.endDate}
-                                            </div>
-                                        </td>
-
-                                        {/* Reason */}
-                                        <td className="py-4 px-6 max-w-xs">
-                                            <p className="text-xs text-gray-700 line-clamp-2">{item.reason}</p>
-                                            {item.managerComment && (
-                                                <p className="text-[11px] text-emerald-600 mt-1 italic">
-                                                    Mgr note: {item.managerComment}
-                                                </p>
-                                            )}
-                                        </td>
-
-                                        {/* Manager Status */}
-                                        <td className="py-4 px-6">
-                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700">
-                                                <CheckCircle2 className="w-3 h-3" /> Approved
-                                            </span>
-                                        </td>
-
-                                        {/* Org Status */}
-                                        <td className="py-4 px-6">
-                                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
-                                                item.status === "Approved"
-                                                    ? "bg-emerald-50 text-[#00B050] border border-emerald-200/60"
-                                                    : item.status === "Rejected"
-                                                    ? "bg-rose-50 text-rose-700 border border-rose-200/60"
-                                                    : "bg-amber-50 text-amber-700 border border-amber-200/60"
-                                            }`}>
-                                                {item.status === "Approved" && <CheckCircle2 className="w-3.5 h-3.5" />}
-                                                {item.status === "Rejected" && <XCircle className="w-3.5 h-3.5" />}
-                                                {item.status === "Pending Org Admin" && <Clock className="w-3.5 h-3.5" />}
-                                                {item.status === "Pending Org Admin" ? "Pending Approval" : item.status}
-                                            </span>
-                                        </td>
-
-                                        {/* Actions */}
-                                        <td className="py-4 px-6 text-right">
-                                            {item.status === "Pending Org Admin" ? (
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <button
-                                                        onClick={() => handleOpenActionModal(item, "Approve")}
-                                                        className="px-3 py-1.5 bg-[#00B050] hover:bg-[#009b46] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center gap-1"
-                                                    >
-                                                        <Check className="w-3.5 h-3.5" />
-                                                        Approve
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleOpenActionModal(item, "Reject")}
-                                                        className="px-3 py-1.5 border border-rose-200 hover:bg-rose-50 text-rose-600 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1"
-                                                    >
-                                                        <X className="w-3.5 h-3.5" />
-                                                        Reject
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <span className="text-xs text-gray-400 italic">Completed</span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td colSpan={7} className="py-12 text-center text-gray-400 text-sm">
-                                        No leave requests found matching your filters.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
+            {/* Leaves List */}
+            {loading ? (
+                <div className="flex flex-col items-center justify-center p-16 text-gray-400 bg-white rounded-2xl border border-gray-100">
+                    <Loader2 className="w-8 h-8 animate-spin text-[#00B050] mb-2" />
+                    <span>Loading leave requests...</span>
                 </div>
-            </div>
+            ) : (
+                <div className="space-y-4">
+                    {filteredLeaves.length === 0 ? (
+                        <div className="bg-white p-12 rounded-2xl border border-gray-100 text-center text-gray-400">
+                            No leave applications found matching your criteria.
+                        </div>
+                    ) : (
+                        filteredLeaves.map((request) => (
+                            <div key={request.id} className="leave-card bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow space-y-4">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-50 pb-3">
+                                    <div className="flex items-center gap-3">
+                                        <img
+                                            src={request.avatar}
+                                            alt={request.employeeName}
+                                            className="w-10 h-10 rounded-full object-cover border border-gray-200"
+                                        />
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="font-bold text-gray-900 text-sm">{request.employeeName}</h3>
+                                                <span className="text-xs text-gray-400">({request.employeeId})</span>
+                                            </div>
+                                            <p className="text-xs text-gray-500">{request.department} · {request.branch}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-50 rounded-xl border border-gray-100 text-xs font-semibold text-gray-700">
+                                            {getLeaveIcon(request.leaveType)}
+                                            {request.leaveType}
+                                        </div>
+                                        {request.status === "Approved" && (
+                                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                <CheckCircle2 className="w-3.5 h-3.5" /> Approved
+                                            </span>
+                                        )}
+                                        {request.status === "Rejected" && (
+                                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                                <XCircle className="w-3.5 h-3.5" /> Rejected
+                                            </span>
+                                        )}
+                                        {request.status === "Pending Org Admin" && (
+                                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                                <Clock className="w-3.5 h-3.5" /> Pending Org Admin
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
 
-            {/* Approval / Rejection Decision Modal */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                                    <div className="space-y-1">
+                                        <p className="text-gray-400 font-semibold uppercase text-[10px]">Leave Duration</p>
+                                        <p className="font-bold text-gray-800 flex items-center gap-1.5">
+                                            <Calendar className="w-3.5 h-3.5 text-[#00B050]" />
+                                            {request.startDate} to {request.endDate}
+                                            <span className="ml-1 px-2 py-0.5 bg-emerald-50 text-[#00B050] font-extrabold rounded-md text-[10px]">
+                                                {request.totalDays} {request.totalDays === 1 ? "day" : "days"}
+                                            </span>
+                                        </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-gray-400 font-semibold uppercase text-[10px]">Manager Endorsement</p>
+                                        <p className="text-gray-700 flex items-center gap-1">
+                                            <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                            <span className="font-bold text-emerald-700">Recommended</span>: {request.managerComment || "Tasks delegated & approved"}
+                                        </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-gray-400 font-semibold uppercase text-[10px]">Applied On</p>
+                                        <p className="text-gray-700 font-medium">{request.appliedOn}</p>
+                                    </div>
+                                </div>
+
+                                <div className="bg-gray-50/75 p-3 rounded-xl text-xs text-gray-700">
+                                    <span className="font-bold text-gray-900">Reason: </span>
+                                    {request.reason}
+                                </div>
+
+                                {request.status === "Pending Org Admin" && (
+                                    <div className="flex items-center justify-end gap-3 pt-2">
+                                        <button
+                                            onClick={() => handleOpenActionModal(request, "Reject")}
+                                            className="flex items-center gap-1.5 px-4 py-2 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                                        >
+                                            <X className="w-3.5 h-3.5" />
+                                            Reject
+                                        </button>
+                                        <button
+                                            onClick={() => handleOpenActionModal(request, "Approve")}
+                                            className="flex items-center gap-1.5 px-4 py-2 bg-[#00B050] text-white hover:bg-[#009b46] shadow-sm shadow-[#00B050]/20 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                                        >
+                                            <Check className="w-3.5 h-3.5" />
+                                            Grant Approval
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </div>
+            )}
+
+            {/* Approval / Rejection Modal */}
             {activeModalRequest && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl max-w-md w-full p-6 space-y-5">
-                        <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                            <div>
-                                <h3 className="text-base font-bold text-gray-900">
-                                    {modalAction === "Approve" ? "Approve Leave Request" : "Reject Leave Request"}
-                                </h3>
-                                <p className="text-xs text-gray-500">
-                                    {activeModalRequest.employeeName} · {activeModalRequest.leaveType} ({activeModalRequest.totalDays} Days)
-                                </p>
-                            </div>
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-200">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                            <h3 className="font-bold text-gray-900 text-base">
+                                {modalAction === "Approve" ? "Grant Final Leave Approval" : "Reject Leave Application"}
+                            </h3>
                             <button
                                 onClick={() => setActiveModalRequest(null)}
-                                className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700"
+                                className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors cursor-pointer"
                             >
-                                <X className="w-5 h-5" />
+                                <X className="w-4 h-4" />
                             </button>
                         </div>
-
                         <form onSubmit={handleProcessAction} className="space-y-4">
-                            <div className="p-3.5 bg-gray-50 rounded-xl space-y-2 text-xs">
-                                <div className="flex justify-between">
-                                    <span className="text-gray-500">Duration:</span>
-                                    <span className="font-bold text-gray-900">{activeModalRequest.startDate} to {activeModalRequest.endDate}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-500">Reason:</span>
-                                    <span className="text-gray-800 font-medium text-right max-w-[200px]">{activeModalRequest.reason}</span>
-                                </div>
-                            </div>
-
                             <div>
-                                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                                    Organization Remarks (Optional)
+                                <p className="text-xs text-gray-500">Applicant</p>
+                                <p className="text-sm font-bold text-gray-900">
+                                    {activeModalRequest.employeeName} ({activeModalRequest.leaveType} · {activeModalRequest.totalDays} Days)
+                                </p>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">
+                                    Admin Note / Justification (Optional)
                                 </label>
                                 <textarea
                                     rows={3}
-                                    placeholder={modalAction === "Approve" ? "e.g. Approved with full pay." : "e.g. Unable to grant due to staffing shortage."}
+                                    placeholder={modalAction === "Approve" ? "e.g. Approved with full pay" : "e.g. Due to conflicting critical deadline"}
                                     value={orgNote}
                                     onChange={(e) => setOrgNote(e.target.value)}
-                                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050]"
+                                    className="w-full p-3 bg-gray-50/50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20"
                                 />
                             </div>
-
-                            <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">
+                            <div className="flex items-center justify-end gap-3 pt-2">
                                 <button
                                     type="button"
                                     onClick={() => setActiveModalRequest(null)}
-                                    className="px-4 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                                    className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    className={`px-5 py-2 rounded-xl text-white text-xs font-semibold shadow-md transition-all cursor-pointer ${
-                                        modalAction === "Approve"
-                                            ? "bg-[#00B050] hover:bg-[#009b46] shadow-[#00B050]/20"
+                                    className={`px-4 py-2 text-xs font-bold text-white rounded-xl shadow-md transition-colors cursor-pointer ${
+                                        modalAction === "Approve" 
+                                            ? "bg-[#00B050] hover:bg-[#009b46] shadow-[#00B050]/20" 
                                             : "bg-rose-600 hover:bg-rose-700 shadow-rose-600/20"
                                     }`}
                                 >
-                                    {modalAction === "Approve" ? "Confirm Approval" : "Confirm Rejection"}
+                                    Confirm {modalAction}
                                 </button>
                             </div>
                         </form>

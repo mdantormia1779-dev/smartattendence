@@ -6,7 +6,9 @@ import EmployeeHeader from "./../Components/Employee/EmployeeHeader";
 import EmployeeFilters from "./../Components/Employee/EmployeeFilters";
 import EmployeeTable from "./../Components/Employee/EmployeeTable";
 import EmployeeDetails from "./../Components/Employee/EmployeeDetails";
-import CreateEmployeeModal from "./../Components/Employee/CreateEmployeeModal"; // মোডাল ইম্পোর্ট করা হলো
+import CreateEmployeeModal from "./../Components/Employee/CreateEmployeeModal";
+import { api } from "@/lib/api-client";
+import { Loader2 } from "lucide-react";
 
 interface EmployeeRecord {
   name: string;
@@ -35,142 +37,91 @@ interface EmployeeRecord {
   nextPay?: string;
 }
 
-interface EmployeePageProps {
-  initialEmployees?: EmployeeRecord[];
-}
-
-const EmployeePage = ({ initialEmployees = [] }: EmployeePageProps) => {
+const EmployeePage = () => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("All");
   const [selectedBranch, setSelectedBranch] = useState("All");
-  
-  // ক্লিক করা এমপ্লয়ির ডেটা রাখার জন্য স্টেট
+  const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeRecord | null>(null);
-
-  // নতুন এমপ্লয়ি যোগ করার মোডালের স্টেট
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  const defaultEmployees = [
-    {
-      name: "Arif Chowdhury",
-      email: "arif.c@vertextech.io",
-      id: "EMP-1042",
-      department: "Information Technology",
-      designation: "Senior Software Engineer",
-      branch: "Head Office – Dhaka",
-      type: "Full-time",
-      status: "Active",
-      today: "Present",
-      todayColor: "bg-emerald-100 text-emerald-700",
-      image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
-      phone: "+880 1712-100201",
-      joiningDate: "Jan 12, 2020",
-      gender: "Male",
-      dob: "May 14, 1994",
-      bloodGroup: "B+",
-      maritalStatus: "Married",
-      nationality: "Bangladeshi",
-      manager: "Sarah Rahman",
-      salary: "৳95,000",
-      grade: "Grade 8",
-      salaryType: "Monthly",
-      payCycle: "Monthly",
-      nextPay: "Sep 05, 2026",
-    },
-    {
-      name: "Nusrat Jahan",
-      email: "nusrat.j@vertextech.io",
-      id: "EMP-1043",
-      department: "Accounts & Finance",
-      designation: "Senior Accountant",
-      branch: "Head Office – Dhaka",
-      type: "Full-time",
-      status: "Active",
-      today: "Present",
-      todayColor: "bg-emerald-100 text-emerald-700",
-      image: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=100",
-      phone: "+880 1811-223344",
-      joiningDate: "Mar 15, 2021",
-      gender: "Female",
-      dob: "Aug 22, 1996",
-      bloodGroup: "O+",
-      maritalStatus: "Single",
-      nationality: "Bangladeshi",
-      manager: "Ariful Islam",
-      salary: "৳75,000",
-      grade: "Grade 6",
-      salaryType: "Monthly",
-      payCycle: "Monthly",
-      nextPay: "Sep 05, 2026",
-    },
-    {
-      name: "Tanvir Ahmed",
-      email: "tanvir.a@vertextech.io",
-      id: "EMP-1044",
-      department: "Marketing",
-      designation: "Digital Marketing Lead",
-      branch: "Gulshan Branch",
-      type: "Full-time",
-      status: "Active",
-      today: "Late",
-      todayColor: "bg-amber-100 text-amber-700",
-      image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100",
-      phone: "+880 1919-556677",
-      joiningDate: "Jul 01, 2022",
-      gender: "Male",
-      dob: "Jan 10, 1992",
-      bloodGroup: "A+",
-      maritalStatus: "Married",
-      nationality: "Bangladeshi",
-      manager: "Nazmul Hossain",
-      salary: "৳85,000",
-      grade: "Grade 7",
-      salaryType: "Monthly",
-      payCycle: "Monthly",
-      nextPay: "Sep 05, 2026",
-    },
-  ];
+  const fetchEmployees = async () => {
+    try {
+      setLoading(true);
+      const res = await api.employees.getAll({
+        search: searchTerm || undefined,
+        limit: 100,
+      });
 
-  // এমপ্লয়ি লিস্টকে স্টেটে রূপান্তর করা হলো যাতে নতুন এমপ্লয়ি যোগ করলে লিস্ট আপডেট হয়
-  const [employees, setEmployees] = useState<EmployeeRecord[]>(
-    initialEmployees.length > 0 ? initialEmployees : defaultEmployees
-  );
-
-  // নতুন এমপ্লয়ি হ্যান্ডলার
-  const handleCreateEmployee = (newEmp: any) => {
-    // মোডাল থেকে আসা ডেটাকে টেবিলের ফরম্যাটে ম্যাপ করে নেওয়া
-    const formattedEmp: EmployeeRecord = {
-      name: newEmp.fullName || "Unnamed Employee",
-      email: newEmp.email || "no-email@company.com",
-      id: newEmp.employeeId || `EMP-${Date.now()}`,
-      department: newEmp.department || "General",
-      designation: newEmp.designation || "Staff",
-      branch: newEmp.branch || "Head Office",
-      type: newEmp.employmentType || "Full-time",
-      status: newEmp.employeeStatus || "Active",
-      today: "Present",
-      todayColor: "bg-emerald-100 text-emerald-700",
-      image: newEmp.profilePicture || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
-      phone: newEmp.phoneNumber || "",
-      joiningDate: newEmp.joiningDate || "Today",
-      gender: newEmp.gender || "Male",
-      dob: newEmp.dob || "",
-      bloodGroup: newEmp.bloodGroup || "",
-      maritalStatus: newEmp.maritalStatus || "",
-      manager: newEmp.manager || "Unassigned",
-      salary: newEmp.basicSalary || "৳50,000",
-      grade: newEmp.salaryGrade || "Grade 1",
-      salaryType: newEmp.salaryType || "Monthly",
-      nationality: "Bangladeshi",
-      payCycle: "Monthly",
-      nextPay: "Next Month",
-    };
-
-    setEmployees((prev) => [formattedEmp, ...prev]);
+      if (res.success && res.data?.items) {
+        const mapped: EmployeeRecord[] = res.data.items.map((e: any) => ({
+          name: e.name,
+          email: e.email,
+          id: e.employeeId,
+          department: e.department || "General",
+          designation: e.designation || "Staff",
+          branch: e.branch || "Head Office – Dhaka",
+          type: e.employmentType || "Full-time",
+          status: e.status || "Active",
+          today: e.status === "Active" ? "Present" : "On Leave",
+          todayColor: e.status === "Active" ? "bg-emerald-100 text-emerald-700" : "bg-cyan-100 text-cyan-700",
+          image: e.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
+          phone: e.phone || "+880 1712-000000",
+          joiningDate: e.joiningDate || "Jan 12, 2024",
+          gender: e.gender || "Male",
+          dob: e.dob || "May 14, 1994",
+          bloodGroup: e.bloodGroup || "B+",
+          maritalStatus: e.maritalStatus || "Single",
+          nationality: "Bangladeshi",
+          manager: e.managerName || "Sarah Rahman",
+          salary: `৳${Number(e.basicSalary || 50000).toLocaleString()}`,
+          grade: e.salaryGrade || "Grade 8",
+          salaryType: e.salaryType || "Monthly",
+          payCycle: "Monthly",
+          nextPay: "Sep 05, 2026",
+        }));
+        setEmployees(mapped);
+      }
+    } catch (err) {
+      console.error("Failed to load employees", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Filtering Logic
+  useEffect(() => {
+    fetchEmployees();
+  }, [searchTerm]);
+
+  const handleCreateEmployee = async (newEmp: any) => {
+    try {
+      const payload = {
+        fullName: newEmp.fullName,
+        email: newEmp.email,
+        employeeId: newEmp.employeeId,
+        password: newEmp.password || "emp12345",
+        designation: newEmp.designation,
+        department: newEmp.department,
+        branch: newEmp.branch,
+        gender: newEmp.gender,
+        phone: newEmp.phoneNumber,
+        basicSalary: Number(newEmp.basicSalary) || 50000,
+        salaryGrade: newEmp.salaryGrade,
+        employmentType: newEmp.employmentType,
+        status: newEmp.employeeStatus,
+      };
+
+      const res = await api.employees.create(payload);
+      if (res.success) {
+        await fetchEmployees();
+      }
+    } catch (e) {
+      console.error("Error creating employee", e);
+    }
+  };
+
   const filteredEmployees = employees.filter((emp) => {
     const matchesSearch =
       emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -214,14 +165,16 @@ const EmployeePage = ({ initialEmployees = [] }: EmployeePageProps) => {
     }, containerRef);
 
     return () => ctx.revert();
-  }, [selectedEmployee]);
+  }, [selectedEmployee, loading]);
 
-  // যদি কোনো এমপ্লয়ি সিলেক্ট করা থাকে, তবে তার ডিটেইলস পেজ দেখাবে
   if (selectedEmployee) {
     return (
       <EmployeeDetails 
         employee={selectedEmployee} 
-        onBack={() => setSelectedEmployee(null)} 
+        onBack={() => {
+          setSelectedEmployee(null);
+          fetchEmployees();
+        }} 
       />
     );
   }
@@ -246,14 +199,20 @@ const EmployeePage = ({ initialEmployees = [] }: EmployeePageProps) => {
           setSelectedBranch={setSelectedBranch}
         />
 
-        <EmployeeTable
-          employees={filteredEmployees}
-          onRowClick={(employee: any) => {
-            setSelectedEmployee(employee);
-          }}
-        />
+        {loading ? (
+          <div className="bg-white rounded-2xl p-12 text-center text-stone-400 flex flex-col items-center justify-center border border-stone-200">
+            <Loader2 className="w-8 h-8 animate-spin text-[#00B050] mb-2" />
+            <span>Loading employees directory...</span>
+          </div>
+        ) : (
+          <EmployeeTable
+            employees={filteredEmployees}
+            onRowClick={(employee: any) => {
+              setSelectedEmployee(employee);
+            }}
+          />
+        )}
 
-        {/* নতুন এমপ্লয়ি যোগ করার মোডাল */}
         <CreateEmployeeModal 
           isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}

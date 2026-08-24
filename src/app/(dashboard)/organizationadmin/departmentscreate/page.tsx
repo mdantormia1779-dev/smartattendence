@@ -2,120 +2,162 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
-import { Building2, Plus } from "lucide-react";
+import { Building2, Plus, Loader2 } from "lucide-react";
 import DepartmentCard from "../Components/Department/DepartmentCard";
 import DepartmentModal from "../Components/Department/DepartmentModal";
+import { api } from "@/lib/api-client";
 
-// ইন্টারফেস ডিফাইন করা
 interface Department {
-    id: string;
-    name: string;
-    code: string;
-    description: string;
-    head: string;
-    headPhone: string;
-    headEmail: string;
-    employeeCount: number;
-    status: "Active" | "Inactive";
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+  head: string;
+  headPhone: string;
+  headEmail: string;
+  employeeCount: number;
+  status: "Active" | "Inactive";
 }
 
 interface DepartmentFormData {
-    name: string;
-    code: string;
-    description: string;
-    head: string;
-    headPhone: string;
-    headEmail: string;
-    status: "Active" | "Inactive";
+  name: string;
+  code: string;
+  description: string;
+  head: string;
+  headPhone: string;
+  headEmail: string;
+  status: "Active" | "Inactive";
 }
 
 export default function DepartmentsPage() {
-    const gridRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [loading, setLoading] = useState(true);
 
-    const [departments, setDepartments] = useState<Department[]>([
-        { id: "1", name: "Human Resources", code: "HR", description: "Manages recruitment, employee welfare, and company culture.", head: "Nusrat Jahan", headPhone: "+880 1711-100001", headEmail: "nusrat.hr@vertex.com", employeeCount: 12, status: "Active" },
-        { id: "2", name: "Information Technology", code: "IT", description: "Handles software engineering, infrastructure, and tech support.", head: "Tanvir Ahmed", headPhone: "+880 1822-200002", headEmail: "tanvir.it@vertex.com", employeeCount: 35, status: "Active" },
-        { id: "3", name: "Accounts & Finance", code: "ACC", description: "Handles payroll, budgeting, auditing, and financial records.", head: "Rahim Uddin", headPhone: "+880 1933-300003", headEmail: "rahim.acc@vertex.com", employeeCount: 8, status: "Active" },
-        { id: "4", name: "Marketing", code: "MKT", description: "Executes campaigns, brand strategy, and social media outreach.", head: "Sabrina Noor", headPhone: "+880 1644-400004", headEmail: "sabrina.mkt@vertex.com", employeeCount: 15, status: "Active" },
-        { id: "5", name: "Sales", code: "SALES", description: "Drives business growth, client acquisition, and revenue targets.", head: "Imran Khan", headPhone: "+880 1555-500005", headEmail: "imran.sales@vertex.com", employeeCount: 22, status: "Active" },
-        { id: "6", name: "Operations", code: "OPS", description: "Ensures seamless daily workflow, logistics, and resource management.", head: "Farhan Hossain", headPhone: "+880 1766-600006", headEmail: "farhan.ops@vertex.com", employeeCount: 18, status: "Active" },
-        { id: "7", name: "Customer Support", code: "CS", description: "Provides 24/7 assistance and resolves client inquiries effectively.", head: "Mehnaz Tabassum", headPhone: "+880 1877-700007", headEmail: "mehnaz.cs@vertex.com", employeeCount: 25, status: "Active" },
-    ]);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [deptToEdit, setDeptToEdit] = useState<Department | null>(null);
 
-    const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-    const [deptToEdit, setDeptToEdit] = useState<Department | null>(null);
+  const fetchDepartments = async () => {
+    try {
+      setLoading(true);
+      const res = await api.departments.getAll();
+      if (res.success && Array.isArray(res.data)) {
+        const mapped: Department[] = res.data.map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          code: d.code || "DEPT",
+          description: d.description || "Core organizational department unit.",
+          head: d.headName || d.managerName || "Unassigned",
+          headPhone: d.headPhone || "+880 1700-000000",
+          headEmail: d.headEmail || "dept@vertextech.io",
+          employeeCount: d.totalEmployees || d.employeesCount || 0,
+          status: d.status === "INACTIVE" ? "Inactive" : "Active",
+        }));
+        setDepartments(mapped);
+      }
+    } catch (e) {
+      console.error("Failed to load departments", e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    useEffect(() => {
-        if (gridRef.current) {
-            gsap.fromTo(
-                gridRef.current.children,
-                { opacity: 0, y: 30 },
-                { opacity: 1, y: 0, duration: 0.6, stagger: 0.08, ease: "power2.out" }
-            );
-        }
-    }, [departments]);
+  useEffect(() => {
+    fetchDepartments();
+  }, []);
 
-    const handleSaveDepartment = (data: DepartmentFormData): void => {
-        if (deptToEdit) {
-            setDepartments((prev: Department[]) => 
-                prev.map((d: Department) => d.id === deptToEdit.id ? { ...d, ...data } : d)
-            );
-        } else {
-            const newDept: Department = {
-                id: Date.now().toString(),
-                ...data,
-                employeeCount: 0,
-            };
-            setDepartments((prev: Department[]) => [newDept, ...prev]);
-        }
-        setDeptToEdit(null);
-    };
+  useEffect(() => {
+    if (!loading && gridRef.current && gridRef.current.children.length > 0) {
+      gsap.fromTo(
+        gridRef.current.children,
+        { opacity: 0, y: 30 },
+        { opacity: 1, y: 0, duration: 0.6, stagger: 0.08, ease: "power2.out" }
+      );
+    }
+  }, [loading, departments]);
 
-    const handleDelete = (id: string): void => {
-        setDepartments((prev: Department[]) => prev.filter((d: Department) => d.id !== id));
-    };
+  const handleSaveDepartment = async (data: DepartmentFormData): Promise<void> => {
+    try {
+      if (deptToEdit) {
+        await api.departments.update(deptToEdit.id, {
+          name: data.name,
+          code: data.code,
+          description: data.description,
+          status: data.status.toUpperCase(),
+        });
+      } else {
+        await api.departments.create({
+          name: data.name,
+          code: data.code,
+          description: data.description,
+          status: data.status.toUpperCase(),
+        });
+      }
+      await fetchDepartments();
+      setIsModalOpen(false);
+      setDeptToEdit(null);
+    } catch (e) {
+      console.error("Failed to save department", e);
+    }
+  };
 
-    return (
-        <div className="flex-1 bg-gray-50/50 p-6 space-y-6 overflow-y-auto">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-                        <Building2 className="w-6 h-6 text-[#00B050]" />
-                        Departments Management
-                    </h1>
-                    <p className="text-xs text-gray-500 mt-1">
-                        Total {departments.length} active departments configured in the organization
-                    </p>
-                </div>
-                <button 
-                    onClick={() => { setDeptToEdit(null); setIsModalOpen(true); }}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-[#00B050] text-white shadow-md shadow-[#00B050]/20 hover:bg-[#009b46] transition-colors cursor-pointer"
-                >
-                    <Plus className="w-4 h-4" />
-                    Add Department
-                </button>
-            </div>
+  const handleDelete = async (id: string): Promise<void> => {
+    try {
+      await api.departments.delete(id);
+      await fetchDepartments();
+    } catch (e) {
+      console.error("Failed to delete department", e);
+    }
+  };
 
-            {/* Grid Layout */}
-            <div ref={gridRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {departments.map((dept: Department) => (
-                    <DepartmentCard 
-                        key={dept.id} 
-                        department={dept} 
-                        onEdit={(d: Department) => { setDeptToEdit(d); setIsModalOpen(true); }}
-                        onDelete={(id: string) => handleDelete(id)}
-                    />
-                ))}
-            </div>
-
-            {/* Modal */}
-            <DepartmentModal 
-                isOpen={isModalOpen} 
-                onClose={() => setIsModalOpen(false)} 
-                deptToEdit={deptToEdit} 
-                onSave={handleSaveDepartment} 
-            />
+  return (
+    <div className="flex-1 bg-gray-50/50 p-6 space-y-6 overflow-y-auto">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
+            <Building2 className="w-6 h-6 text-[#00B050]" />
+            Departments Management
+          </h1>
+          <p className="text-xs text-gray-500 mt-1">
+            Total {departments.length} active departments configured in the organization
+          </p>
         </div>
-    );
+        <button 
+          onClick={() => { setDeptToEdit(null); setIsModalOpen(true); }}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-[#00B050] text-white shadow-md shadow-[#00B050]/20 hover:bg-[#009b46] transition-colors cursor-pointer"
+        >
+          <Plus className="w-4 h-4" />
+          Add Department
+        </button>
+      </div>
+
+      {/* Grid Layout */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center p-16 text-gray-400 bg-white rounded-2xl border border-gray-100">
+          <Loader2 className="w-8 h-8 animate-spin text-[#00B050] mb-2" />
+          <span>Loading departments...</span>
+        </div>
+      ) : (
+        <div ref={gridRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {departments.map((dept) => (
+            <DepartmentCard 
+              key={dept.id} 
+              department={dept} 
+              onEdit={(d: Department) => { setDeptToEdit(d); setIsModalOpen(true); }}
+              onDelete={handleDelete}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Modal */}
+      <DepartmentModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        deptToEdit={deptToEdit} 
+        onSave={handleSaveDepartment} 
+      />
+    </div>
+  );
 }

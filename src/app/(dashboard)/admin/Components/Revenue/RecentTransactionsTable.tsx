@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
-import { CheckCircle2 } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { CheckCircle2, Loader2 } from "lucide-react";
+import { api } from "@/lib/api-client";
 
 interface Transaction {
   id: string;
@@ -11,14 +12,35 @@ interface Transaction {
   date: string;
 }
 
-const transactions: Transaction[] = [
-  { id: "TXN-9481", organization: "TechCorp Solutions", plan: "Business Plan (Monthly)", amount: "+$149.00", date: "Today, 2:45 PM" },
-  { id: "TXN-9480", organization: "Alpha Industries", plan: "Starter Plan (Yearly)", amount: "+$390.00", date: "Today, 11:15 AM" },
-  { id: "TXN-9479", organization: "Global Logistics", plan: "Enterprise Plan", amount: "+$319.00", date: "Yesterday" },
-  { id: "TXN-9478", organization: "Delta Media", plan: "Business Plan (Monthly)", amount: "+$149.00", date: "Jun 02, 2026" },
-];
-
 export default function RecentTransactionsTable() {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        setLoading(true);
+        const res = await api.payments.getAll();
+        if (res.success && Array.isArray(res.data)) {
+          const mapped: Transaction[] = res.data.map((p: any) => ({
+            id: p.transactionId || `TXN-${p.id?.substring(0, 4)}`,
+            organization: p.organizationName || p.organization || "Company",
+            plan: `${p.plan || "Business Plan"} (${p.billingCycle || "Monthly"})`,
+            amount: `+$${p.amount || "149.00"}`,
+            date: p.date || (p.createdAt ? p.createdAt.split("T")[0] : "Today"),
+          }));
+          setTransactions(mapped);
+        }
+      } catch (e) {
+        console.error("Failed to load revenue transactions", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTransactions();
+  }, []);
+
   return (
     <div className="animate-section opacity-0 bg-white rounded-2xl border border-neutral-200/80 shadow-sm overflow-hidden">
       <div className="p-6 border-b border-neutral-100 flex justify-between items-center">
@@ -28,32 +50,47 @@ export default function RecentTransactionsTable() {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b border-neutral-200 bg-neutral-50/50 text-neutral-400 text-xs font-semibold uppercase tracking-wider">
-              <th className="py-3.5 px-6">Transaction ID</th>
-              <th className="py-3.5 px-6">Organization</th>
-              <th className="py-3.5 px-6">Subscription Plan</th>
-              <th className="py-3.5 px-6">Date</th>
-              <th className="py-3.5 px-6 text-right">Amount</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-100 text-sm">
-            {transactions.map((txn) => (
-              <tr key={txn.id} className="hover:bg-neutral-50/60 transition-colors">
-                <td className="py-4 px-6 font-mono text-xs text-neutral-600 font-semibold">{txn.id}</td>
-                <td className="py-4 px-6 font-bold text-neutral-900">{txn.organization}</td>
-                <td className="py-4 px-6 text-neutral-500 text-xs">{txn.plan}</td>
-                <td className="py-4 px-6 text-neutral-400 text-xs">{txn.date}</td>
-                <td className="py-4 px-6 text-right font-extrabold text-[#10b981] flex items-center justify-end gap-1">
-                  <CheckCircle2 className="w-4 h-4" /> {txn.amount}
-                </td>
+      {loading ? (
+        <div className="flex items-center justify-center py-12 text-neutral-400">
+          <Loader2 className="w-6 h-6 animate-spin text-[#00B050] mr-2" />
+          <span className="text-xs">Loading transactions...</span>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-neutral-200 bg-neutral-50/50 text-neutral-400 text-xs font-semibold uppercase tracking-wider">
+                <th className="py-3.5 px-6">Transaction ID</th>
+                <th className="py-3.5 px-6">Organization</th>
+                <th className="py-3.5 px-6">Subscription Plan</th>
+                <th className="py-3.5 px-6">Date</th>
+                <th className="py-3.5 px-6 text-right">Amount</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-neutral-100 text-sm">
+              {transactions.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-xs text-neutral-400">
+                    No transactions recorded yet.
+                  </td>
+                </tr>
+              ) : (
+                transactions.map((txn) => (
+                  <tr key={txn.id} className="hover:bg-neutral-50/60 transition-colors">
+                    <td className="py-4 px-6 font-mono text-xs text-neutral-600 font-semibold">{txn.id}</td>
+                    <td className="py-4 px-6 font-bold text-neutral-900 text-xs">{txn.organization}</td>
+                    <td className="py-4 px-6 text-neutral-500 text-xs">{txn.plan}</td>
+                    <td className="py-4 px-6 text-neutral-400 text-xs">{txn.date}</td>
+                    <td className="py-4 px-6 text-right font-extrabold text-[#10b981] text-xs flex items-center justify-end gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> {txn.amount}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,29 @@
+[
+  {
+    "employeeId": "EMP-1042",
+    "name": "Arif Chowdhury",
+    "email": "arif.c@vertextech.io",
+    "organizationId": "org-1",
+    "department": "Information Technology",
+    "designation": "Senior Software Engineer",
+    "basicSalary": 95000
+  },
+  {
+    "employeeId": "EMP-1043",
+    "name": "Nusrat Jahan",
+    "email": "nusrat.j@vertextech.io",
+    "organizationId": "org-1",
+    "department": "Accounts & Finance",
+    "designation": "Senior Accountant",
+    "basicSalary": 72000
+  },
+  {
+    "employeeId": "EMP-B01",
+    "name": "Abdur Rahim",
+    "email": "rahim.b@bengaltextiles.com",
+    "organizationId": "org-2",
+    "department": "Production",
+    "designation": "Floor Supervisor",
+    "basicSalary": 45000
+  }
+]

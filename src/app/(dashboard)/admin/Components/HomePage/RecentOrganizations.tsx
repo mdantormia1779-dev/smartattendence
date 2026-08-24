@@ -1,15 +1,44 @@
 "use client";
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-
-const organizations = [
-    { name: 'Vertex Technologies Ltd.', plan: 'Business', employees: '291 employees', initials: 'VT', bg: 'bg-emerald-600' },
-    { name: 'Bengal Textiles Ltd.', plan: 'Enterprise', employees: '1240 employees', initials: 'BT', bg: 'bg-amber-600' },
-    { name: 'GreenMart Superstores', plan: 'Starter', employees: '84 employees', initials: 'GS', bg: 'bg-teal-600' },
-    { name: 'CareMed Hospital', plan: 'Business', employees: '460 employees', initials: 'CH', bg: 'bg-indigo-600' },
-];
+import { api } from '@/lib/api-client';
 
 export const RecentOrganizations = () => {
+    const [orgs, setOrgs] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function fetchOrgs() {
+            try {
+                const res = await api.organizations.getAll();
+                if (res.success && Array.isArray(res.data)) {
+                    setOrgs(res.data.slice(0, 4));
+                }
+            } catch (e) {
+                console.error("Failed to load recent organizations", e);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        fetchOrgs();
+    }, []);
+
+    const defaultOrgs = [
+        { name: 'Vertex Technologies Ltd.', plan: 'Business', employees: '291 employees', initials: 'VT', bg: 'bg-emerald-600' },
+        { name: 'Bengal Textiles Ltd.', plan: 'Enterprise', employees: '1240 employees', initials: 'BT', bg: 'bg-amber-600' },
+        { name: 'GreenMart Superstores', plan: 'Starter', employees: '84 employees', initials: 'GS', bg: 'bg-teal-600' },
+        { name: 'CareMed Hospital', plan: 'Business', employees: '460 employees', initials: 'CH', bg: 'bg-indigo-600' },
+    ];
+
+    const displayOrgs = orgs.length > 0 ? orgs.map((o: any) => ({
+        name: o.name || 'Organization',
+        plan: o.plan || 'Business',
+        employees: `${o.employeeCount || 100} employees`,
+        initials: (o.name || 'OR').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
+        bg: 'bg-emerald-600',
+    })) : defaultOrgs;
+
     return (
         <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -22,7 +51,7 @@ export const RecentOrganizations = () => {
                 <p className="text-xs text-gray-400 mb-6">Newly onboarded enterprise clients</p>
 
                 <div className="space-y-4">
-                    {organizations.map((org, i) => (
+                    {displayOrgs.map((org, i) => (
                         <motion.div 
                             key={i}
                             whileHover={{ x: 3 }}
@@ -43,7 +72,7 @@ export const RecentOrganizations = () => {
             </div>
 
             <div className="mt-6 pt-4 border-t border-gray-100 text-center">
-                <span className="text-[11px] text-gray-400 font-medium">Showing 4 of 63 active organizations</span>
+                <span className="text-[11px] text-gray-400 font-medium">Showing {displayOrgs.length} active organizations</span>
             </div>
         </motion.div>
     );

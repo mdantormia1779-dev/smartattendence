@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { OrganizationsHeader } from '../Components/Organizations/OrganizationsHeader';
 import { OrganizationFilters } from '../Components/Organizations/OrganizationFilters';
 import { OrganizationTable, Organization } from '../Components/Organizations/OrganizationTable';
@@ -7,184 +7,19 @@ import { SuspensionNoticeCard } from '../Components/Organizations/SuspensionNoti
 import { OrganizationDetailsModal } from '../Components/Organizations/OrganizationDetailsModal';
 import { OrganizationEditModal } from '../Components/Organizations/OrganizationEditModal';
 import { OrganizationDeleteModal } from '../Components/Organizations/OrganizationDeleteModal';
-
-const initialOrganizations: Organization[] = [
-    { 
-        id: 'ORG-1001', 
-        name: 'Vertex Technologies Ltd.', 
-        logo: '',
-        category: 'Software & IT', 
-        email: 'contact@vertextech.io', 
-        phone: '+8801700000001', 
-        website: 'https://vertextech.io', 
-        address: 'Level 4, Uttara Tower, Dhaka', 
-        country: 'Bangladesh', 
-        language: 'English', 
-        currency: 'BDT (৳)', 
-        timeZone: 'GMT +6:00', 
-        workingDays: 'Sun - Thu', 
-        officeHours: '09:00 AM - 06:00 PM',
-        plan: 'Business', 
-        employees: 291, 
-        branches: 4, 
-        revenue: '$1,490', 
-        joined: 'Jan 12, 2024', 
-        status: 'Active', 
-        initials: 'VT', 
-        bg: 'bg-emerald-600' 
-    },
-    { 
-        id: 'ORG-1002', 
-        name: 'Bengal Textiles Ltd.', 
-        logo: '',
-        category: 'Manufacturing', 
-        email: 'info@bengaltextiles.com', 
-        phone: '+8801800000002', 
-        website: 'https://bengaltextiles.com', 
-        address: 'Industrial Area, Gazipur', 
-        country: 'Bangladesh', 
-        language: 'English', 
-        currency: 'BDT (৳)', 
-        timeZone: 'GMT +6:00', 
-        workingDays: 'Sat - Thu', 
-        officeHours: '08:00 AM - 05:00 PM',
-        plan: 'Enterprise', 
-        employees: 1240, 
-        branches: 12, 
-        revenue: '$3,990', 
-        joined: 'Mar 02, 2024', 
-        status: 'Active', 
-        initials: 'BT', 
-        bg: 'bg-amber-600' 
-    },
-    { 
-        id: 'ORG-1003', 
-        name: 'GreenMart Superstores', 
-        logo: '',
-        category: 'Retail', 
-        email: 'support@greenmart.net', 
-        phone: '+8801900000003', 
-        website: 'https://greenmart.net', 
-        address: 'Gulshan-2, Dhaka', 
-        country: 'Bangladesh', 
-        language: 'English', 
-        currency: 'BDT (৳)', 
-        timeZone: 'GMT +6:00', 
-        workingDays: 'Mon - Sat', 
-        officeHours: '10:00 AM - 08:00 PM',
-        plan: 'Starter', 
-        employees: 84, 
-        branches: 3, 
-        revenue: '$147', 
-        joined: 'May 18, 2024', 
-        status: 'Active', 
-        initials: 'GS', 
-        bg: 'bg-teal-600' 
-    },
-    { 
-        id: 'ORG-1004', 
-        name: 'CareMed Hospital', 
-        logo: '',
-        category: 'Healthcare', 
-        email: 'help@caremed.org', 
-        phone: '+8801500000004', 
-        website: 'https://caremed.org', 
-        address: 'Main Road, Sylhet', 
-        country: 'Bangladesh', 
-        language: 'English', 
-        currency: 'BDT (৳)', 
-        timeZone: 'GMT +6:00', 
-        workingDays: 'Sun - Sat (24/7)', 
-        officeHours: '24 Hours',
-        plan: 'Business', 
-        employees: 460, 
-        branches: 2, 
-        revenue: '$298', 
-        joined: 'Jul 07, 2024', 
-        status: 'Active', 
-        initials: 'CH', 
-        bg: 'bg-indigo-600' 
-    },
-    { 
-        id: 'ORG-1005', 
-        name: 'SkillPoint Academy', 
-        logo: '',
-        category: 'Education', 
-        email: 'contact@skillpoint.edu', 
-        phone: '+8801600000005', 
-        website: 'https://skillpoint.edu', 
-        address: 'Habiganj Sadar, Habiganj', 
-        country: 'Bangladesh', 
-        language: 'English', 
-        currency: 'BDT (৳)', 
-        timeZone: 'GMT +6:00', 
-        workingDays: 'Sun - Thu', 
-        officeHours: '09:00 AM - 05:00 PM',
-        plan: 'Free', 
-        employees: 18, 
-        branches: 1, 
-        revenue: '$0', 
-        joined: 'Aug 01, 2026', 
-        status: 'Trial', 
-        initials: 'SA', 
-        bg: 'bg-gray-500' 
-    },
-    { 
-        id: 'ORG-1006', 
-        name: 'Delta Logistics', 
-        logo: '',
-        category: 'Logistics', 
-        email: 'ops@deltalogistics.com', 
-        phone: '+8801300000006', 
-        website: 'https://deltalogistics.com', 
-        address: 'Agrabad C/O, Chattogram', 
-        country: 'Bangladesh', 
-        language: 'English', 
-        currency: 'BDT (৳)', 
-        timeZone: 'GMT +6:00', 
-        workingDays: 'Sat - Thu', 
-        officeHours: '09:00 AM - 07:00 PM',
-        plan: 'Business', 
-        employees: 318, 
-        branches: 9, 
-        revenue: '$596', 
-        joined: 'Feb 14, 2024', 
-        status: 'Active', 
-        initials: 'DL', 
-        bg: 'bg-blue-600' 
-    },
-    { 
-        id: 'ORG-1007', 
-        name: 'UrbanNest Realty', 
-        logo: '',
-        category: 'Real Estate', 
-        email: 'info@urbannest.com', 
-        phone: '+8801400000007', 
-        website: 'https://urbannest.com', 
-        address: 'Banani, Dhaka', 
-        country: 'Bangladesh', 
-        language: 'English', 
-        currency: 'BDT (৳)', 
-        timeZone: 'GMT +6:00', 
-        workingDays: 'Sun - Thu', 
-        officeHours: '10:00 AM - 06:00 PM',
-        plan: 'Starter', 
-        employees: 55, 
-        branches: 2, 
-        revenue: '$0', 
-        joined: 'Sep 22, 2024', 
-        status: 'Suspended', 
-        initials: 'UR', 
-        bg: 'bg-rose-600' 
-    },
-];
+import { OrganizationCreateModal } from '../Components/Organizations/OrganizationCreateModal';
+import { api } from '@/lib/api-client';
+import { Loader2 } from 'lucide-react';
 
 export const OrganizationsPage = () => {
-    const [organizations, setOrganizations] = useState<Organization[]>(initialOrganizations);
+    const [organizations, setOrganizations] = useState<Organization[]>([]);
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedPlan, setSelectedPlan] = useState('All');
     
     // Modal States
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
     const [selectedOrgForDetails, setSelectedOrgForDetails] = useState<Organization | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 
@@ -193,6 +28,71 @@ export const OrganizationsPage = () => {
 
     const [selectedOrgForDelete, setSelectedOrgForDelete] = useState<Organization | null>(null);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+    const fetchOrganizations = async () => {
+        try {
+            setLoading(true);
+            const res = await api.organizations.getAll();
+            if (res.success && Array.isArray(res.data)) {
+                const colors = ['bg-emerald-600', 'bg-amber-600', 'bg-teal-600', 'bg-indigo-600', 'bg-blue-600', 'bg-rose-600', 'bg-purple-600'];
+                const mapped: Organization[] = res.data.map((o: any, idx: number) => {
+                    const initials = (o.name || 'Org')
+                        .split(' ')
+                        .map((w: string) => w[0])
+                        .join('')
+                        .substring(0, 2)
+                        .toUpperCase();
+
+                    let status = o.isSuspended ? 'Suspended' : (o.subscriptionStatus === 'TRIAL' ? 'Trial' : 'Active');
+                    if (o.status) status = o.status;
+
+                    return {
+                        id: o.id,
+                        name: o.name || 'Untitled Organization',
+                        logo: o.customLogoUrl || '',
+                        category: o.industry || 'General',
+                        email: o.email || '',
+                        phone: o.phone || '',
+                        website: o.website || (o.customDomain ? `https://${o.customDomain}` : ''),
+                        address: o.address || '',
+                        country: o.country || 'Bangladesh',
+                        language: o.language || 'English',
+                        currency: o.currency || 'BDT (৳)',
+                        timeZone: o.timezone || 'GMT +6:00',
+                        workingDays: Array.isArray(o.workingDays) ? o.workingDays.join(', ') : (o.workingDays || 'Sun - Thu'),
+                        officeHours: `${o.defaultOfficeStart || '09:00 AM'} - ${o.defaultOfficeEnd || '05:00 PM'}`,
+                        plan: o.planTier ? o.planTier.charAt(0) + o.planTier.slice(1).toLowerCase() : (o.planName || 'Starter'),
+                        // Fix: Preserve 0 count using nullish coalescing instead of treating 0 as falsy
+                        employees: o.totalEmployees ?? 0,
+                        branches: o.totalBranches ?? 0,
+                        revenue: '$149',
+                        joined: o.createdAt ? o.createdAt.split('T')[0] : '',
+                        status: status,
+                        initials: initials,
+                        bg: colors[idx % colors.length]
+                    };
+                });
+                setOrganizations(mapped);
+            }
+        } catch (err) {
+            console.error('Failed to load organizations', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchOrganizations();
+    }, []);
+
+    // Create Handler
+    const handleSaveCreate = async (newOrgData: any) => {
+        const res = await api.organizations.create(newOrgData);
+        if (!res.success) {
+            throw new Error(res.message || 'Failed to create organization');
+        }
+        await fetchOrganizations();
+    };
 
     // Action Handlers
     const handleView = (org: Organization) => {
@@ -205,24 +105,49 @@ export const OrganizationsPage = () => {
         setIsEditModalOpen(true);
     };
 
-    const handleSaveEdit = (updatedOrg: Organization) => {
-        setOrganizations(prev => 
-            prev.map(item => item.id === updatedOrg.id ? updatedOrg : item)
-        );
-        setIsEditModalOpen(false);
-        setSelectedOrgForEdit(null);
+    const handleSaveEdit = async (updatedOrg: Organization) => {
+        try {
+            const start = updatedOrg.officeHours ? updatedOrg.officeHours.split(' - ')[0] : '09:00 AM';
+            const end = updatedOrg.officeHours ? updatedOrg.officeHours.split(' - ')[1] : '05:00 PM';
+
+            await api.organizations.update(updatedOrg.id, {
+                name: updatedOrg.name,
+                industry: updatedOrg.category,
+                email: updatedOrg.email,
+                phone: updatedOrg.phone,
+                website: updatedOrg.website,
+                address: updatedOrg.address,
+                country: updatedOrg.country,
+                language: updatedOrg.language,
+                currency: updatedOrg.currency,
+                timezone: updatedOrg.timeZone,
+                workingDays: updatedOrg.workingDays,
+                planTier: (updatedOrg.plan.toUpperCase()) as any,
+                customLogoUrl: updatedOrg.logo || null,
+                defaultOfficeStart: start,
+                defaultOfficeEnd: end,
+                brandColor: '#00B050',
+            });
+            await fetchOrganizations();
+        } catch (err) {
+            console.error('Failed to update organization', err);
+        } finally {
+            setIsEditModalOpen(false);
+            setSelectedOrgForEdit(null);
+        }
     };
 
-    const handleToggleStatus = (org: Organization) => {
-        setOrganizations(prev => 
-            prev.map(item => {
-                if (item.id === org.id) {
-                    const newStatus = item.status === 'Suspended' ? 'Active' : 'Suspended';
-                    return { ...item, status: newStatus };
-                }
-                return item;
-            })
-        );
+    const handleToggleStatus = async (org: Organization) => {
+        try {
+            const isSuspended = org.status !== 'Suspended';
+            await api.organizations.update(org.id, {
+                isSuspended,
+                suspensionReason: isSuspended ? 'Suspended by Super Admin' : null,
+            });
+            await fetchOrganizations();
+        } catch (err) {
+            console.error('Failed to toggle organization status', err);
+        }
     };
 
     // Delete Handlers
@@ -231,10 +156,16 @@ export const OrganizationsPage = () => {
         setIsDeleteModalOpen(true);
     };
 
-    const handleConfirmDelete = (org: Organization) => {
-        setOrganizations(prev => prev.filter(item => item.id !== org.id));
-        setIsDeleteModalOpen(false);
-        setSelectedOrgForDelete(null);
+    const handleConfirmDelete = async (org: Organization) => {
+        try {
+            await api.organizations.delete(org.id);
+            await fetchOrganizations();
+        } catch (err) {
+            console.error('Failed to delete organization', err);
+        } finally {
+            setIsDeleteModalOpen(false);
+            setSelectedOrgForDelete(null);
+        }
     };
 
     // Filter Logic for Search & Plan Dropdown
@@ -244,7 +175,7 @@ export const OrganizationsPage = () => {
             org.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
             org.id.toLowerCase().includes(searchTerm.toLowerCase());
 
-        const matchesPlan = selectedPlan === 'All' || org.plan === selectedPlan;
+        const matchesPlan = selectedPlan === 'All' || org.plan.toLowerCase() === selectedPlan.toLowerCase();
 
         return matchesSearch && matchesPlan;
     });
@@ -255,6 +186,7 @@ export const OrganizationsPage = () => {
             <OrganizationsHeader 
                 totalShown={filteredOrganizations.length} 
                 totalCount={organizations.length}
+                onCreateClick={() => setIsCreateModalOpen(true)}
             />
 
             {/* Filters Component */}
@@ -266,12 +198,26 @@ export const OrganizationsPage = () => {
             />
 
             {/* Table Component with Action Handlers */}
-            <OrganizationTable 
-                organizations={filteredOrganizations} 
-                onView={handleView}
-                onEdit={handleEdit}
-                onToggleStatus={handleToggleStatus}
-                onDelete={handleDelete}
+            {loading ? (
+                <div className="flex flex-col items-center justify-center py-24 text-gray-400 bg-white rounded-3xl border border-gray-100 shadow-sm">
+                    <Loader2 className="w-8 h-8 animate-spin text-[#00B050] mb-2" />
+                    <span className="text-xs font-semibold">Loading organizations from database...</span>
+                </div>
+            ) : (
+                <OrganizationTable 
+                    organizations={filteredOrganizations} 
+                    onView={handleView}
+                    onEdit={handleEdit}
+                    onToggleStatus={handleToggleStatus}
+                    onDelete={handleDelete}
+                />
+            )}
+
+            {/* Organization Create Modal */}
+            <OrganizationCreateModal 
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
+                onSave={handleSaveCreate}
             />
 
             {/* Organization Details Modal */}

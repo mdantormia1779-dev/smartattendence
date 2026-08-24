@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
     Share2, 
     Copy, 
@@ -10,10 +10,12 @@ import {
     Wallet, 
     Sparkles, 
     CheckCircle2, 
-    X,
-    Building2,
-    Send
+    X, 
+    Building2, 
+    Send,
+    Loader2
 } from "lucide-react";
+import { api } from "@/lib/api-client";
 
 export default function EmployeeReferralsPage() {
     const [copied, setCopied] = useState(false);
@@ -22,24 +24,51 @@ export default function EmployeeReferralsPage() {
     const [payoutMethod, setPayoutMethod] = useState<"bKash" | "Nagad" | "Bank Transfer">("bKash");
     const [payoutDetails, setPayoutDetails] = useState("+880 1712-100201 (Personal)");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     const [account, setAccount] = useState({
-        referralCode: "ARIF-EMP1042",
-        referralLink: "https://smartattendance.io/signup?ref=ARIF-EMP1042",
+        referralCode: "EMP-REF",
+        referralLink: "https://smartattendance.io/signup?ref=EMP-REF",
         commissionRate: 15.0,
-        totalClicks: 145,
-        totalRegistrations: 8,
-        totalPaidCustomers: 3,
-        availableBalance: 67.5,
-        pendingCommission: 45.0,
-        paidCommission: 0.0,
+        totalClicks: 0,
+        totalRegistrations: 0,
+        totalPaidCustomers: 0,
+        availableBalance: 0,
+        pendingCommission: 0,
+        paidCommission: 0,
     });
 
-    const [commissions, setCommissions] = useState([
-        { id: "com-1", org: "CloudTech Software", plan: "Business Plan ($149/mo)", amt: 22.35, date: "2026-08-05", status: "AVAILABLE" },
-        { id: "com-2", org: "Alpha Retail Store", plan: "Starter Plan ($39/mo)", amt: 5.85, date: "2026-07-28", status: "AVAILABLE" },
-        { id: "com-3", org: "Dhaka Creative Studio", plan: "Business Plan ($149/mo)", amt: 22.35, date: "2026-08-15", status: "PENDING" },
-    ]);
+    const [commissions, setCommissions] = useState<any[]>([]);
+
+    const fetchReferralAccount = async () => {
+        try {
+            setLoading(true);
+            const [accRes, linkRes] = await Promise.all([
+                api.referrals.getAccount(),
+                api.referrals.getLink(),
+            ]);
+
+            if (accRes.success && accRes.data) {
+                setAccount((prev) => ({
+                    ...prev,
+                    ...accRes.data,
+                    referralLink: linkRes.data?.link || prev.referralLink,
+                    referralCode: linkRes.data?.code || accRes.data.code || prev.referralCode,
+                }));
+                if (Array.isArray(accRes.data.commissions)) {
+                    setCommissions(accRes.data.commissions);
+                }
+            }
+        } catch (e) {
+            console.error("Failed to load employee referral account", e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchReferralAccount();
+    }, []);
 
     const handleCopy = () => {
         navigator.clipboard.writeText(account.referralLink);
@@ -54,7 +83,7 @@ export default function EmployeeReferralsPage() {
         window.open(`https://wa.me/?text=${text}`, "_blank");
     };
 
-    const handleWithdraw = (e: React.FormEvent) => {
+    const handleWithdraw = async (e: React.FormEvent) => {
         e.preventDefault();
         const amt = parseFloat(withdrawAmount);
         if (amt < 50) {
@@ -66,16 +95,26 @@ export default function EmployeeReferralsPage() {
             return;
         }
 
-        setIsSubmitting(true);
-        setTimeout(() => {
-            setAccount({
-                ...account,
-                availableBalance: Number((account.availableBalance - amt).toFixed(2)),
+        try {
+            setIsSubmitting(true);
+            const res = await api.referrals.requestWithdrawal({
+                amount: amt,
+                payoutMethod,
+                payoutDetails,
             });
+
+            if (res.success) {
+                alert("🎉 Payout request submitted! Admin will disburse to your mobile wallet.");
+                await fetchReferralAccount();
+                setIsWithdrawModalOpen(false);
+            } else {
+                alert(res.message || "Failed to submit withdrawal");
+            }
+        } catch (e: any) {
+            alert(e.message || "Error processing withdrawal");
+        } finally {
             setIsSubmitting(false);
-            setIsWithdrawModalOpen(false);
-            alert("🎉 Payout request submitted! Admin will disburse to your mobile wallet.");
-        }, 700);
+        }
     };
 
     return (
@@ -100,147 +139,101 @@ export default function EmployeeReferralsPage() {
                 </button>
             </div>
 
-            {/* Sharing Hero Card */}
-            <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-xl">
-                <div className="absolute right-0 top-0 w-96 h-96 bg-[#00B050]/20 rounded-full blur-3xl pointer-events-none" />
+            {/* Share Card */}
+            <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl p-6 text-white space-y-4">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#00B050]/20 text-[#00B050] border border-[#00B050]/30">
+                    <Sparkles className="w-3.5 h-3.5" /> 15% Monthly Passive Income
+                </span>
+                <h2 className="text-xl sm:text-2xl font-bold">Your Unique Employee Referral Link</h2>
 
-                <div className="relative z-10 space-y-4 max-w-2xl">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#00B050]/20 text-[#00B050] border border-[#00B050]/30">
-                        <Sparkles className="w-3.5 h-3.5" />
-                        15% Extra Monthly Passive Earnings
-                    </span>
-                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                        Your Personal Employee Referral Link
-                    </h2>
-                    <p className="text-xs text-gray-300 leading-relaxed">
-                        Earn rewards for every business that adopts Smart Attendance through your link. Payments can be directly withdrawn to your bKash, Nagad, or Bank account!
-                    </p>
-
-                    {/* Copy Box & WhatsApp button */}
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2">
-                        <div className="flex-1 bg-white/10 backdrop-blur-md rounded-2xl px-4 py-3 border border-white/10 font-mono text-xs text-white truncate">
-                            {account.referralLink}
-                        </div>
-                        <button
-                            onClick={handleCopy}
-                            className="px-5 py-3 rounded-2xl bg-[#00B050] hover:bg-[#009b46] text-white font-bold text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
-                        >
-                            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                            {copied ? "Copied!" : "Copy Link"}
-                        </button>
-                        <button
-                            onClick={handleShareWhatsApp}
-                            className="px-4 py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
-                        >
-                            <Send className="w-3.5 h-3.5" /> WhatsApp
-                        </button>
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                    <div className="bg-white/10 border border-white/20 rounded-2xl px-4 py-3 font-mono text-sm tracking-wider text-white w-full sm:w-auto">
+                        {account.referralLink}
                     </div>
+                    <button
+                        onClick={handleCopy}
+                        className="w-full sm:w-auto px-5 py-3 bg-[#00B050] hover:bg-[#009b46] text-white rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#00B050]/30 cursor-pointer"
+                    >
+                        {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        {copied ? "Copied Link!" : "Copy Link"}
+                    </button>
+                    <button
+                        onClick={handleShareWhatsApp}
+                        className="w-full sm:w-auto px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                        <Send className="w-4 h-4" />
+                        Share on WhatsApp
+                    </button>
                 </div>
             </div>
 
             {/* Metrics */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                    <p className="text-xs font-semibold text-gray-500 uppercase">Link Clicks</p>
-                    <h3 className="text-2xl font-bold text-gray-900 mt-1">{account.totalClicks}</h3>
-                    <p className="text-[11px] text-gray-400 mt-0.5">{account.totalRegistrations} Signups</p>
-                </div>
-
-                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                    <p className="text-xs font-semibold text-gray-500 uppercase">Paid Companies</p>
-                    <h3 className="text-2xl font-bold text-emerald-600 mt-1">{account.totalPaidCustomers}</h3>
-                    <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">Earning recurring</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase">Available Wallet Balance</p>
+                    <h3 className="text-2xl font-bold text-emerald-600 mt-1 font-mono">${account.availableBalance.toFixed(2)}</h3>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Ready to withdraw</p>
                 </div>
 
                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
                     <p className="text-xs font-semibold text-gray-500 uppercase">Pending Holding</p>
                     <h3 className="text-2xl font-bold text-amber-600 mt-1 font-mono">${account.pendingCommission.toFixed(2)}</h3>
-                    <p className="text-[11px] text-gray-400 mt-0.5">30-day clearance</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">14-day hold</p>
                 </div>
 
                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                    <p className="text-xs font-semibold text-gray-500 uppercase">Available Wallet</p>
-                    <h3 className="text-2xl font-bold text-[#00B050] mt-1 font-mono">${account.availableBalance.toFixed(2)}</h3>
-                    <p className="text-[11px] text-gray-400 mt-0.5">Ready for payout</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase">Referred Organizations</p>
+                    <h3 className="text-2xl font-bold text-gray-900 mt-1">{account.totalRegistrations} Companies</h3>
+                    <p className="text-[11px] text-gray-400 mt-0.5">{account.totalPaidCustomers} paid clients</p>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                    <p className="text-xs font-semibold text-gray-500 uppercase">Link Clicks</p>
+                    <h3 className="text-2xl font-bold text-indigo-600 mt-1">{account.totalClicks} Visits</h3>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Real-time tracker</p>
                 </div>
             </div>
 
-            {/* Commissions History */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                    <div>
-                        <h3 className="text-base font-bold text-gray-900">Your Earned Referral Rewards</h3>
-                        <p className="text-xs text-gray-500">History of commissions credited from referred subscriptions</p>
-                    </div>
-                </div>
-
-                <div className="divide-y divide-gray-100 text-xs">
-                    {commissions.map((c) => (
-                        <div key={c.id} className="py-3.5 flex items-center justify-between">
-                            <div>
-                                <p className="font-bold text-gray-900 flex items-center gap-1.5">
-                                    <Building2 className="w-3.5 h-3.5 text-gray-400" />
-                                    {c.org}
-                                </p>
-                                <span className="text-[11px] text-gray-400">{c.plan} · {c.date}</span>
-                            </div>
-                            <div className="text-right">
-                                <span className="font-bold font-mono text-[#00B050] text-sm">+${c.amt.toFixed(2)}</span>
-                                <p className="text-[10px] text-emerald-600 font-semibold">{c.status}</p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* Withdrawal Modal */}
+            {/* Modal */}
             {isWithdrawModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-                    <div className="bg-white rounded-3xl border border-gray-200 shadow-2xl max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95">
-                        <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-                            <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                                <Wallet className="w-5 h-5 text-[#00B050]" />
-                                Withdraw Commission Balance
-                            </h3>
-                            <button onClick={() => setIsWithdrawModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400">
-                                <X className="w-5 h-5" />
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                            <h3 className="font-bold text-gray-900 text-base">Request Employee Commission Payout</h3>
+                            <button
+                                onClick={() => setIsWithdrawModalOpen(false)}
+                                className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 cursor-pointer"
+                            >
+                                <X className="w-4 h-4" />
                             </button>
                         </div>
-
-                        <div className="p-3 bg-emerald-50/70 rounded-2xl border border-emerald-200/60 flex items-center justify-between text-xs">
-                            <span className="text-emerald-900 font-semibold">Available for Payout:</span>
-                            <span className="font-bold text-lg text-[#00B050] font-mono">${account.availableBalance.toFixed(2)}</span>
-                        </div>
-
-                        <form onSubmit={handleWithdraw} className="space-y-3 text-xs">
+                        <form onSubmit={handleWithdraw} className="space-y-4">
                             <div>
-                                <label className="block font-semibold text-gray-700 mb-1">Amount to Withdraw ($)</label>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Withdraw Amount ($)</label>
                                 <input
                                     type="number"
-                                    min={50}
+                                    min="50"
                                     max={account.availableBalance}
+                                    required
                                     value={withdrawAmount}
                                     onChange={(e) => setWithdrawAmount(e.target.value)}
-                                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm"
+                                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold"
                                 />
-                                <p className="text-[10px] text-gray-400 mt-0.5">Minimum payout: $50.00</p>
                             </div>
-
                             <div>
-                                <label className="block font-semibold text-gray-700 mb-1">Payment Method</label>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Payout Channel</label>
                                 <select
                                     value={payoutMethod}
                                     onChange={(e) => setPayoutMethod(e.target.value as any)}
                                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs"
                                 >
-                                    <option value="bKash">bKash Mobile Wallet</option>
-                                    <option value="Nagad">Nagad Mobile Wallet</option>
-                                    <option value="Bank Transfer">Bank Account</option>
+                                    <option value="bKash">bKash Personal</option>
+                                    <option value="Nagad">Nagad Personal</option>
+                                    <option value="Bank Transfer">Bank Wire</option>
                                 </select>
                             </div>
-
                             <div>
-                                <label className="block font-semibold text-gray-700 mb-1">bKash/Account Number</label>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Account / Mobile Number</label>
                                 <input
                                     type="text"
                                     required
@@ -249,21 +242,20 @@ export default function EmployeeReferralsPage() {
                                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs"
                                 />
                             </div>
-
-                            <div className="flex justify-end gap-2 pt-2">
+                            <div className="flex items-center justify-end gap-3 pt-2">
                                 <button
                                     type="button"
                                     onClick={() => setIsWithdrawModalOpen(false)}
-                                    className="px-4 py-2 rounded-xl border border-gray-200 text-xs font-semibold"
+                                    className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={isSubmitting}
-                                    className="px-4 py-2 bg-[#00B050] text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-50"
+                                    className="px-4 py-2 text-xs font-bold bg-[#00B050] text-white rounded-xl hover:bg-[#009b46] cursor-pointer disabled:opacity-50"
                                 >
-                                    {isSubmitting ? "Submitting..." : "Confirm Withdrawal"}
+                                    {isSubmitting ? "Submitting..." : "Confirm Payout"}
                                 </button>
                             </div>
                         </form>

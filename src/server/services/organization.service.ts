@@ -1,0 +1,413 @@
+import { prisma } from "@/lib/prisma";
+import { ConflictError, NotFoundError, PlanLimitExceededError } from "../errors";
+import { OrgStatus } from "@prisma/client";
+
+export interface OrganizationData {
+  id: string;
+  name: string;
+  slug: string;
+  email: string;
+  phone?: string | null;
+  website?: string | null;
+  industry?: string | null;
+  address?: string | null;
+  country?: string | null;
+  language?: string | null;
+  currency?: string | null;
+  planId?: string;
+  planName?: string;
+  planTier?: "FREE" | "STARTER" | "BUSINESS" | "ENTERPRISE";
+  subscriptionStatus?: "ACTIVE" | "TRIAL" | "EXPIRED" | "SUSPENDED" | "CANCELLED";
+  brandColor?: string;
+  customLogoUrl?: string | null;
+  customDomain?: string | null;
+  defaultOfficeStart?: string;
+  defaultOfficeEnd?: string;
+  defaultGeofenceM?: number;
+  antiSpoofingMode?: string;
+  workingDays?: string[] | string;
+  timezone?: string;
+  totalEmployees: number;
+  totalBranches: number;
+  isSuspended: boolean;
+  suspensionReason?: string | null;
+  createdAt: string;
+}
+
+/**
+ * Helper to map Prisma organization record to domain OrganizationData
+ */
+function mapToOrganizationData(org: any): OrganizationData {
+  const isSuspended = org.status === OrgStatus.SUSPENDED;
+  const subscription = org.subscriptions;
+  const plan = subscription?.subscription_plans;
+
+  let workingDaysParsed: string[] | string = ["Sun", "Mon", "Tue", "Wed", "Thu"];
+  if (Array.isArray(org.workingDays)) {
+    workingDaysParsed = org.workingDays;
+  } else if (typeof org.workingDays === "string") {
+    workingDaysParsed = org.workingDays;
+  }
+
+  const customTheme =
+    typeof org.customTheme === "object" && org.customTheme !== null
+      ? (org.customTheme as Record<string, any>)
+      : {};
+
+  return {
+    id: org.id,
+    name: org.name,
+    slug: org.slug,
+    email: org.email,
+    phone: org.phone ?? null,
+    website: org.website ?? null,
+    industry: org.industry ?? "General",
+    address: org.address ?? null,
+    country: org.country ?? "Bangladesh",
+    language: org.language ?? "English",
+    currency: org.currency ?? "BDT (৳)",
+    planId: plan?.id ?? (subscription?.planId || "plan-starter"),
+    planName: plan?.name ?? "FREE",
+    planTier: (plan?.type as "FREE" | "STARTER" | "BUSINESS" | "ENTERPRISE") ?? "FREE",
+    subscriptionStatus: isSuspended ? "SUSPENDED" : (subscription?.status ?? "ACTIVE"),
+    brandColor: customTheme.brandColor || "#00B050",
+    customLogoUrl: org.logoUrl ?? null,
+    customDomain: org.customDomain ?? null,
+    defaultOfficeStart: org.officeStart ?? "09:00 AM",
+    defaultOfficeEnd: org.officeEnd ?? "05:00 PM",
+    defaultGeofenceM: customTheme.defaultGeofenceM ?? 120,
+    antiSpoofingMode: customTheme.antiSpoofingMode ?? "High",
+    workingDays: workingDaysParsed,
+    timezone: org.timezone ?? "Asia/Dhaka",
+    // Strictly return real relational counts without 1 fallback
+    totalEmployees: org._count?.employees ?? 0,
+    totalBranches: org._count?.branches ?? 0,
+    isSuspended: isSuspended,
+    suspensionReason: customTheme.suspensionReason ?? null,
+    createdAt: org.createdAt instanceof Date ? org.createdAt.toISOString() : String(org.createdAt),
+  };
+}
+
+export class OrganizationService {
+  /**
+   * Fetch all organizations from database with relational employee and branch counts
+   */
+  static async getAllOrganizations(): Promise<OrganizationData[]> {
+    const orgs = await prisma.organizations.findMany({
+      include: {
+        subscriptions: {
+          include: {
+            subscription_plans: true,
+          },
+        },
+        _count: {
+          select: {
+            employees: true,
+            branches: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    return orgs.map(mapToOrganizationData);
+  }
+
+  /**
+   * Fetch a single organization by ID
+   */
+  static async getOrganizationById(id: string): Promise<OrganizationData> {
+    const org = await prisma.organizations.findUnique({
+      where: { id },
+      include: {
+        subscriptions: {
+          include: {
+            subscription_plans: true,
+          },
+        },
+        _count: {
+          select: {
+            employees: true,
+            branches: true,
+          },
+        },
+      },
+    });
+
+    if (!org) {
+      throw new NotFoundError("Organization");
+    }
+
+    return mapToOrganizationData(org);
+  }
+
+  /**
+   * Insert new organization record into the database (no fake initial branch/employee entries)
+   */
+  static async createOrganization(data: {
+    name: string;
+    slug: string;
+    email: string;
+    planTier?: OrganizationData["planTier"];
+    industry?: string;
+    phone?: string;
+    website?: string;
+    customLogoUrl?: string;
+    address?: string;
+    country?: string;
+    language?: string;
+    currency?: string;
+    timezone?: string;
+    workingDays?: string[] | string;
+    defaultOfficeStart?: string;
+    defaultOfficeEnd?: string;
+    defaultGeofenceM?: number;
+    adminName?: string;
+    adminEmail?: string;
+    adminPassword?: string;
+  }): Promise<OrganizationData> {
+    // Check if slug or email already exists
+    const existing = await prisma.organizations.findFirst({
+      where: {
+        OR: [{ slug: data.slug }, { email: data.email }],
+      },
+    });
+
+    if (existing) {
+      throw new ConflictError(
+        `Organization with slug '${data.slug}' or email '${data.email}' already exists`
+      );
+    }
+
+    const orgId = `org-${Date.now()}`;
+
+    let workingDaysData: any = ["Sun", "Mon", "Tue", "Wed", "Thu"];
+    if (Array.isArray(data.workingDays)) {
+      workingDaysData = data.workingDays;
+    } else if (typeof data.workingDays === "string" && data.workingDays.trim()) {
+      workingDaysData = data.workingDays
+        .split(/[,-]/)
+        .map((d) => d.trim())
+        .filter(Boolean);
+    }
+
+    const created = await prisma.organizations.create({
+      data: {
+        id: orgId,
+        name: data.name,
+        slug: data.slug,
+        email: data.email,
+        logoUrl: data.customLogoUrl || null,
+        industry: data.industry || "General",
+        phone: data.phone || null,
+        website: data.website || null,
+        address: data.address || null,
+        country: data.country || "Bangladesh",
+        language: data.language || "English",
+        currency: data.currency || "BDT (৳)",
+        timezone: data.timezone || "Asia/Dhaka",
+        workingDays: workingDaysData,
+        officeStart: data.defaultOfficeStart || "09:00 AM",
+        officeEnd: data.defaultOfficeEnd || "05:00 PM",
+        status: OrgStatus.ACTIVE,
+        customTheme: {
+          brandColor: "#00B050",
+          defaultGeofenceM: data.defaultGeofenceM || 120,
+          antiSpoofingMode: "High",
+        },
+        updatedAt: new Date(),
+      },
+      include: {
+        subscriptions: {
+          include: {
+            subscription_plans: true,
+          },
+        },
+        _count: {
+          select: {
+            employees: true,
+            branches: true,
+          },
+        },
+      },
+    });
+
+    return mapToOrganizationData(created);
+  }
+
+  /**
+   * Update organization settings directly in database
+   */
+  static async updateSettings(
+    id: string,
+    settings: Partial<OrganizationData> & { status?: string }
+  ): Promise<OrganizationData> {
+    const existing = await prisma.organizations.findUnique({
+      where: { id },
+      include: {
+        subscriptions: {
+          include: {
+            subscription_plans: true,
+          },
+        },
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundError("Organization");
+    }
+
+    const currentPlanTier = existing.subscriptions?.subscription_plans?.type;
+    if (settings.customDomain && currentPlanTier !== "ENTERPRISE") {
+      throw new PlanLimitExceededError(
+        "Custom domain is an Enterprise-only feature. Please upgrade your subscription."
+      );
+    }
+
+    const currentTheme =
+      typeof existing.customTheme === "object" && existing.customTheme !== null
+        ? (existing.customTheme as Record<string, any>)
+        : {};
+
+    const updatedTheme = {
+      ...currentTheme,
+      ...(settings.brandColor ? { brandColor: settings.brandColor } : {}),
+      ...(settings.defaultGeofenceM ? { defaultGeofenceM: settings.defaultGeofenceM } : {}),
+      ...(settings.antiSpoofingMode ? { antiSpoofingMode: settings.antiSpoofingMode } : {}),
+      ...(settings.suspensionReason !== undefined ? { suspensionReason: settings.suspensionReason } : {}),
+    };
+
+    let orgStatus: OrgStatus | undefined;
+    if (settings.isSuspended !== undefined) {
+      orgStatus = settings.isSuspended ? OrgStatus.SUSPENDED : OrgStatus.ACTIVE;
+    } else if (settings.status) {
+      const statusUpper = settings.status.toUpperCase();
+      if (statusUpper === "SUSPENDED") orgStatus = OrgStatus.SUSPENDED;
+      else if (statusUpper === "ACTIVE") orgStatus = OrgStatus.ACTIVE;
+      else if (statusUpper === "PENDING") orgStatus = OrgStatus.PENDING;
+    }
+
+    const updated = await prisma.organizations.update({
+      where: { id },
+      data: {
+        ...(settings.name ? { name: settings.name } : {}),
+        ...(settings.slug ? { slug: settings.slug } : {}),
+        ...(settings.email ? { email: settings.email } : {}),
+        ...(settings.phone !== undefined ? { phone: settings.phone } : {}),
+        ...(settings.website !== undefined ? { website: settings.website } : {}),
+        ...(settings.industry !== undefined ? { industry: settings.industry } : {}),
+        ...(settings.address !== undefined ? { address: settings.address } : {}),
+        ...(settings.country !== undefined ? { country: settings.country } : {}),
+        ...(settings.language ? { language: settings.language } : {}),
+        ...(settings.currency ? { currency: settings.currency } : {}),
+        ...(settings.timezone ? { timezone: settings.timezone } : {}),
+        ...(settings.customLogoUrl !== undefined ? { logoUrl: settings.customLogoUrl } : {}),
+        ...(settings.customDomain !== undefined ? { customDomain: settings.customDomain } : {}),
+        ...(settings.defaultOfficeStart !== undefined ? { officeStart: settings.defaultOfficeStart } : {}),
+        ...(settings.defaultOfficeEnd !== undefined ? { officeEnd: settings.defaultOfficeEnd } : {}),
+        ...(settings.workingDays !== undefined ? { workingDays: settings.workingDays as any } : {}),
+        ...(orgStatus ? { status: orgStatus } : {}),
+        customTheme: updatedTheme,
+        updatedAt: new Date(),
+      },
+      include: {
+        subscriptions: {
+          include: {
+            subscription_plans: true,
+          },
+        },
+        _count: {
+          select: {
+            employees: true,
+            branches: true,
+          },
+        },
+      },
+    });
+
+    return mapToOrganizationData(updated);
+  }
+
+  /**
+   * Suspend or unsuspend organization
+   */
+  static async suspendOrganization(
+    id: string,
+    reason: string,
+    isSuspended: boolean = true
+  ): Promise<OrganizationData> {
+    const existing = await prisma.organizations.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundError("Organization");
+    }
+
+    const currentTheme =
+      typeof existing.customTheme === "object" && existing.customTheme !== null
+        ? (existing.customTheme as Record<string, any>)
+        : {};
+
+    const updated = await prisma.organizations.update({
+      where: { id },
+      data: {
+        status: isSuspended ? OrgStatus.SUSPENDED : OrgStatus.ACTIVE,
+        customTheme: {
+          ...currentTheme,
+          suspensionReason: isSuspended ? reason : null,
+        },
+        updatedAt: new Date(),
+      },
+      include: {
+        subscriptions: {
+          include: {
+            subscription_plans: true,
+          },
+        },
+        _count: {
+          select: {
+            employees: true,
+            branches: true,
+          },
+        },
+      },
+    });
+
+    return mapToOrganizationData(updated);
+  }
+
+  /**
+   * Delete organization by ID
+   */
+  static async deleteOrganization(id: string): Promise<OrganizationData> {
+    const existing = await prisma.organizations.findUnique({
+      where: { id },
+      include: {
+        subscriptions: {
+          include: {
+            subscription_plans: true,
+          },
+        },
+        _count: {
+          select: {
+            employees: true,
+            branches: true,
+          },
+        },
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundError("Organization");
+    }
+
+    await prisma.organizations.delete({
+      where: { id },
+    });
+
+    return mapToOrganizationData(existing);
+  }
+}

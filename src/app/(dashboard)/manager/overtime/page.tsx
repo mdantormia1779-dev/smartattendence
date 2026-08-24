@@ -12,8 +12,10 @@ import {
     X, 
     DollarSign,
     Calendar,
-    Zap
+    Zap,
+    Loader2
 } from "lucide-react";
+import { api } from "@/lib/api-client";
 
 interface TeamOTClaim {
     id: string;
@@ -27,40 +29,65 @@ interface TeamOTClaim {
     status: "Pending Manager" | "Approved by Manager" | "Rejected";
 }
 
-const initialOTClaims: TeamOTClaim[] = [
-    {
-        id: "mot-1",
-        employeeName: "Arif Chowdhury",
-        employeeId: "EMP-1042",
-        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
-        date: "2026-08-16",
-        hours: 3.5,
-        otType: "Regular OT",
-        taskDone: "Server cloud database replication and indexing upgrade.",
-        status: "Pending Manager",
-    },
-    {
-        id: "mot-2",
-        employeeName: "Mahmudul Hasan",
-        employeeId: "EMP-1047",
-        avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100",
-        date: "2026-08-14",
-        hours: 2.0,
-        otType: "Regular OT",
-        taskDone: "Resolving critical payment gateway callback webhook error.",
-        status: "Approved by Manager",
-    },
-];
-
 export default function ManagerOvertimePage() {
-    const [claims, setClaims] = useState<TeamOTClaim[]>(initialOTClaims);
+    const [claims, setClaims] = useState<TeamOTClaim[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const handleApprove = (id: string) => {
-        setClaims(claims.map(c => c.id === id ? { ...c, status: "Approved by Manager" } : c));
+    const fetchClaims = async () => {
+        try {
+            setLoading(true);
+            const res = await api.overtime.getAll();
+            if (res.success && Array.isArray(res.data)) {
+                const mapped: TeamOTClaim[] = res.data.map((c: any) => {
+                    let type: TeamOTClaim["otType"] = "Regular OT";
+                    if (c.type === "WEEKEND") type = "Weekend OT";
+                    else if (c.type === "EMERGENCY") type = "Emergency OT";
+
+                    let status: TeamOTClaim["status"] = "Pending Manager";
+                    if (c.managerApproval === "APPROVED") status = "Approved by Manager";
+                    else if (c.managerApproval === "REJECTED") status = "Rejected";
+
+                    return {
+                        id: c.id,
+                        employeeName: c.employeeName || c.employeeId,
+                        employeeId: c.employeeId,
+                        avatar: c.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
+                        date: c.date,
+                        hours: c.claimedHours || 2,
+                        otType: type,
+                        taskDone: c.reason || "Extended tasks",
+                        status,
+                    };
+                });
+                setClaims(mapped);
+            }
+        } catch (e) {
+            console.error("Failed to load manager overtime claims", e);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const handleReject = (id: string) => {
-        setClaims(claims.map(c => c.id === id ? { ...c, status: "Rejected" } : c));
+    useEffect(() => {
+        fetchClaims();
+    }, []);
+
+    const handleApprove = async (id: string) => {
+        try {
+            await api.overtime.approve(id, "Manager Approved");
+            await fetchClaims();
+        } catch (e) {
+            console.error("Failed to approve OT claim", e);
+        }
+    };
+
+    const handleReject = async (id: string) => {
+        try {
+            await api.overtime.reject(id, "Manager Rejected");
+            await fetchClaims();
+        } catch (e) {
+            console.error("Failed to reject OT claim", e);
+        }
     };
 
     return (
@@ -80,90 +107,103 @@ export default function ManagerOvertimePage() {
 
             {/* Claims Table */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="border-b border-gray-100 bg-gray-50/70 text-gray-500 text-xs font-semibold uppercase tracking-wider">
-                                <th className="py-4 px-6">Team Member</th>
-                                <th className="py-4 px-6">Date & Type</th>
-                                <th className="py-4 px-6">Claimed Hours</th>
-                                <th className="py-4 px-6">Work Performed</th>
-                                <th className="py-4 px-6">Status</th>
-                                <th className="py-4 px-6 text-right">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 text-sm">
-                            {claims.map((item) => (
-                                <tr key={item.id} className="hover:bg-gray-50/60 transition-colors">
-                                    <td className="py-4 px-6">
-                                        <div className="flex items-center gap-3">
-                                            <img
-                                                src={item.avatar}
-                                                alt={item.employeeName}
-                                                className="w-10 h-10 rounded-full object-cover ring-2 ring-gray-100"
-                                            />
-                                            <div>
-                                                <p className="font-bold text-gray-900 leading-tight">{item.employeeName}</p>
-                                                <span className="text-xs text-gray-400 font-mono">{item.employeeId}</span>
-                                            </div>
-                                        </div>
-                                    </td>
-
-                                    <td className="py-4 px-6">
-                                        <span className="font-bold text-xs text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
-                                            {item.otType}
-                                        </span>
-                                        <p className="text-[11px] text-gray-400 mt-0.5 font-mono">{item.date}</p>
-                                    </td>
-
-                                    <td className="py-4 px-6 font-bold text-xs text-gray-900">
-                                        {item.hours} Hours
-                                    </td>
-
-                                    <td className="py-4 px-6 max-w-xs text-xs text-gray-700">
-                                        {item.taskDone}
-                                    </td>
-
-                                    <td className="py-4 px-6">
-                                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
-                                            item.status === "Approved by Manager"
-                                                ? "bg-emerald-50 text-emerald-700"
-                                                : item.status === "Rejected"
-                                                ? "bg-rose-50 text-rose-700"
-                                                : "bg-amber-50 text-amber-700"
-                                        }`}>
-                                            {item.status === "Approved by Manager" && <CheckCircle2 className="w-3.5 h-3.5" />}
-                                            {item.status === "Rejected" && <XCircle className="w-3.5 h-3.5" />}
-                                            {item.status === "Pending Manager" && <Clock className="w-3.5 h-3.5" />}
-                                            {item.status}
-                                        </span>
-                                    </td>
-
-                                    <td className="py-4 px-6 text-right">
-                                        {item.status === "Pending Manager" ? (
-                                            <div className="flex items-center justify-end gap-2">
-                                                <button
-                                                    onClick={() => handleApprove(item.id)}
-                                                    className="px-3 py-1.5 bg-[#00B050] hover:bg-[#009b46] text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1 cursor-pointer"
-                                                >
-                                                    <Check className="w-3.5 h-3.5" /> Approve
-                                                </button>
-                                                <button
-                                                    onClick={() => handleReject(item.id)}
-                                                    className="px-3 py-1.5 border border-rose-200 hover:bg-rose-50 text-rose-600 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer"
-                                                >
-                                                    <X className="w-3.5 h-3.5" /> Reject
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <span className="text-xs text-gray-400 italic">Reviewed</span>
-                                        )}
-                                    </td>
+                {loading ? (
+                    <div className="flex items-center justify-center py-20 text-gray-400">
+                        <Loader2 className="w-8 h-8 animate-spin text-[#00B050] mr-2" />
+                        <span>Loading team overtime claims...</span>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="border-b border-gray-100 bg-gray-50/70 text-gray-500 text-xs font-semibold uppercase tracking-wider">
+                                    <th className="py-4 px-6">Team Member</th>
+                                    <th className="py-4 px-6">Date & Type</th>
+                                    <th className="py-4 px-6">Claimed Hours</th>
+                                    <th className="py-4 px-6">Work Performed</th>
+                                    <th className="py-4 px-6">Status</th>
+                                    <th className="py-4 px-6 text-right">Action</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 text-sm">
+                                {claims.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6} className="text-center py-12 text-gray-400 text-xs">
+                                            No overtime claims pending.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    claims.map((item) => (
+                                        <tr key={item.id} className="hover:bg-gray-50/60 transition-colors">
+                                            <td className="py-4 px-6">
+                                                <div className="flex items-center gap-3">
+                                                    <img
+                                                        src={item.avatar}
+                                                        alt={item.employeeName}
+                                                        className="w-9 h-9 rounded-full object-cover ring-2 ring-gray-100"
+                                                    />
+                                                    <div>
+                                                        <p className="font-bold text-gray-900 text-xs">{item.employeeName}</p>
+                                                        <p className="text-[11px] text-gray-400 font-mono">{item.employeeId}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="py-4 px-6 text-xs text-gray-700">
+                                                <p className="font-semibold">{item.date}</p>
+                                                <span className="text-[10px] text-indigo-600 font-bold">{item.otType}</span>
+                                            </td>
+                                            <td className="py-4 px-6 font-bold text-xs text-gray-900 font-mono">
+                                                {item.hours} Hours
+                                            </td>
+                                            <td className="py-4 px-6 text-xs text-gray-600 max-w-xs truncate">
+                                                {item.taskDone}
+                                            </td>
+                                            <td className="py-4 px-6">
+                                                {item.status === "Approved by Manager" && (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700">
+                                                        <CheckCircle2 className="w-3 h-3" /> Endorsed
+                                                    </span>
+                                                )}
+                                                {item.status === "Pending Manager" && (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700">
+                                                        <Clock className="w-3 h-3" /> Pending Review
+                                                    </span>
+                                                )}
+                                                {item.status === "Rejected" && (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700">
+                                                        <XCircle className="w-3 h-3" /> Rejected
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="py-4 px-6 text-right">
+                                                {item.status === "Pending Manager" ? (
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button
+                                                            onClick={() => handleReject(item.id)}
+                                                            className="p-1 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 cursor-pointer"
+                                                            title="Reject"
+                                                        >
+                                                            <X className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleApprove(item.id)}
+                                                            className="p-1 rounded-lg bg-[#00B050] text-white hover:bg-[#009b46] shadow-xs cursor-pointer"
+                                                            title="Approve"
+                                                        >
+                                                            <Check className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-400 text-xs">—</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
         </div>
     );

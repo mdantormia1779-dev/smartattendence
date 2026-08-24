@@ -1,0 +1,746 @@
+{
+  "info": {
+    "name": "Smart Attendance API - Multi-Tenant SaaS ERP",
+    "_postman_id": "c71d75f8-1e3f-4e3f-b4e5-4b8ade3eba46",
+    "description": "Complete automated testing collection for Smart Attendance ERP covering Auth, RBAC, Multi-Tenant Isolation, Attendance, Biometrics, GPS Geofencing, Payroll, Subscriptions, Payments, Referrals, and Notifications.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 Authentication",
+      "item": [
+        {
+          "name": "Login - Super Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Success is true\", () => pm.expect(pm.response.json().success).to.eql(true));",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.token) pm.environment.set(\"superAdminToken\", json.data.token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"superadmin@erp.com\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          }
+        },
+        {
+          "name": "Login - Org Admin A",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.token) pm.environment.set(\"adminToken\", json.data.token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sarah.admin@vertextech.io\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          }
+        },
+        {
+          "name": "Login - Employee A",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.token) pm.environment.set(\"employeeToken\", json.data.token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"arif.c@vertextech.io\",\n  \"password\": \"emp123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          }
+        },
+        {
+          "name": "Login - Negative: Wrong Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"Success is false\", () => pm.expect(pm.response.json().success).to.eql(false));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"superadmin@erp.com\",\n  \"password\": \"wrongpass99\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          }
+        },
+        {
+          "name": "Register Tenant & Capture Referral",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 201\", () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "pm.test(\"Success is true\", () => pm.expect(pm.response.json().success).to.eql(true));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adminName\": \"Nasir Uddin\",\n  \"adminEmail\": \"nasir.admin@deltagroup.io\",\n  \"password\": \"delta12345\",\n  \"companyName\": \"Delta Group Holdings\",\n  \"companyEmail\": \"info@deltagroup.io\",\n  \"referralCode\": \"{{referralCode}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
+          }
+        },
+        {
+          "name": "Get Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/session", "host": ["{{baseUrl}}"], "path": ["api", "auth", "session"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Organizations",
+      "item": [
+        {
+          "name": "List Organizations (Super Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.length > 0) pm.environment.set(\"organizationAId\", json.data[0].id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{superAdminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations", "host": ["{{baseUrl}}"], "path": ["api", "organizations"] }
+          }
+        },
+        {
+          "name": "Get Organization Details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{organizationAId}}", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{organizationAId}}"] }
+          }
+        },
+        {
+          "name": "Multi-Tenant Isolation: Admin A access Org B -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Cross tenant access blocked (403)\", () => pm.response.to.have.status(403));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{organizationBId}}", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{organizationBId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Branches & Departments",
+      "item": [
+        {
+          "name": "List Branches",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.length > 0) pm.environment.set(\"branchId\", json.data[0].id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/branches", "host": ["{{baseUrl}}"], "path": ["api", "branches"] }
+          }
+        },
+        {
+          "name": "Create Branch with Geofence Radius",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", () => pm.response.to.have.status(201));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Uttara Tech Center\",\n  \"code\": \"UTR-01\",\n  \"address\": \"Sector 7, Uttara, Dhaka\",\n  \"latitude\": 23.8759,\n  \"longitude\": 90.3795,\n  \"geofenceRadius\": 150\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/branches", "host": ["{{baseUrl}}"], "path": ["api", "branches"] }
+          }
+        },
+        {
+          "name": "List Departments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.length > 0) pm.environment.set(\"departmentId\", json.data[0].id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/departments", "host": ["{{baseUrl}}"], "path": ["api", "departments"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Employees & Lifecycle",
+      "item": [
+        {
+          "name": "List Employees with Pagination & Filter",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.length > 0) pm.environment.set(\"employeeId\", json.data[0].employeeId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/employees?page=1&limit=10&status=Active", "host": ["{{baseUrl}}"], "path": ["api", "employees"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }, { "key": "status", "value": "Active" }] }
+          }
+        },
+        {
+          "name": "Create Employee",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", () => pm.response.to.have.status(201));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Zahirul Islam\",\n  \"email\": \"zahir.i@vertextech.io\",\n  \"employeeId\": \"EMP-1099\",\n  \"designation\": \"DevOps Engineer\",\n  \"branchId\": \"{{branchId}}\",\n  \"departmentId\": \"{{departmentId}}\",\n  \"basicSalary\": 80000\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/employees", "host": ["{{baseUrl}}"], "path": ["api", "employees"] }
+          }
+        },
+        {
+          "name": "Get Employee Profile Details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/employees/{{employeeId}}", "host": ["{{baseUrl}}"], "path": ["api", "employees", "{{employeeId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Attendance & Geofencing",
+      "item": [
+        {
+          "name": "Verify Location Inside Geofence",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Inside geofence is true\", () => pm.expect(pm.response.json().data.isInsideGeofence).to.eql(true));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{employeeToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latitude\": 23.7925,\n  \"longitude\": 90.4078,\n  \"branchId\": \"{{branchId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/attendance/verify-location", "host": ["{{baseUrl}}"], "path": ["api", "attendance", "verify-location"] }
+          }
+        },
+        {
+          "name": "Check-In with GPS Geofence Verification",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 or 400 (duplicate)\", () => pm.expect([200, 201, 400]).to.include(pm.response.code));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{employeeToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employeeId\": \"{{employeeId}}\",\n  \"latitude\": 23.7925,\n  \"longitude\": 90.4078,\n  \"verificationMethod\": \"FACE_RECOGNITION\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/attendance/check-in", "host": ["{{baseUrl}}"], "path": ["api", "attendance", "check-in"] }
+          }
+        },
+        {
+          "name": "Check-In Negative: Outside Geofence -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Outside geofence blocked (400)\", () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{employeeToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employeeId\": \"{{employeeId}}\",\n  \"latitude\": 24.5000,\n  \"longitude\": 91.5000\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/attendance/check-in", "host": ["{{baseUrl}}"], "path": ["api", "attendance", "check-in"] }
+          }
+        },
+        {
+          "name": "Get Today Punch Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/attendance/today", "host": ["{{baseUrl}}"], "path": ["api", "attendance", "today"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Overtime & Leaves",
+      "item": [
+        {
+          "name": "Submit Overtime Claim",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.id) pm.environment.set(\"overtimeId\", json.data.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{employeeToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employeeId\": \"{{employeeId}}\",\n  \"date\": \"2026-08-24\",\n  \"type\": \"REGULAR\",\n  \"claimedHours\": 2.5,\n  \"reason\": \"Sprint deployment release testing\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/overtime", "host": ["{{baseUrl}}"], "path": ["api", "overtime"] }
+          }
+        },
+        {
+          "name": "Apply for Leave",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.id) pm.environment.set(\"leaveId\", json.data.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{employeeToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employeeId\": \"{{employeeId}}\",\n  \"type\": \"CASUAL\",\n  \"startDate\": \"2026-08-26\",\n  \"endDate\": \"2026-08-27\",\n  \"reason\": \"Personal family commitment\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/leaves", "host": ["{{baseUrl}}"], "path": ["api", "leaves"] }
+          }
+        },
+        {
+          "name": "Approve Leave (Manager)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{managerToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVED\",\n  \"comment\": \"Team tasks covered\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/leaves/{{leaveId}}/approve", "host": ["{{baseUrl}}"], "path": ["api", "leaves", "{{leaveId}}", "approve"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Payroll & Decimal Calculations",
+      "item": [
+        {
+          "name": "Generate Monthly Payroll Batch",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 or 409 (already exists)\", () => pm.expect([200, 201, 409]).to.include(pm.response.code));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"month\": \"2026-08\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/payroll/generate", "host": ["{{baseUrl}}"], "path": ["api", "payroll", "generate"] }
+          }
+        },
+        {
+          "name": "Get Payslips (Employee)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/payslips", "host": ["{{baseUrl}}"], "path": ["api", "payslips"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Subscriptions & Payments",
+      "item": [
+        {
+          "name": "Get Subscription Plans",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/subscription/plans", "host": ["{{baseUrl}}"], "path": ["api", "subscription", "plans"] }
+          }
+        },
+        {
+          "name": "Payment Webhook (Server Verified & Idempotent)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-webhook-signature", "value": "sig_mock_payment_998822" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"payment.succeeded\",\n  \"data\": {\n    \"organizationId\": \"{{organizationAId}}\",\n    \"organizationName\": \"Vertex Technologies Ltd.\",\n    \"planName\": \"Business Plan\",\n    \"amount\": 149.00,\n    \"transactionId\": \"TXN-TEST-{{$timestamp}}\",\n    \"referralCode\": \"{{referralCode}}\"\n  }\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/webhooks/payment", "host": ["{{baseUrl}}"], "path": ["api", "webhooks", "payment"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Referrals & Wallet",
+      "item": [
+        {
+          "name": "Track Public Referral Click",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{referralCode}}\",\n  \"landingPage\": \"https://erp.com/signup\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/referral/track", "host": ["{{baseUrl}}"], "path": ["api", "referral", "track"] }
+          }
+        },
+        {
+          "name": "Get User Referral Account & Wallet",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/referrals", "host": ["{{baseUrl}}"], "path": ["api", "referrals"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 Notifications & Audit Logs",
+      "item": [
+        {
+          "name": "List User Notifications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/notifications", "host": ["{{baseUrl}}"], "path": ["api", "notifications"] }
+          }
+        },
+        {
+          "name": "Get Audit Logs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{superAdminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/audit-logs", "host": ["{{baseUrl}}"], "path": ["api", "audit-logs"] }
+          }
+        }
+      ]
+    }
+  ]
+}
