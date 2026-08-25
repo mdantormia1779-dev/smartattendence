@@ -106,15 +106,18 @@ export default function AttendancePage() {
     }, [selectedDate]);
 
     useEffect(() => {
-        if (!loading) {
-            const ctx = gsap.context(() => {
-                gsap.fromTo(
-                    ".animate-row",
-                    { opacity: 0, y: 15 },
-                    { opacity: 1, y: 0, duration: 0.4, stagger: 0.05, ease: "power2.out" }
-                );
-            }, containerRef);
-            return () => ctx.revert();
+        if (!loading && containerRef.current) {
+            const rows = containerRef.current.querySelectorAll(".animate-row");
+            if (rows.length > 0) {
+                const ctx = gsap.context(() => {
+                    gsap.fromTo(
+                        rows,
+                        { opacity: 0, y: 15 },
+                        { opacity: 1, y: 0, duration: 0.4, stagger: 0.05, ease: "power2.out" }
+                    );
+                }, containerRef);
+                return () => ctx.revert();
+            }
         }
     }, [attendanceList, selectedBranch, selectedStatus, searchQuery, loading]);
 

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
-import { X, Building, MapPin, Phone, Save, ToggleLeft } from "lucide-react";
+import { X, Building, MapPin, Phone, Save, ToggleLeft, Sparkles, Hash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -20,6 +20,38 @@ interface Branch {
     longitude: string;
     status: "Active" | "Inactive";
 }
+
+// Helper to auto-generate meaningful branch code
+export const generateBranchCode = (name: string, existingList?: Branch[]): string => {
+    const count = (existingList?.length || 0) + 1;
+    const clean = (name || "").trim();
+
+    if (!clean) {
+        return `BR-${String(count).padStart(3, "0")}`;
+    }
+
+    // Filter filler words
+    const filteredWords = clean
+        .replace(/\b(branch|office|hub|center|centre|point|location|tower|floor)\b/gi, "")
+        .trim();
+
+    const words = (filteredWords || clean).split(/[\s\-_]+/).filter(Boolean);
+
+    let prefix = "";
+    if (words.length >= 2) {
+        prefix = words.map(w => w[0]).join("").toUpperCase().slice(0, 4);
+    } else if (words.length === 1) {
+        prefix = words[0].slice(0, 4).toUpperCase();
+    } else {
+        prefix = "LOC";
+    }
+
+    prefix = prefix.replace(/[^A-Z0-9]/g, "");
+    if (!prefix) prefix = "BRN";
+
+    const numPart = String(count).padStart(2, "0");
+    return `BR-${prefix}${numPart}`;
+};
 
 // Zod Validation Schema
 const branchSchema = z.object({
@@ -40,17 +72,21 @@ interface BranchModalProps {
     isOpen: boolean;
     onClose: () => void;
     branchToEdit?: Branch | null;
+    existingBranches?: Branch[];
     onSave: (branchData: BranchFormData) => void;
 }
 
-export default function BranchModal({ isOpen, onClose, branchToEdit, onSave }: BranchModalProps) {
+export default function BranchModal({ isOpen, onClose, branchToEdit, existingBranches = [], onSave }: BranchModalProps) {
     const modalRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
+    const [isManualCode, setIsManualCode] = useState(false);
 
     const {
         register,
         handleSubmit,
         reset,
+        setValue,
+        watch,
         formState: { errors },
     } = useForm<BranchFormData>({
         resolver: zodResolver(branchSchema),
@@ -67,8 +103,11 @@ export default function BranchModal({ isOpen, onClose, branchToEdit, onSave }: B
         },
     });
 
+    const watchedName = watch("name");
+
     useEffect(() => {
         if (branchToEdit) {
+            setIsManualCode(true);
             reset({
                 name: branchToEdit.name,
                 code: branchToEdit.code,
@@ -81,9 +120,11 @@ export default function BranchModal({ isOpen, onClose, branchToEdit, onSave }: B
                 status: branchToEdit.status,
             });
         } else {
+            setIsManualCode(false);
+            const initialCode = generateBranchCode("", existingBranches);
             reset({
                 name: "",
-                code: "",
+                code: initialCode,
                 shortName: "",
                 address: "",
                 phone: "",
@@ -93,7 +134,7 @@ export default function BranchModal({ isOpen, onClose, branchToEdit, onSave }: B
                 status: "Active",
             });
         }
-    }, [branchToEdit, isOpen, reset]);
+    }, [branchToEdit, isOpen, existingBranches, reset]);
 
     useEffect(() => {
         if (isOpen) {
@@ -107,8 +148,29 @@ export default function BranchModal({ isOpen, onClose, branchToEdit, onSave }: B
 
     if (!isOpen) return null;
 
+    // Handle Branch Name input change to auto-update branch code
+    const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setValue("name", val, { shouldValidate: true });
+        
+        if (!isManualCode && !branchToEdit) {
+            const autoCode = generateBranchCode(val, existingBranches);
+            setValue("code", autoCode, { shouldValidate: true });
+        }
+    };
+
+    // Manual re-generate button
+    const handleRegenerateCode = () => {
+        const autoCode = generateBranchCode(watchedName || "", existingBranches);
+        setValue("code", autoCode, { shouldValidate: true });
+        setIsManualCode(false);
+    };
+
     const onSubmit = (data: BranchFormData) => {
-        onSave(data);
+        onSave({
+            ...data,
+            code: data.code.trim().toUpperCase(),
+        });
         onClose();
     };
 
@@ -123,7 +185,7 @@ export default function BranchModal({ isOpen, onClose, branchToEdit, onSave }: B
                             {branchToEdit ? "Edit Branch" : "Create New Branch"}
                         </h2>
                         <p className="text-xs text-gray-500 mt-0.5">
-                            {branchToEdit ? "Update branch location and details" : "Add a new office branch and configure settings"}
+                            {branchToEdit ? "Update branch location and details" : "Add a new office branch with auto-generated code and geofencing"}
                         </p>
                     </div>
                     <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors cursor-pointer">
@@ -141,6 +203,7 @@ export default function BranchModal({ isOpen, onClose, branchToEdit, onSave }: B
                                 <input 
                                     type="text" 
                                     {...register("name")}
+                                    onChange={handleNameChange}
                                     placeholder="e.g. Uttara Branch" 
                                     className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#00B050]"
                                 />
@@ -149,13 +212,31 @@ export default function BranchModal({ isOpen, onClose, branchToEdit, onSave }: B
                         </div>
 
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-gray-700">Branch Code *</label>
-                            <input 
-                                type="text" 
-                                {...register("code")}
-                                placeholder="e.g. BR-005" 
-                                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#00B050]"
-                            />
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-gray-700">Branch Code *</label>
+                                <button
+                                    type="button"
+                                    onClick={handleRegenerateCode}
+                                    className="text-[10px] text-[#00B050] hover:text-[#009b46] font-bold flex items-center gap-1 cursor-pointer transition-colors bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60"
+                                    title="Auto-generate branch code"
+                                >
+                                    <Sparkles className="w-3 h-3 text-[#00B050]" />
+                                    Auto Generate
+                                </button>
+                            </div>
+                            <div className="relative">
+                                <Hash className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
+                                <input 
+                                    type="text" 
+                                    {...register("code")}
+                                    onChange={(e) => {
+                                        setValue("code", e.target.value.toUpperCase(), { shouldValidate: true });
+                                        setIsManualCode(true);
+                                    }}
+                                    placeholder="e.g. BR-UTTA01" 
+                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs font-mono font-bold text-gray-900 focus:outline-none focus:border-[#00B050] uppercase"
+                                />
+                            </div>
                             {errors.code && <span className="text-[10px] font-medium text-rose-500">{errors.code.message}</span>}
                         </div>
                     </div>

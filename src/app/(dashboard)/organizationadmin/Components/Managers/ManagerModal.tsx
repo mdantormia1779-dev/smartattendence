@@ -15,6 +15,10 @@ import {
     Briefcase,
     Lock,
     Upload,
+    Sparkles,
+    Eye,
+    EyeOff,
+    GitBranch,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -23,7 +27,7 @@ import { Manager, ManagerFormData } from "@/types/manager";
 
 const managerSchema = z.object({
     managerId: z.string().min(1, "Manager ID is required"),
-    name: z.string().min(1, "Name is required"),
+    name: z.string().min(1, "Full Name is required"),
     profilePic: z.string().optional().or(z.literal("")),
     email: z.string().email("Invalid email address"),
     phone: z.string().min(1, "Phone number is required"),
@@ -38,28 +42,66 @@ const managerSchema = z.object({
         .or(z.literal("")),
 });
 
+interface BranchOption {
+    id: string;
+    name: string;
+    code?: string;
+}
+
+interface DepartmentOption {
+    id: string;
+    name: string;
+    code?: string;
+}
+
 interface ManagerModalProps {
     isOpen: boolean;
     onClose: () => void;
     managerToEdit?: Manager | null;
+    existingManagers?: Manager[];
+    branches?: BranchOption[];
+    departments?: DepartmentOption[];
     onSave: (data: ManagerFormData) => void;
 }
+
+export const generateManagerId = (name: string, existingList?: Manager[]): string => {
+    const count = (existingList?.length || 0) + 1;
+    const clean = (name || "").trim();
+    if (!clean) return `MGR-${String(count).padStart(3, "0")}`;
+
+    const parts = clean.split(/\s+/).filter(Boolean);
+    let prefix = "";
+    if (parts.length >= 2) {
+        prefix = (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    } else {
+        prefix = clean.slice(0, 3).toUpperCase();
+    }
+    return `MGR-${prefix}${String(count).padStart(2, "0")}`;
+};
 
 export default function ManagerModal({
     isOpen,
     onClose,
     managerToEdit,
+    existingManagers = [],
+    branches = [],
+    departments = [],
     onSave,
 }: ManagerModalProps) {
     const modalRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const [imagePreview, setImagePreview] = useState<string>("");
+    const [showPassword, setShowPassword] = useState(false);
+
+    const defaultBranch = branches[0]?.name || "Main Head Office";
+    const defaultDepartment = departments[0]?.name || "General Operations";
 
     const {
         register,
         handleSubmit,
         reset,
         setValue,
+        watch,
         formState: { errors },
     } = useForm<ManagerFormData>({
         resolver: zodResolver(managerSchema),
@@ -69,47 +111,49 @@ export default function ManagerModal({
             profilePic: "",
             email: "",
             phone: "",
-            designation: "",
-            assignedBranch: "Head Office - Dhaka",
-            department: "Information Technology",
+            designation: "Lead Manager",
+            assignedBranch: defaultBranch,
+            department: defaultDepartment,
             status: "Active",
             password: "",
         },
     });
 
+    const watchedName = watch("name");
+
     useEffect(() => {
         if (managerToEdit) {
             reset({
-                managerId: managerToEdit.managerId,
+                managerId: managerToEdit.managerId || `MGR-${managerToEdit.id.slice(-4).toUpperCase()}`,
                 name: managerToEdit.name,
                 profilePic: managerToEdit.profilePic || "",
                 email: managerToEdit.email,
-                phone: managerToEdit.phone,
-                designation: managerToEdit.designation,
-                assignedBranch: managerToEdit.assignedBranch,
-                department: managerToEdit.department,
-                status: managerToEdit.status,
+                phone: managerToEdit.phone || "+880 1800-000000",
+                designation: managerToEdit.designation || "Lead Manager",
+                assignedBranch: managerToEdit.assignedBranch || defaultBranch,
+                department: managerToEdit.department || defaultDepartment,
+                status: managerToEdit.status || "Active",
                 password: "",
             });
             setImagePreview(managerToEdit.profilePic || "");
         } else {
+            const autoId = generateManagerId("", existingManagers);
             reset({
-                managerId: "MGR-" + Math.floor(1000 + Math.random() * 9000),
+                managerId: autoId,
                 name: "",
                 profilePic: "",
                 email: "",
-                phone: "",
-                designation: "",
-                assignedBranch: "Head Office - Dhaka",
-                department: "Information Technology",
+                phone: "+880 1800-000000",
+                designation: "Department Manager",
+                assignedBranch: defaultBranch,
+                department: defaultDepartment,
                 status: "Active",
-                password: "",
+                password: "manager123",
             });
             setImagePreview("");
         }
-    }, [managerToEdit, isOpen, reset]);
+    }, [managerToEdit, isOpen, branches, departments, existingManagers, reset]);
 
-    // Handle Image File Upload & Convert to Base64
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -123,19 +167,25 @@ export default function ManagerModal({
         }
     };
 
+    const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setValue("name", val, { shouldValidate: true });
+        if (!managerToEdit) {
+            const autoId = generateManagerId(val, existingManagers);
+            setValue("managerId", autoId, { shouldValidate: true });
+        }
+    };
+
+    const handleRegenerateId = () => {
+        const autoId = generateManagerId(watchedName || "", existingManagers);
+        setValue("managerId", autoId, { shouldValidate: true });
+    };
+
     useEffect(() => {
         if (isOpen) {
             document.body.style.overflow = "hidden";
-            gsap.fromTo(
-                modalRef.current,
-                { opacity: 0 },
-                { opacity: 1, duration: 0.3 }
-            );
-            gsap.fromTo(
-                contentRef.current,
-                { scale: 0.9, opacity: 0, y: 20 },
-                { scale: 1, opacity: 1, y: 0, duration: 0.4, ease: "back.out(1.2)" }
-            );
+            gsap.fromTo(modalRef.current, { opacity: 0 }, { opacity: 1, duration: 0.3 });
+            gsap.fromTo(contentRef.current, { scale: 0.92, opacity: 0, y: 20 }, { scale: 1, opacity: 1, y: 0, duration: 0.35, ease: "back.out(1.2)" });
         } else {
             document.body.style.overflow = "auto";
         }
@@ -149,247 +199,243 @@ export default function ManagerModal({
     };
 
     return (
-        <div
-            ref={modalRef}
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
-        >
-            <div
-                ref={contentRef}
-                className="bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col max-h-[90vh]"
-            >
+        <div ref={modalRef} className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div ref={contentRef} className="bg-white rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col max-h-[90vh]">
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-gray-100">
-                    <div>
-                        <h2 className="text-lg font-bold text-gray-900">
-                            {managerToEdit ? "Edit Manager" : "Add New Manager"}
-                        </h2>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                            {managerToEdit
-                                ? "Update manager details"
-                                : "Register a new manager in the system"}
-                        </p>
+                <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gray-50/50">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-[#00B050]/10 text-[#00B050] flex items-center justify-center font-bold">
+                            <Briefcase className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h2 className="text-base font-bold text-gray-900">
+                                {managerToEdit ? "Edit Manager Profile" : "Assign New Manager"}
+                            </h2>
+                            <p className="text-xs text-gray-400">
+                                {managerToEdit
+                                    ? "Update leadership roles and assignments"
+                                    : "Register a managerial supervisor for your organization"}
+                            </p>
+                        </div>
                     </div>
                     <button
                         onClick={onClose}
-                        className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors cursor-pointer"
+                        className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
                     >
                         <X className="w-4 h-4" />
                     </button>
                 </div>
 
                 {/* Form */}
-                <form
-                    onSubmit={handleSubmit(onSubmit)}
-                    className="p-6 space-y-4 overflow-y-auto flex-1"
-                >
+                <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
                     {/* Profile Picture Upload Section */}
-                    <div className="flex flex-col items-center justify-center space-y-2 pb-2">
-                        <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-[#00B050]/30 shadow-inner bg-gray-50 flex items-center justify-center">
+                    <div className="flex items-center gap-4 pb-2 border-b border-gray-100">
+                        <div className="relative w-16 h-16 rounded-2xl overflow-hidden border-2 border-emerald-500/20 shadow-2xs bg-emerald-50 text-[#00B050] font-bold flex items-center justify-center text-base shrink-0">
                             {imagePreview ? (
                                 <Image
                                     src={imagePreview}
                                     alt="Profile Preview"
                                     fill
-                                    sizes="80px"
+                                    sizes="64px"
                                     className="object-cover"
                                 />
                             ) : (
-                                <User className="w-8 h-8 text-gray-400" />
+                                <span>{watchedName ? watchedName.slice(0, 2).toUpperCase() : "MGR"}</span>
                             )}
                         </div>
-                        <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors cursor-pointer">
-                            <Upload className="w-3.5 h-3.5" />
-                            Upload Photo
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleImageChange}
-                                className="hidden"
-                            />
-                        </label>
+                        <div>
+                            <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors cursor-pointer">
+                                <Upload className="w-3.5 h-3.5" />
+                                Upload Photo
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleImageChange}
+                                    className="hidden"
+                                />
+                            </label>
+                            <p className="text-[10px] text-gray-400 mt-1">PNG, JPG or WEBP (Max 2MB)</p>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Full Name */}
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-gray-700">
-                                Manager ID *
-                            </label>
-                            <div className="relative">
-                                <Hash className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
-                                <input
-                                    type="text"
-                                    {...register("managerId")}
-                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#00B050]"
-                                />
-                            </div>
-                            {errors.managerId && (
-                                <span className="text-[10px] font-medium text-rose-500">
-                                    {errors.managerId.message}
-                                </span>
-                            )}
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-gray-700">
-                                Full Name *
-                            </label>
+                            <label className="text-xs font-bold text-gray-700">Full Name *</label>
                             <div className="relative">
                                 <User className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
                                 <input
                                     type="text"
                                     {...register("name")}
+                                    onChange={handleNameChange}
                                     placeholder="e.g. Tanvir Ahmed"
-                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#00B050]"
+                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050]"
                                 />
                             </div>
-                            {errors.name && (
-                                <span className="text-[10px] font-medium text-rose-500">
-                                    {errors.name.message}
-                                </span>
-                            )}
+                            {errors.name && <span className="text-[10px] font-medium text-rose-500">{errors.name.message}</span>}
+                        </div>
+
+                        {/* Manager ID */}
+                        <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-gray-700">Manager ID *</label>
+                                <button
+                                    type="button"
+                                    onClick={handleRegenerateId}
+                                    className="text-[10px] text-[#00B050] hover:text-[#009b46] font-bold flex items-center gap-1 cursor-pointer transition-colors bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60"
+                                >
+                                    <Sparkles className="w-3 h-3" /> Auto
+                                </button>
+                            </div>
+                            <div className="relative">
+                                <Hash className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    {...register("managerId")}
+                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs font-mono font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050] uppercase"
+                                />
+                            </div>
+                            {errors.managerId && <span className="text-[10px] font-medium text-rose-500">{errors.managerId.message}</span>}
                         </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Email */}
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-gray-700">
-                                Email Address *
-                            </label>
+                            <label className="text-xs font-bold text-gray-700">Email Address (Login Username) *</label>
                             <div className="relative">
                                 <Mail className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
                                 <input
                                     type="email"
                                     {...register("email")}
-                                    placeholder="manager@vertex.com"
-                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#00B050]"
+                                    placeholder="manager@vertextech.io"
+                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050]"
                                 />
                             </div>
-                            {errors.email && (
-                                <span className="text-[10px] font-medium text-rose-500">
-                                    {errors.email.message}
-                                </span>
-                            )}
+                            {errors.email && <span className="text-[10px] font-medium text-rose-500">{errors.email.message}</span>}
                         </div>
 
+                        {/* Phone */}
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-gray-700">
-                                Phone Number *
-                            </label>
+                            <label className="text-xs font-bold text-gray-700">Phone Number *</label>
                             <div className="relative">
                                 <Phone className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
                                 <input
                                     type="text"
                                     {...register("phone")}
                                     placeholder="+880 1800-000000"
-                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#00B050]"
+                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050]"
                                 />
                             </div>
-                            {errors.phone && (
-                                <span className="text-[10px] font-medium text-rose-500">
-                                    {errors.phone.message}
-                                </span>
-                            )}
+                            {errors.phone && <span className="text-[10px] font-medium text-rose-500">{errors.phone.message}</span>}
                         </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Designation */}
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-gray-700">
-                                Designation *
-                            </label>
+                            <label className="text-xs font-bold text-gray-700">Designation / Role Title *</label>
                             <div className="relative">
                                 <Briefcase className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
                                 <input
                                     type="text"
                                     {...register("designation")}
-                                    placeholder="e.g. Senior Tech Lead"
-                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#00B050]"
+                                    placeholder="e.g. Engineering Lead / Area Head"
+                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050]"
                                 />
                             </div>
-                            {errors.designation && (
-                                <span className="text-[10px] font-medium text-rose-500">
-                                    {errors.designation.message}
-                                </span>
-                            )}
+                            {errors.designation && <span className="text-[10px] font-medium text-rose-500">{errors.designation.message}</span>}
                         </div>
 
+                        {/* Password */}
                         <div className="space-y-1.5">
                             <label className="text-xs font-bold text-gray-700">
-                                Password *
+                                {managerToEdit ? "Change Password (Optional)" : "Login Password *"}
                             </label>
                             <div className="relative">
                                 <Lock className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
                                 <input
-                                    type="password"
+                                    type={showPassword ? "text" : "password"}
                                     {...register("password")}
-                                    placeholder="••••••••"
-                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#00B050]"
+                                    placeholder={managerToEdit ? "Leave blank to keep current" : "••••••••"}
+                                    className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050]"
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                                >
+                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
                             </div>
-                            {errors.password && (
-                                <span className="text-[10px] font-medium text-rose-500">
-                                    {errors.password.message}
-                                </span>
-                            )}
+                            {errors.password && <span className="text-[10px] font-medium text-rose-500">{errors.password.message}</span>}
                         </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Assigned Branch */}
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-gray-700">
-                                Assigned Branch *
-                            </label>
+                            <label className="text-xs font-bold text-gray-700">Assigned Branch (Office Location) *</label>
                             <div className="relative">
                                 <Building2 className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
                                 <select
                                     {...register("assignedBranch")}
-                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#00B050] bg-white cursor-pointer"
+                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050] bg-white cursor-pointer"
                                 >
-                                    <option value="Head Office - Dhaka">
-                                        Head Office - Dhaka
-                                    </option>
-                                    <option value="Gulshan Branch">Gulshan Branch</option>
-                                    <option value="Uttara Branch">Uttara Branch</option>
-                                    <option value="Chattogram Branch">Chattogram Branch</option>
+                                    {branches.length > 0 ? (
+                                        branches.map((b) => (
+                                            <option key={b.id} value={b.name}>
+                                                {b.name} ({b.code || "Branch"})
+                                            </option>
+                                        ))
+                                    ) : (
+                                        <option value="Main Head Office">Main Head Office</option>
+                                    )}
                                 </select>
                             </div>
                         </div>
 
+                        {/* Assigned Department */}
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-gray-700">
-                                Department *
-                            </label>
+                            <label className="text-xs font-bold text-gray-700">Department Unit *</label>
                             <div className="relative">
                                 <Layers className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
                                 <select
                                     {...register("department")}
-                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#00B050] bg-white cursor-pointer"
+                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050] bg-white cursor-pointer"
                                 >
-                                    <option value="Information Technology">
-                                        Information Technology
-                                    </option>
-                                    <option value="Human Resources">Human Resources</option>
-                                    <option value="Accounts & Finance">Accounts & Finance</option>
-                                    <option value="Marketing">Marketing</option>
-                                    <option value="Sales">Sales</option>
-                                    <option value="Operations">Operations</option>
-                                    <option value="Customer Support">Customer Support</option>
+                                    {departments.length > 0 ? (
+                                        departments.map((d) => (
+                                            <option key={d.id} value={d.name}>
+                                                {d.name} ({d.code || "DEPT"})
+                                            </option>
+                                        ))
+                                    ) : (
+                                        <>
+                                            <option value="Information Technology">Information Technology</option>
+                                            <option value="Human Resources">Human Resources</option>
+                                            <option value="Accounts & Finance">Accounts & Finance</option>
+                                            <option value="Operations">Operations</option>
+                                        </>
+                                    )}
                                 </select>
                             </div>
                         </div>
                     </div>
 
+                    {/* Status */}
                     <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-gray-700">Status *</label>
+                        <label className="text-xs font-bold text-gray-700">Account Status *</label>
                         <select
                             {...register("status")}
-                            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#00B050] bg-white cursor-pointer"
+                            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050] bg-white cursor-pointer"
                         >
-                            <option value="Active">Active</option>
-                            <option value="Inactive">Inactive</option>
+                            <option value="Active">Active Leadership</option>
+                            <option value="Inactive">Inactive / On Leave</option>
                         </select>
                     </div>
 
+                    {/* Action Buttons */}
                     <div className="pt-4 flex items-center justify-end gap-3 border-t border-gray-100">
                         <button
                             type="button"
@@ -400,10 +446,10 @@ export default function ManagerModal({
                         </button>
                         <button
                             type="submit"
-                            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-semibold bg-[#00B050] text-white shadow-md shadow-[#00B050]/20 hover:bg-[#009b46] transition-colors cursor-pointer"
+                            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold bg-[#00B050] text-white shadow-md shadow-[#00B050]/20 hover:bg-[#009b46] transition-colors cursor-pointer active:scale-95"
                         >
                             <Save className="w-4 h-4" />
-                            Save Manager
+                            {managerToEdit ? "Save Manager" : "Assign Manager"}
                         </button>
                     </div>
                 </form>

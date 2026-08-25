@@ -1,6 +1,7 @@
 import { ConflictError, NotFoundError, UnauthorizedError, ValidationError } from "../errors";
 import { logAuditEvent } from "@/lib/audit-logger";
 import { OrganizationService } from "./organization.service";
+import { prisma } from "@/lib/prisma";
 
 export interface UserSessionData {
   id: string;
@@ -55,7 +56,50 @@ let usersStore: any[] = [
 
 export class AuthService {
   static async login(email: string, password: string, ip?: string, userAgent?: string) {
-    const user = usersStore.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    let user = usersStore.find((u) => u.email.toLowerCase() === email.toLowerCase());
+
+    if (!user) {
+      try {
+        const orgAdmin = await prisma.org_admins.findUnique({
+          where: { email: email.toLowerCase() },
+          include: { organizations: true },
+        });
+
+        if (orgAdmin) {
+          user = {
+            id: orgAdmin.id,
+            email: orgAdmin.email,
+            passwordHash: orgAdmin.password,
+            fullName: orgAdmin.name,
+            role: "ORG_ADMIN",
+            organizationId: orgAdmin.organizationId,
+            isActive: orgAdmin.organizations?.status !== "SUSPENDED",
+          };
+          usersStore.push(user);
+        } else {
+          const mgr = await prisma.managers.findFirst({
+            where: { email: email.toLowerCase() },
+            include: { organizations: true },
+          });
+
+          if (mgr) {
+            user = {
+              id: mgr.id,
+              email: mgr.email,
+              passwordHash: mgr.password,
+              fullName: mgr.name,
+              role: "MANAGER",
+              organizationId: mgr.organizationId,
+              isActive: mgr.organizations?.status !== "SUSPENDED",
+            };
+            usersStore.push(user);
+          }
+        }
+      } catch (e) {
+        // Fallback gracefully
+      }
+    }
+
     if (!user || user.passwordHash !== password) {
       throw new UnauthorizedError("Invalid email or password");
     }
@@ -194,5 +238,92 @@ export class AuthService {
     const user = usersStore.find((u) => u.id === userId);
     if (!user) throw new NotFoundError("User");
     return user;
+  }
+
+  /**
+   * Super Admin override to change organization admin password
+   */
+  static async updateOrgAdminPassword(
+    organizationId: string,
+    newPassword: string,
+    adminEmail?: string,
+    adminName?: string
+  ) {
+    if (!newPassword || newPassword.length < 6) {
+      throw new ValidationError("New password must be at least 6 characters");
+    }
+
+    // 1. Update in-memory user store
+    let user = usersStore.find(
+      (u) =>
+        (u.organizationId === organizationId && u.role === "ORG_ADMIN") ||
+        (adminEmail && u.email.toLowerCase() === adminEmail.toLowerCase())
+    );
+
+    if (user) {
+      user.passwordHash = newPassword;
+      if (adminEmail) user.email = adminEmail;
+      if (adminName) user.fullName = adminName;
+    } else {
+      user = {
+        id: `user-org-${Date.now()}`,
+        email: adminEmail || `admin@${organizationId}.com`,
+        passwordHash: newPassword,
+        fullName: adminName || "Organization Admin",
+        role: "ORG_ADMIN",
+        organizationId: organizationId,
+        isActive: true,
+      };
+      usersStore.push(user);
+    }
+
+    // 2. Persist in Prisma database
+    try {
+      const existingAdmin = await prisma.org_admins.findFirst({
+        where: { organizationId },
+      });
+
+      if (existingAdmin) {
+        await prisma.org_admins.update({
+          where: { id: existingAdmin.id },
+          data: {
+            password: newPassword,
+            ...(adminEmail ? { email: adminEmail } : {}),
+            ...(adminName ? { name: adminName } : {}),
+            updatedAt: new Date(),
+          },
+        });
+      } else {
+        const org = await prisma.organizations.findUnique({
+          where: { id: organizationId },
+        });
+
+        await prisma.org_admins.create({
+          data: {
+            id: `admin-${Date.now()}`,
+            name: adminName || (org ? `${org.name} Admin` : "Organization Admin"),
+            email: adminEmail || (org ? org.email : `admin@${organizationId}.com`),
+            password: newPassword,
+            organizationId: organizationId,
+            updatedAt: new Date(),
+          },
+        });
+      }
+    } catch (e) {
+      console.warn("[AuthService] DB update for org admin password bypassed/fallback:", e);
+    }
+
+    // 3. Record Audit Log
+    logAuditEvent({
+      organizationId: organizationId,
+      userId: "SUPER_ADMIN",
+      userName: "Super Admin",
+      userRole: "SUPER_ADMIN",
+      action: "ADMIN_PASSWORD_RESET",
+      module: "Auth",
+      details: `Super Admin reset password for organization '${organizationId}' (Email: ${adminEmail || user.email})`,
+    });
+
+    return { success: true, message: "Organization password updated successfully" };
   }
 }

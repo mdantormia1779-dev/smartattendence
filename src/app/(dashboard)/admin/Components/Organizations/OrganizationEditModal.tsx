@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Building2, Save, Globe, Clock, MapPin, Layers, Loader2 } from 'lucide-react';
+import { X, Building2, Save, Globe, Clock, MapPin, Layers, Loader2, KeyRound, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { Organization } from './OrganizationTable';
 
 interface OrganizationEditModalProps {
@@ -34,6 +34,12 @@ export const OrganizationEditModal: React.FC<OrganizationEditModalProps> = ({
     const [officeStart, setOfficeStart] = useState('09:00 AM');
     const [officeEnd, setOfficeEnd] = useState('05:00 PM');
 
+    // Admin Password Override States
+    const [adminPassword, setAdminPassword] = useState('');
+    const [confirmAdminPassword, setConfirmAdminPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +58,12 @@ export const OrganizationEditModal: React.FC<OrganizationEditModalProps> = ({
             setTimeZone(organization.timeZone || 'Asia/Dhaka (GMT+6)');
             setWorkingDays(organization.workingDays || 'Sun - Thu');
             setPlan(organization.plan ? organization.plan.toUpperCase() : 'BUSINESS');
+
+            // Reset password fields whenever organization opens
+            setAdminPassword('');
+            setConfirmAdminPassword('');
+            setShowPassword(false);
+            setShowConfirmPassword(false);
 
             if (organization.officeHours && organization.officeHours.includes(' - ')) {
                 const parts = organization.officeHours.split(' - ');
@@ -80,6 +92,18 @@ export const OrganizationEditModal: React.FC<OrganizationEditModalProps> = ({
             return;
         }
 
+        // Validate password override if entered
+        if (adminPassword.trim()) {
+            if (adminPassword.trim().length < 6) {
+                setError('New Admin Password must be at least 6 characters.');
+                return;
+            }
+            if (adminPassword.trim() !== confirmAdminPassword.trim()) {
+                setError('Password confirmation does not match the new password.');
+                return;
+            }
+        }
+
         try {
             setIsSubmitting(true);
             const updatedOrg: Organization = {
@@ -98,6 +122,7 @@ export const OrganizationEditModal: React.FC<OrganizationEditModalProps> = ({
                 workingDays,
                 plan: plan.toUpperCase(),
                 officeHours: `${officeStart.trim()} - ${officeEnd.trim()}`,
+                adminPassword: adminPassword.trim() || undefined,
             };
 
             await onSave(updatedOrg);
@@ -361,6 +386,71 @@ export const OrganizationEditModal: React.FC<OrganizationEditModalProps> = ({
                                         placeholder="05:00 PM"
                                         className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050]"
                                     />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Section 3: Admin Account Security & Password (Super Admin Override) */}
+                        <div className="space-y-3 pt-3 border-t border-gray-100">
+                            <div className="flex items-center justify-between">
+                                <h4 className="font-bold text-gray-900 text-xs uppercase tracking-wider flex items-center gap-1.5 text-[#00B050]">
+                                    <KeyRound className="w-4 h-4 text-amber-500" /> 3. Admin Account Security & Password
+                                </h4>
+                                <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200/60 flex items-center gap-1">
+                                    <ShieldCheck className="w-3 h-3 text-amber-600" /> Super Admin Override
+                                </span>
+                            </div>
+                            <p className="text-[11px] text-gray-500 leading-relaxed">
+                                Super Admin can set or reset the login password for this organization's administrator account. 
+                                <span className="text-gray-700 font-medium"> Leave these fields blank if you do not wish to change the current password.</span>
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 bg-amber-50/40 p-4 rounded-2xl border border-amber-100">
+                                <div>
+                                    <label className="block font-semibold text-gray-700 mb-1">
+                                        New Admin Password (Min 6 characters)
+                                    </label>
+                                    <div className="relative">
+                                        <input 
+                                            type={showPassword ? "text" : "password"} 
+                                            value={adminPassword} 
+                                            onChange={(e) => setAdminPassword(e.target.value)}
+                                            placeholder="Enter new password (optional)"
+                                            className="w-full px-3 py-2.5 pr-10 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050] bg-white text-xs"
+                                            autoComplete="new-password"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer p-1"
+                                            tabIndex={-1}
+                                        >
+                                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block font-semibold text-gray-700 mb-1">
+                                        Confirm New Password
+                                    </label>
+                                    <div className="relative">
+                                        <input 
+                                            type={showConfirmPassword ? "text" : "password"} 
+                                            value={confirmAdminPassword} 
+                                            onChange={(e) => setConfirmAdminPassword(e.target.value)}
+                                            placeholder="Re-enter new password"
+                                            className="w-full px-3 py-2.5 pr-10 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050] bg-white text-xs"
+                                            autoComplete="new-password"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer p-1"
+                                            tabIndex={-1}
+                                        >
+                                            {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>

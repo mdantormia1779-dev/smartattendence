@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MoreVertical, Eye, Edit3, ShieldAlert, Trash2, X, Globe, Mail, Phone, MapPin, Clock } from 'lucide-react';
+import { MoreVertical, Eye, Edit3, ShieldAlert, Trash2, X, Globe, Mail, Phone, MapPin, Clock, KeyRound } from 'lucide-react';
 
 export interface Organization {
     id: string;
@@ -26,6 +26,8 @@ export interface Organization {
     status: string;
     initials: string;
     bg: string;
+    adminPassword?: string;
+    adminEmail?: string;
 }
 
 interface OrganizationTableProps {
@@ -188,6 +190,13 @@ export const OrganizationTable: React.FC<OrganizationTableProps> = ({
                                                         >
                                                             <Edit3 className="w-4 h-4 text-emerald-500" />
                                                             Edit Profile
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => { setOpenMenuId(null); onEdit?.(org); }}
+                                                            className="w-full px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-amber-50/70 hover:text-amber-700 flex items-center gap-2.5 transition-colors cursor-pointer"
+                                                        >
+                                                            <KeyRound className="w-4 h-4 text-amber-500" />
+                                                            Change Password
                                                         </button>
                                                         <button 
                                                             onClick={() => { setOpenMenuId(null); onToggleStatus?.(org); }}

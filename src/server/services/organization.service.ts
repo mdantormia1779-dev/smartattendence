@@ -356,7 +356,12 @@ export class OrganizationService {
    */
   static async updateSettings(
     id: string,
-    settings: Partial<OrganizationData> & { status?: string }
+    settings: Partial<OrganizationData> & {
+      status?: string;
+      adminPassword?: string;
+      adminEmail?: string;
+      adminName?: string;
+    }
   ): Promise<OrganizationData> {
     const existing = await prisma.organizations.findUnique({
       where: { id },
@@ -371,6 +376,17 @@ export class OrganizationService {
 
     if (!existing) {
       throw new NotFoundError("Organization");
+    }
+
+    // If adminPassword is provided by Super Admin, update the admin user credentials
+    if (settings.adminPassword && settings.adminPassword.trim().length >= 6) {
+      const { AuthService } = await import("./auth.service");
+      await AuthService.updateOrgAdminPassword(
+        id,
+        settings.adminPassword.trim(),
+        settings.adminEmail || settings.email || existing.email,
+        settings.adminName || settings.name || existing.name
+      );
     }
 
     const currentPlanTier = existing.subscriptions?.subscription_plans?.type;

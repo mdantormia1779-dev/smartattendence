@@ -2,11 +2,10 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
-import { Building2, Plus, Loader2 } from "lucide-react";
+import { Building2, Plus, Loader2, MapPin, RefreshCw } from "lucide-react";
 import BranchCard from "../Components/Branches/BranchCard";
 import BranchModal from "../Components/Branches/BranchModal";
 import DeleteModal from "../Components/Branches/DeleteModal";
-import { api } from "@/lib/api-client";
 
 interface Branch {
   id: string;
@@ -48,9 +47,19 @@ export default function BranchesPage() {
   const fetchBranches = async () => {
     try {
       setLoading(true);
-      const res = await api.branches.getAll();
-      if (res.success && Array.isArray(res.data)) {
-        const mapped: Branch[] = res.data.map((b: any) => ({
+      const res = await fetch(`/api/branches?_t=${Date.now()}`, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+        },
+      });
+      const json = await res.json();
+      const data = json.data || json;
+
+      if (json.success || Array.isArray(data)) {
+        const rawList = Array.isArray(data) ? data : (data.data || []);
+        const mapped: Branch[] = rawList.map((b: any) => ({
           id: b.id,
           name: b.name,
           code: b.code || "BR-001",
@@ -58,7 +67,7 @@ export default function BranchesPage() {
           address: b.address || "Dhaka, Bangladesh",
           phone: b.phone || "+880 1712-345678",
           employees: b.totalEmployees || b.employeesCount || 0,
-          geoFence: `${b.geofenceRadius || 120}m`,
+          geoFence: `${b.geofenceRadius || b.geoFenceRadius || 120}m`,
           latitude: String(b.latitude || 23.7925),
           longitude: String(b.longitude || 90.4078),
           status: b.status === "INACTIVE" ? "Inactive" : "Active",
@@ -66,7 +75,7 @@ export default function BranchesPage() {
         setBranches(mapped);
       }
     } catch (e) {
-      console.error("Failed to load branches", e);
+      console.error("Failed to load branches:", e);
     } finally {
       setLoading(false);
     }
@@ -80,8 +89,8 @@ export default function BranchesPage() {
     if (!loading && gridRef.current && gridRef.current.children.length > 0) {
       gsap.fromTo(
         gridRef.current.children,
-        { opacity: 0, y: 30 },
-        { opacity: 1, y: 0, duration: 0.6, stagger: 0.1, ease: "power2.out" }
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.5, stagger: 0.08, ease: "power2.out" }
       );
     }
   }, [loading, branches]);
@@ -104,26 +113,38 @@ export default function BranchesPage() {
       return;
     }
 
+    const branchCode = (data.code || `BR-${String(branches.length + 1).padStart(3, "0")}`).trim().toUpperCase();
+
     try {
       if (branchToEdit) {
-        await api.branches.update(branchToEdit.id, {
-          name: data.name,
-          code: data.code,
-          address: data.address,
-          latitude: lat,
-          longitude: lng,
-          geofenceRadius: radius,
-          status: data.status.toUpperCase(),
+        await fetch(`/api/branches/${branchToEdit.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: data.name.trim(),
+            code: branchCode,
+            address: data.address.trim(),
+            phone: data.phone.trim(),
+            latitude: lat,
+            longitude: lng,
+            geofenceRadius: radius,
+            status: data.status.toUpperCase(),
+          }),
         });
       } else {
-        await api.branches.create({
-          name: data.name,
-          code: data.code,
-          address: data.address,
-          latitude: lat,
-          longitude: lng,
-          geofenceRadius: radius,
-          status: data.status.toUpperCase(),
+        await fetch("/api/branches", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: data.name.trim(),
+            code: branchCode,
+            address: data.address.trim(),
+            phone: data.phone.trim(),
+            latitude: lat,
+            longitude: lng,
+            geofenceRadius: radius,
+            status: data.status.toUpperCase(),
+          }),
         });
       }
       await fetchBranches();
@@ -137,7 +158,9 @@ export default function BranchesPage() {
   const confirmDelete = async () => {
     if (branchToDelete) {
       try {
-        await api.branches.delete(branchToDelete);
+        await fetch(`/api/branches/${branchToDelete}`, {
+          method: "DELETE",
+        });
         await fetchBranches();
       } catch (e) {
         console.error("Failed to delete branch", e);
@@ -149,32 +172,54 @@ export default function BranchesPage() {
   };
 
   return (
-    <div className="flex-1 bg-gray-50/50 p-6 space-y-6 overflow-y-auto">
+    <div className="flex-1 bg-[#FBFBFA] p-6 md:p-8 space-y-6 overflow-y-auto min-h-screen text-neutral-800">
       {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-neutral-200/80 shadow-xs">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-            <Building2 className="w-6 h-6 text-[#00B050]" />
-            Branches
+          <h1 className="text-2xl font-bold text-neutral-900 tracking-tight flex items-center gap-2">
+            <Building2 className="w-6 h-6 text-[#10b981]" />
+            Branch Locations
           </h1>
-          <p className="text-xs text-gray-500 mt-1">
-            {branches.length} active branches with geo-fenced attendance
+          <p className="text-xs text-neutral-500 mt-1">
+            {branches.length} office locations with active GPS geofenced perimeter
           </p>
         </div>
-        <button 
-          onClick={() => { setBranchToEdit(null); setIsModalOpen(true); }}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-[#00B050] text-white shadow-md shadow-[#00B050]/20 hover:bg-[#009b46] transition-colors cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          Add Branch
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={fetchBranches}
+            className="p-2.5 rounded-xl border border-neutral-200 hover:bg-neutral-50 text-neutral-600 transition-colors cursor-pointer"
+            title="Refresh branches list"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          <button 
+            onClick={() => { setBranchToEdit(null); setIsModalOpen(true); }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-[#10b981] text-white shadow-xs hover:bg-emerald-600 transition-colors cursor-pointer active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            Add Branch
+          </button>
+        </div>
       </div>
 
       {/* Branches Grid */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center p-16 text-gray-400 bg-white rounded-2xl border border-gray-100">
-          <Loader2 className="w-8 h-8 animate-spin text-[#00B050] mb-2" />
-          <span>Loading branch locations...</span>
+        <div className="flex flex-col items-center justify-center p-20 text-neutral-400 bg-white rounded-3xl border border-neutral-200/80">
+          <Loader2 className="w-8 h-8 animate-spin text-[#10b981] mb-2" />
+          <span className="text-xs">Loading branch locations...</span>
+        </div>
+      ) : branches.length === 0 ? (
+        <div className="p-20 text-center text-xs text-neutral-400 bg-white rounded-3xl border border-neutral-200/80 space-y-3">
+          <MapPin className="w-10 h-10 text-neutral-300 mx-auto mb-1" />
+          <p className="font-bold text-neutral-800 text-sm">No branch locations created yet</p>
+          <p className="text-neutral-400 max-w-sm mx-auto">Click "Add Branch" to set up your primary office location and GPS geofence radius for employee clock-ins.</p>
+          <button 
+            onClick={() => { setBranchToEdit(null); setIsModalOpen(true); }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-[#10b981] text-white shadow-xs hover:bg-emerald-600 transition-colors cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Create First Branch
+          </button>
         </div>
       ) : (
         <div ref={gridRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -194,6 +239,7 @@ export default function BranchesPage() {
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
         branchToEdit={branchToEdit} 
+        existingBranches={branches}
         onSave={handleSaveBranch} 
       />
 

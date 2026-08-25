@@ -79,6 +79,9 @@ export const UpdateOrgSettingsSchema = z.object({
   isSuspended: z.boolean().optional(),
   suspensionReason: z.string().optional().nullable(),
   status: z.string().optional(),
+  adminPassword: z.string().min(6, "Password must be at least 6 characters").optional().or(z.literal("")),
+  adminEmail: z.string().email().optional().or(z.literal("")),
+  adminName: z.string().optional().or(z.literal("")),
 });
 
 // ==========================================
@@ -97,7 +100,12 @@ export const CreateBranchSchema = z.object({
 export const CreateDepartmentSchema = z.object({
   name: z.string().min(2, "Department name is required"),
   code: z.string().optional(),
-  headOfDept: z.string().optional(),
+  branchId: z.string().optional().nullable(),
+  headOfDept: z.string().optional().nullable(),
+  headPhone: z.string().optional().nullable(),
+  headEmail: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  status: z.string().optional().nullable(),
 });
 
 // ==========================================

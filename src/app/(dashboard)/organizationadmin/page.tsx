@@ -20,17 +20,27 @@ export default function OrganizationDashboardPage() {
     const [refreshKey, setRefreshKey] = useState(0);
 
     const loadProfileAndOrg = async () => {
+        let foundName = "";
+        let foundCompany = "";
+
         // 1. Check local session storage keys
         if (typeof window !== "undefined") {
-            const rawUser = localStorage.getItem("user_info") || localStorage.getItem("user") || localStorage.getItem("currentUser");
+            const rawUser =
+                localStorage.getItem("user") ||
+                localStorage.getItem("user_info") ||
+                localStorage.getItem("userData") ||
+                localStorage.getItem("currentUser");
+
             if (rawUser) {
                 try {
                     const parsed = JSON.parse(rawUser);
                     if (parsed.name || parsed.fullName) {
-                        setAdminName(parsed.name || parsed.fullName);
+                        foundName = parsed.name || parsed.fullName;
+                        setAdminName(foundName);
                     }
                     if (parsed.companyName || parsed.organizationName || parsed.organization?.name) {
-                        setCompanyName(parsed.companyName || parsed.organizationName || parsed.organization?.name);
+                        foundCompany = parsed.companyName || parsed.organizationName || parsed.organization?.name;
+                        setCompanyName(foundCompany);
                     }
                 } catch {}
             }
@@ -44,9 +54,14 @@ export default function OrganizationDashboardPage() {
                 if (org.name) {
                     setCompanyName(org.name);
                 }
-                if (adminName === "Administrator" && org.email) {
-                    const extractedName = org.email.split("@")[0];
-                    setAdminName(extractedName.charAt(0).toUpperCase() + extractedName.slice(1));
+                // Only if name was not found in storage, use fallback
+                if (!foundName) {
+                    if (org.ownerName) {
+                        setAdminName(org.ownerName);
+                    } else if (org.email) {
+                        const extracted = org.email.split("@")[0];
+                        setAdminName(extracted.charAt(0).toUpperCase() + extracted.slice(1));
+                    }
                 }
             }
         } catch (e) {
@@ -67,6 +82,19 @@ export default function OrganizationDashboardPage() {
         });
         setCurrentDateStr(formatted);
 
+        // Listen for profile update events
+        const handleProfileUpdate = (e: any) => {
+            if (e.detail) {
+                if (e.detail.name || e.detail.fullName) setAdminName(e.detail.name || e.detail.fullName);
+                if (e.detail.companyName) setCompanyName(e.detail.companyName);
+            } else {
+                loadProfileAndOrg();
+            }
+        };
+
+        window.addEventListener("user-profile-updated", handleProfileUpdate);
+        window.addEventListener("admin-profile-updated", handleProfileUpdate);
+
         if (headerRef.current) {
             gsap.fromTo(
                 headerRef.current,
@@ -74,6 +102,11 @@ export default function OrganizationDashboardPage() {
                 { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }
             );
         }
+
+        return () => {
+            window.removeEventListener("user-profile-updated", handleProfileUpdate);
+            window.removeEventListener("admin-profile-updated", handleProfileUpdate);
+        };
     }, []);
 
     const handleRefresh = () => {

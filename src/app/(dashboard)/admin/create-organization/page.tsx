@@ -127,6 +127,7 @@ export const OrganizationsPage = () => {
                 defaultOfficeStart: start,
                 defaultOfficeEnd: end,
                 brandColor: '#00B050',
+                adminPassword: updatedOrg.adminPassword || undefined,
             });
             await fetchOrganizations();
         } catch (err) {

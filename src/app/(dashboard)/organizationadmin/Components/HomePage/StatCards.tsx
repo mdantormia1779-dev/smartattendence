@@ -2,11 +2,12 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import gsap from "gsap";
-import { Users, CalendarDays, Clock, UserX, TrendingUp, AlertCircle, Loader2 } from "lucide-react";
+import { Users, Building2, CalendarDays, Clock, UserX, TrendingUp, AlertCircle, Loader2 } from "lucide-react";
 
 export default function StatCards() {
   const [stats, setStats] = useState({
     totalEmployees: 0,
+    totalBranches: 0,
     present: 0,
     onLeave: 0,
     late: 0,
@@ -39,6 +40,7 @@ export default function StatCards() {
 
           setStats({
             totalEmployees: total,
+            totalBranches: data.totalBranches ?? 0,
             present: pres,
             onLeave: data.todayOnLeave ?? 0,
             late: data.todayLate ?? 0,
@@ -69,8 +71,8 @@ export default function StatCards() {
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {[1, 2, 3, 4, 5].map((i) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
           <div key={i} className="bg-white p-5 rounded-3xl border border-neutral-200/80 shadow-xs h-28 flex items-center justify-center">
             <Loader2 className="w-5 h-5 animate-spin text-[#10b981]" />
           </div>
@@ -80,7 +82,7 @@ export default function StatCards() {
   }
 
   return (
-    <div ref={cardRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div ref={cardRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
       {/* Total Workforce */}
       <div className="bg-white p-5 rounded-3xl border border-neutral-200/80 shadow-xs flex flex-col justify-between">
         <div>
@@ -97,6 +99,25 @@ export default function StatCards() {
         </div>
         <div className="flex items-center gap-1.5 text-[11px] text-neutral-500 font-medium mt-3 pt-2.5 border-t border-neutral-100">
           <span>Active directory count</span>
+        </div>
+      </div>
+
+      {/* Total Branches */}
+      <div className="bg-white p-5 rounded-3xl border border-neutral-200/80 shadow-xs flex flex-col justify-between">
+        <div>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Total Branches</span>
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Building2 className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <span className="text-2xl font-extrabold text-blue-600">{stats.totalBranches}</span>
+            <span className="text-xs text-neutral-400 ml-1.5 font-medium">locations</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px] text-blue-600 font-semibold mt-3 pt-2.5 border-t border-neutral-100">
+          <span>Geo-fenced hubs</span>
         </div>
       </div>
 

@@ -138,30 +138,39 @@ const EmployeePage = () => {
     if (selectedEmployee) return;
 
     const ctx = gsap.context(() => {
-      gsap.from(".anim-header", {
-        y: -20,
-        opacity: 0,
-        duration: 0.7,
-        stagger: 0.15,
-        ease: "power3.out",
-      });
+      const headers = containerRef.current?.querySelectorAll(".anim-header");
+      if (headers && headers.length > 0) {
+        gsap.from(headers, {
+          y: -20,
+          opacity: 0,
+          duration: 0.7,
+          stagger: 0.15,
+          ease: "power3.out",
+        });
+      }
 
-      gsap.from(".anim-filter", {
-        y: 15,
-        opacity: 0,
-        duration: 0.5,
-        delay: 0.3,
-        ease: "power3.out",
-      });
+      const filters = containerRef.current?.querySelectorAll(".anim-filter");
+      if (filters && filters.length > 0) {
+        gsap.from(filters, {
+          y: 15,
+          opacity: 0,
+          duration: 0.5,
+          delay: 0.3,
+          ease: "power3.out",
+        });
+      }
 
-      gsap.from(".anim-row", {
-        x: -20,
-        opacity: 0,
-        duration: 0.4,
-        stagger: 0.08,
-        delay: 0.4,
-        ease: "power2.out",
-      });
+      const rows = containerRef.current?.querySelectorAll(".anim-row");
+      if (rows && rows.length > 0) {
+        gsap.from(rows, {
+          x: -20,
+          opacity: 0,
+          duration: 0.4,
+          stagger: 0.08,
+          delay: 0.4,
+          ease: "power2.out",
+        });
+      }
     }, containerRef);
 
     return () => ctx.revert();
