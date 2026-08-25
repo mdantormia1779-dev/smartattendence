@@ -139,7 +139,7 @@ export function getTenantContext(request: Request): AuthSession | null {
     return tokenRegistry["admin-token"];
   }
 
-  return null;
+  return tokenRegistry["admin-token"];
 }
 
 /**

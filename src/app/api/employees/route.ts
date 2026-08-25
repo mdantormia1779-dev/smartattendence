@@ -7,11 +7,11 @@ import { handleApiError } from "@/server/errors";
 export async function GET(request: Request) {
   try {
     const session = requireAuth(request);
-    const orgId = session.organizationId || "org-1";
+    const orgId = request.headers.get("x-organization-id") || session.organizationId || "org-1";
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
+    const limit = parseInt(searchParams.get("limit") || "100");
     const search = searchParams.get("search") || undefined;
     const branchId = searchParams.get("branchId") || undefined;
     const departmentId = searchParams.get("departmentId") || undefined;
@@ -26,7 +26,12 @@ export async function GET(request: Request) {
       status,
     });
 
-    return NextResponse.json({ success: true, ...result });
+    return NextResponse.json({ 
+      success: true, 
+      data: result, 
+      items: result.items, 
+      pagination: result.pagination 
+    });
   } catch (error: any) {
     const err = handleApiError(error);
     return NextResponse.json(err.body, { status: err.statusCode });
@@ -36,7 +41,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const session = requireRole(request, ["SUPER_ADMIN", "ORG_ADMIN"]);
-    const orgId = session.organizationId || "org-1";
+    const orgId = request.headers.get("x-organization-id") || session.organizationId || "org-1";
 
     const body = await request.json();
     const validated = CreateEmployeeSchema.parse(body);

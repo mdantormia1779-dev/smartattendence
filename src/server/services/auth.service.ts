@@ -93,6 +93,24 @@ export class AuthService {
               isActive: mgr.organizations?.status !== "SUSPENDED",
             };
             usersStore.push(user);
+          } else {
+            const emp = await prisma.employees.findFirst({
+              where: { email: email.toLowerCase() },
+              include: { organizations: true },
+            });
+
+            if (emp) {
+              user = {
+                id: emp.id,
+                email: emp.email,
+                passwordHash: emp.password,
+                fullName: emp.fullName,
+                role: "EMPLOYEE",
+                organizationId: emp.organizationId,
+                isActive: emp.status !== "SUSPENDED" && emp.organizations?.status !== "SUSPENDED",
+              };
+              usersStore.push(user);
+            }
           }
         }
       } catch (e) {

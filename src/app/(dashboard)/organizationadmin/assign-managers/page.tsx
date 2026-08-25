@@ -74,7 +74,7 @@ export default function ManagersPage() {
           designation: m.designation || "Lead Manager",
           assignedBranch: m.assignedBranch || m.branchName || "Main Head Office",
           department: m.department || m.departmentName || "General Operations",
-          status: m.status === "INACTIVE" || m.status === "Inactive" ? "Inactive" : "Active",
+          status: (m.status === "INACTIVE" || m.status === "Inactive" ? "Inactive" : "Active") as "Active" | "Inactive",
           teamCount: m.teamCount || m._count?.employees || 0,
         }));
         setManagers(mapped);

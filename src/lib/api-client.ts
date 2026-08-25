@@ -28,11 +28,13 @@ class ApiClient {
       const storedUser = localStorage.getItem("user");
       let userRole = "SUPER_ADMIN";
       let userId = "user-super-1";
+      let orgId = localStorage.getItem("organizationId") || "";
       if (storedUser) {
         try {
           const parsed = JSON.parse(storedUser);
           if (parsed.role) userRole = parsed.role;
           if (parsed.id || parsed.userId) userId = parsed.id || parsed.userId;
+          if (parsed.organizationId || parsed.orgId) orgId = parsed.organizationId || parsed.orgId;
         } catch {}
       }
 
@@ -40,6 +42,7 @@ class ApiClient {
         Authorization: `Bearer ${token}`,
         "x-user-role": userRole,
         "x-user-id": userId,
+        ...(orgId ? { "x-organization-id": orgId } : {}),
       };
     }
     return {};

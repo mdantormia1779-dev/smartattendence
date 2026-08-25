@@ -62,6 +62,7 @@ export class ManagerService {
 
     return records.map((m, idx): ManagerData => ({
       id: m.id,
+      organizationId: m.organizationId,
       managerId: `MGR-${m.id.replace(/[^a-zA-Z0-9]/g, "").slice(-4).toUpperCase() || String(idx + 1).padStart(3, "0")}`,
       name: m.name,
       profilePic: m.profilePicture || undefined,
