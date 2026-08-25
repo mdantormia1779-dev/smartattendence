@@ -1,18 +1,72 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import gsap from "gsap";
-import { Plus, CheckCircle2 } from "lucide-react";
+import { Plus, CheckCircle2, RefreshCw } from "lucide-react";
 import StatCards from "./Components/HomePage/StatCards";
 import BarChartSection from "./Components/HomePage/BarChartSection";
 import PieChartSection from "./Components/HomePage/PieChartSection";
 import LiveAttendanceTable from "./Components/HomePage/LiveAttendanceTable";
 import SideWidgets from "./Components/HomePage/SideWidgets";
+import { api } from "@/lib/api-client";
 
 export default function OrganizationDashboardPage() {
+    const router = useRouter();
     const headerRef = useRef<HTMLDivElement>(null);
+    const [adminName, setAdminName] = useState("Administrator");
+    const [companyName, setCompanyName] = useState("Organization");
+    const [currentDateStr, setCurrentDateStr] = useState("");
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    const loadProfileAndOrg = async () => {
+        // 1. Check local session storage keys
+        if (typeof window !== "undefined") {
+            const rawUser = localStorage.getItem("user_info") || localStorage.getItem("user") || localStorage.getItem("currentUser");
+            if (rawUser) {
+                try {
+                    const parsed = JSON.parse(rawUser);
+                    if (parsed.name || parsed.fullName) {
+                        setAdminName(parsed.name || parsed.fullName);
+                    }
+                    if (parsed.companyName || parsed.organizationName || parsed.organization?.name) {
+                        setCompanyName(parsed.companyName || parsed.organizationName || parsed.organization?.name);
+                    }
+                } catch {}
+            }
+        }
+
+        // 2. Fetch live organization from PostgreSQL Database
+        try {
+            const res = await api.organizations.getAll();
+            if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+                const org = res.data[0];
+                if (org.name) {
+                    setCompanyName(org.name);
+                }
+                if (adminName === "Administrator" && org.email) {
+                    const extractedName = org.email.split("@")[0];
+                    setAdminName(extractedName.charAt(0).toUpperCase() + extractedName.slice(1));
+                }
+            }
+        } catch (e) {
+            console.error("Failed to load organization info:", e);
+        }
+    };
 
     useEffect(() => {
+        loadProfileAndOrg();
+
+        // Format live date
+        const now = new Date();
+        const formatted = now.toLocaleDateString("en-US", {
+            weekday: "long",
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+        });
+        setCurrentDateStr(formatted);
+
         if (headerRef.current) {
             gsap.fromTo(
                 headerRef.current,
@@ -22,43 +76,61 @@ export default function OrganizationDashboardPage() {
         }
     }, []);
 
+    const handleRefresh = () => {
+        setRefreshKey((prev) => prev + 1);
+        loadProfileAndOrg();
+    };
+
     return (
-        <div className="flex-1 bg-gray-50/50 p-6 space-y-6 overflow-y-auto">
-            {/* Top Greeting */}
-            <div ref={headerRef} className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+        <div className="flex-1 bg-[#FBFBFA] p-6 md:p-8 space-y-6 overflow-y-auto min-h-screen text-neutral-800">
+            {/* Top Greeting Banner */}
+            <div ref={headerRef} className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-neutral-200/80 shadow-xs">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-                        Good morning, Sarah <span className="inline-block animate-bounce">👋</span>
+                    <h1 className="text-2xl font-bold text-neutral-900 tracking-tight flex items-center gap-2">
+                        Good day, {adminName} <span className="inline-block animate-bounce">👋</span>
                     </h1>
-                    <p className="text-sm text-gray-500 mt-1">
-                        Here's what's happening at Vertex today — Tuesday, Aug 18, 2026
+                    <p className="text-xs text-neutral-500 mt-1">
+                        Live operations & attendance overview for <strong className="text-neutral-700">{companyName}</strong> — {currentDateStr || "Today"}
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer">
-                        <Plus className="w-4 h-4" />
+                    <button 
+                        onClick={handleRefresh}
+                        className="p-2.5 rounded-xl border border-neutral-200 hover:bg-neutral-50 text-neutral-600 transition-colors cursor-pointer"
+                        title="Refresh dashboard metrics"
+                    >
+                        <RefreshCw className="w-4 h-4" />
+                    </button>
+                    <button 
+                        onClick={() => router.push("/organizationadmin/employees")}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold border border-neutral-200 text-neutral-700 hover:bg-neutral-50 transition-colors cursor-pointer shadow-xs active:scale-95"
+                    >
+                        <Plus className="w-4 h-4 text-[#10b981]" />
                         Add Employee
                     </button>
-                    <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-[#00B050] text-white shadow-md shadow-[#00B050]/20 hover:bg-[#009b46] transition-colors cursor-pointer">
+                    <button 
+                        onClick={() => router.push("/organizationadmin/attendance")}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-[#10b981] text-white shadow-xs hover:bg-emerald-600 transition-colors cursor-pointer active:scale-95"
+                    >
                         <CheckCircle2 className="w-4 h-4" />
-                        Mark Attendance
+                        Attendance Console
                     </button>
                 </div>
             </div>
 
             {/* Stat Cards */}
-            <StatCards />
+            <StatCards key={`stats-${refreshKey}`} />
 
-            {/* Charts Section */}
+            {/* Charts Section: Weekly Trend Bar Chart & Today Breakdown Pie Chart */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <BarChartSection />
-                <PieChartSection />
+                <BarChartSection key={`bars-${refreshKey}`} />
+                <PieChartSection key={`pie-${refreshKey}`} />
             </div>
 
-            {/* Bottom Grid: Live Attendance & Side Widgets */}
+            {/* Bottom Grid: Live Attendance & Side Widgets (Leaves + Holidays) */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <LiveAttendanceTable />
-                <SideWidgets />
+                <LiveAttendanceTable key={`logs-${refreshKey}`} />
+                <SideWidgets key={`widgets-${refreshKey}`} />
             </div>
         </div>
     );

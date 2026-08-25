@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
+import Link from "next/link";
 import gsap from "gsap";
-import { MapPin, Loader2 } from "lucide-react";
-import { api } from "@/lib/api-client";
+import { MapPin, Loader2, ArrowUpRight, Clock, CheckCircle2, AlertTriangle, ScanFace } from "lucide-react";
 
 interface AttendanceRow {
+  id: string;
   name: string;
   dept: string;
   time: string;
@@ -22,23 +23,36 @@ export default function LiveAttendanceTable() {
   useEffect(() => {
     async function fetchAttendance() {
       try {
-        const res = await api.attendance.getLogs({ limit: 5 });
-        if (res.success && Array.isArray(res.data)) {
-          const mapped: AttendanceRow[] = res.data.map((l: any) => {
-            const isPresent = l.status === "PRESENT";
-            const isLate = l.status === "LATE";
+        setLoading(true);
+        const res = await fetch(`/api/attendance?limit=6&_t=${Date.now()}`, {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+          },
+        });
+        const json = await res.json();
+        const data = json.data || json;
+
+        if (json.success || Array.isArray(data)) {
+          const rawList = Array.isArray(data) ? data : (data.data || []);
+          const mapped: AttendanceRow[] = rawList.map((l: any) => {
+            const statusUpper = (l.status || "").toUpperCase();
+            const isPresent = statusUpper === "PRESENT";
+            const isLate = statusUpper === "LATE";
             const color = isPresent
-              ? "bg-emerald-50 text-[#00B050]"
+              ? "bg-emerald-50 text-[#10b981] border-emerald-200"
               : isLate
-              ? "bg-amber-50 text-amber-600"
-              : "bg-rose-50 text-rose-600";
+              ? "bg-amber-50 text-amber-600 border-amber-200"
+              : "bg-rose-50 text-rose-600 border-rose-200";
 
             return {
-              name: l.employeeName || l.employeeId,
-              dept: l.department || "General",
+              id: l.id || Math.random().toString(),
+              name: l.employeeName || l.employee?.fullName || l.employeeId || "Staff Member",
+              dept: l.department || l.employee?.department?.name || "Operations",
               time: l.checkInTime || "--",
-              method: l.verificationMethod === "FACE_RECOGNITION" ? "Face + GPS" : "GPS Geofence",
-              status: l.status.toLowerCase(),
+              method: l.verificationMethod === "FACE_RECOGNITION" ? "Face AI + GPS" : "GPS Geofence",
+              status: (l.status || "PRESENT").toLowerCase(),
               color,
             };
           });
@@ -60,75 +74,80 @@ export default function LiveAttendanceTable() {
       if (rows.length > 0) {
         gsap.fromTo(
           rows,
-          { opacity: 0, x: -20 },
-          { opacity: 1, x: 0, duration: 0.5, stagger: 0.08, ease: "power2.out" }
+          { opacity: 0, x: -10 },
+          { opacity: 1, x: 0, duration: 0.4, stagger: 0.05, ease: "power2.out" }
         );
       }
     }
-  }, [loading, logs]);
+  }, [loading]);
 
   return (
-    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm lg:col-span-2">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <h3 className="text-base font-bold text-gray-900">Live Attendance</h3>
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-[#00B050] text-[10px] font-bold rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#00B050] animate-pulse"></span> Live
-          </span>
+    <div className="bg-white p-6 md:p-8 rounded-3xl border border-neutral-200/80 shadow-xs lg:col-span-2 flex flex-col justify-between space-y-4">
+      <div>
+        <div className="flex items-center justify-between pb-4 border-b border-neutral-100">
+          <div>
+            <h3 className="text-base font-bold text-neutral-900">Today's Live Punch Stream</h3>
+            <p className="text-xs text-neutral-500">Real-time GPS geofence and biometric verification feed</p>
+          </div>
+          <Link
+            href="/organizationadmin/attendance"
+            className="flex items-center gap-1 text-xs font-bold text-[#10b981] hover:text-emerald-700 transition-colors"
+          >
+            View All Logs <ArrowUpRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
-        <a href="/organizationadmin/attendance" className="text-xs font-bold text-[#00B050] hover:underline">
-          View all
-        </a>
-      </div>
 
-      <div className="overflow-x-auto">
         {loading ? (
-          <div className="flex items-center justify-center py-10 text-gray-400">
-            <Loader2 className="w-6 h-6 animate-spin mr-2 text-[#00B050]" />
-            <span>Loading live attendance...</span>
+          <div className="flex items-center justify-center py-20 text-neutral-400">
+            <Loader2 className="w-6 h-6 animate-spin text-[#10b981] mr-2" />
+            <span className="text-xs">Streaming real-time punches...</span>
+          </div>
+        ) : logs.length === 0 ? (
+          <div className="py-20 text-center text-xs text-neutral-400 space-y-2">
+            <Clock className="w-8 h-8 text-neutral-300 mx-auto mb-1" />
+            <p className="font-semibold text-neutral-700">No punches recorded for today yet</p>
+            <p className="text-[11px] text-neutral-400">When employees clock in via mobile or face punch, events will appear here in real time.</p>
           </div>
         ) : (
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="text-gray-400 border-b border-gray-100">
-                <th className="pb-3 font-semibold">Employee</th>
-                <th className="pb-3 font-semibold">Department</th>
-                <th className="pb-3 font-semibold">Check-in</th>
-                <th className="pb-3 font-semibold">Method</th>
-                <th className="pb-3 font-semibold text-right">Status</th>
-              </tr>
-            </thead>
-            <tbody ref={tableRef} className="divide-y divide-gray-50">
-              {logs.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-6 text-center text-gray-400">
-                    No attendance records for today yet.
-                  </td>
+          <div className="overflow-x-auto mt-4">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-neutral-100 text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
+                  <th className="pb-3 px-3">Employee</th>
+                  <th className="pb-3 px-3">Department</th>
+                  <th className="pb-3 px-3">Check-In</th>
+                  <th className="pb-3 px-3">Verification</th>
+                  <th className="pb-3 px-3 text-right">Status</th>
                 </tr>
-              ) : (
-                logs.map((row, i) => (
-                  <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="py-3 font-bold text-gray-900 flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-[#00B050]/10 text-[#00B050] flex items-center justify-center font-bold text-[10px]">
-                        {row.name.charAt(0)}
-                      </div>
-                      {row.name}
+              </thead>
+              <tbody ref={tableRef} className="divide-y divide-neutral-100 text-xs">
+                {logs.map((row) => (
+                  <tr key={row.id} className="hover:bg-neutral-50/60 transition-colors">
+                    <td className="py-3.5 px-3">
+                      <div className="font-bold text-neutral-900">{row.name}</div>
                     </td>
-                    <td className="py-3 text-gray-500 font-medium">{row.dept}</td>
-                    <td className="py-3 text-gray-700 font-semibold">{row.time}</td>
-                    <td className="py-3 text-gray-500 flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-gray-400" /> {row.method}
+                    <td className="py-3.5 px-3 text-neutral-600 font-medium">
+                      {row.dept}
                     </td>
-                    <td className="py-3 text-right">
-                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase ${row.color}`}>
+                    <td className="py-3.5 px-3 font-mono text-neutral-700 font-semibold">
+                      {row.time}
+                    </td>
+                    <td className="py-3.5 px-3 text-neutral-500">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-neutral-50 border border-neutral-200 rounded-md text-[11px] font-medium text-neutral-700">
+                        <ScanFace className="w-3 h-3 text-[#10b981]" />
+                        {row.method}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-3 text-right">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${row.color}`}>
                         {row.status}
                       </span>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

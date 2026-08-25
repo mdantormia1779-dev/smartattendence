@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const role = (searchParams.get("role") || session?.role || "SUPER_ADMIN") as RoleType;
     const organizationId = searchParams.get("organizationId") || session?.organizationId || null;
 
-    const notifs = getUserNotifications({
+    const notifs = await getUserNotifications({
       userId,
       role,
       organizationId,
@@ -66,6 +66,7 @@ export async function POST(request: Request) {
       category: body.category || "SYSTEM",
       type: body.type || "INFO",
       link: body.link,
+      dataJson: body.dataJson,
     });
 
     if (!result.success) {
