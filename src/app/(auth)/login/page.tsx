@@ -55,8 +55,8 @@ const demoRoles = [
     {
         title: "Team Manager",
         role: "IT Department Lead",
-        email: "tanvir.mgr@vertextech.io",
-        password: "password123",
+        email: "test@gmail.com",
+        password: "manager123",
         path: "/manager",
         icon: UserCheck,
         color: "from-blue-500/20 to-blue-600/20 border-blue-300 text-blue-900",

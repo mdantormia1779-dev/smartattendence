@@ -95,8 +95,27 @@ export default function Header({ title = "Dashboard" }: HeaderProps) {
                     if (org.name) setCompanyName(org.name);
                     if (org.customLogoUrl) setOrgLogo(org.customLogoUrl);
                     if (org.planTier || org.planName) {
-                        const tier = org.planTier || org.planName || "BUSINESS";
-                        setPlanTier(`${tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase()} Plan`);
+                        const tier = (org.planTier || org.planName || "BUSINESS").toUpperCase();
+                        const isFreeOrTrial = tier === "FREE" || tier.includes("TRIAL") || org.subscriptionStatus === "TRIAL";
+                        const createdDate = org.createdAt ? new Date(org.createdAt) : new Date();
+                        const now = new Date();
+                        const diffDays = Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24));
+                        
+                        let remaining = 30;
+                        if (isFreeOrTrial) {
+                            remaining = Math.max(0, 30 - diffDays);
+                        } else {
+                            remaining = Math.max(0, 30 - (diffDays % 30));
+                        }
+
+                        if (org.subscriptionStatus === "EXPIRED" || (isFreeOrTrial && remaining === 0)) {
+                            setPlanTier(`⚠️ ${tier} Expired`);
+                        } else if (isFreeOrTrial) {
+                            setPlanTier(`30-Day Free Trial (${remaining} days left)`);
+                        } else {
+                            const formattedTier = tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase();
+                            setPlanTier(`${formattedTier} Plan (${remaining} days left)`);
+                        }
                     }
                     if (org.id) setOrganizationId(org.id);
 

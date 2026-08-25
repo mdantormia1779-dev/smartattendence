@@ -351,7 +351,7 @@ export const OrganizationCreateModal: React.FC<OrganizationCreateModalProps> = (
                                         onChange={(e) => setPlanTier(e.target.value as any)}
                                         className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050]"
                                     >
-                                        <option value="FREE">Free Tier (20 Employees, 1 Branch)</option>
+                                        <option value="FREE">30-Day Free Trial (30 Employees, 2 Branches)</option>
                                         <option value="STARTER">Starter Plan (100 Employees, 5 Branches)</option>
                                         <option value="BUSINESS">Business Plan (500 Employees, 20 Branches)</option>
                                         <option value="ENTERPRISE">Enterprise Plan (Unlimited Quotas)</option>

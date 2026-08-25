@@ -18,25 +18,28 @@ export interface Plan {
 
 export const pricingPlans: Plan[] = [
     {
-        name: "Free",
+        name: "30-Day Free Trial",
         monthlyPrice: 0,
         yearlyPrice: 0,
-        periodMonthly: "forever",
-        periodYearly: "forever",
+        periodMonthly: "for 30 days",
+        periodYearly: "for 30 days",
         popular: false,
         stats: [
             { label: "Organizations", value: "1" },
-            { label: "Branches", value: "1" },
-            { label: "Managers", value: "1" },
-            { label: "Employees", value: "20" }
+            { label: "Branches", value: "2" },
+            { label: "Managers", value: "3" },
+            { label: "Employees", value: "30" }
         ],
         features: [
-            "Face Recognition",
-            "GPS Verification",
-            "Basic Reports",
-            "Attendance Logs"
+            "30 Days Full Access",
+            "Up to 3 Branch Managers",
+            "Face Recognition AI",
+            "GPS Geofence Verification",
+            "Shift & Leave Management",
+            "Payroll & Payslips Preview",
+            "No Credit Card Required"
         ],
-        buttonText: "Start Free",
+        buttonText: "Start 30-Day Free Trial",
         buttonStyle: "bg-white hover:bg-gray-50 text-gray-900 border border-gray-200"
     },
     {
@@ -52,10 +55,12 @@ export const pricingPlans: Plan[] = [
             { label: "Employees", value: "100" }
         ],
         features: [
-            "Everything in Free",
-            "Leave Management",
-            "Shift Management",
-            "Email Notification"
+            "Up to 5 Branch Managers",
+            "100 Employee Capacity",
+            "Everything in Free Trial",
+            "Automated Payroll",
+            "Email Notifications",
+            "Standard Priority Support"
         ],
         buttonText: "Choose Plan",
         buttonStyle: "bg-white hover:bg-gray-50 text-gray-900 border border-gray-200"
@@ -73,11 +78,13 @@ export const pricingPlans: Plan[] = [
             { label: "Employees", value: "500" }
         ],
         features: [
+            "Up to 20 Branch Managers",
+            "500 Employee Capacity",
             "Everything in Starter",
-            "Payroll & Payslips",
-            "Fingerprint Support",
-            "Advanced Analytics",
-            "API Access"
+            "Full Automated Payroll & Tax",
+            "Fingerprint & Multi-Branch AI",
+            "Advanced Executive Analytics",
+            "REST API Access"
         ],
         buttonText: "Choose Plan",
         buttonStyle: "bg-[#00B050] hover:bg-[#009644] text-white"
@@ -95,11 +102,13 @@ export const pricingPlans: Plan[] = [
             { label: "Employees", value: "Unlimited" }
         ],
         features: [
+            "Unlimited Branch Managers",
+            "Unlimited Staff & Branches",
             "Everything in Business",
-            "White Label",
-            "Custom Domain",
-            "Priority Support",
-            "Dedicated Manager"
+            "White-Label Portal Branding",
+            "Custom Subdomain Support",
+            "Dedicated Account Manager",
+            "24/7 Priority SLA"
         ],
         buttonText: "Choose Plan",
         buttonStyle: "bg-white hover:bg-gray-50 text-gray-900 border border-gray-200"

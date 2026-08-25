@@ -66,8 +66,8 @@ function mapToOrganizationData(org: any): OrganizationData {
     country: org.country ?? "Bangladesh",
     language: org.language ?? "English",
     currency: org.currency ?? "BDT (৳)",
-    planId: plan?.id ?? (subscription?.planId || "plan-starter"),
-    planName: plan?.name ?? "FREE",
+    planId: plan?.id ?? (subscription?.planId || "plan-free"),
+    planName: plan?.name ?? (plan?.type === "FREE" ? "30-Day Free Trial" : (plan?.type || "30-Day Free Trial")),
     planTier: (plan?.type as "FREE" | "STARTER" | "BUSINESS" | "ENTERPRISE") ?? "FREE",
     subscriptionStatus: isSuspended ? "SUSPENDED" : (subscription?.status ?? "ACTIVE"),
     brandColor: customTheme.brandColor || "#00B050",
@@ -281,7 +281,7 @@ export class OrganizationService {
         .filter(Boolean);
     }
 
-    const tier = (data.planTier?.toUpperCase() as SubscriptionPlanType) || SubscriptionPlanType.STARTER;
+    const tier = (data.planTier?.toUpperCase() as SubscriptionPlanType) || SubscriptionPlanType.FREE;
     let targetPlan = await prisma.subscription_plans.findFirst({
       where: { type: tier },
     });
@@ -290,14 +290,18 @@ export class OrganizationService {
       targetPlan = await prisma.subscription_plans.create({
         data: {
           id: `plan-${tier.toLowerCase()}`,
-          name: `${tier.charAt(0) + tier.slice(1).toLowerCase()} Plan`,
+          name: tier === "FREE" ? "30-Day Free Trial" : `${tier.charAt(0) + tier.slice(1).toLowerCase()} Plan`,
           type: tier,
           price: tier === "FREE" ? 0 : tier === "STARTER" ? 29 : tier === "BUSINESS" ? 99 : 299,
-          billingCycle: "monthly",
+          billingCycle: tier === "FREE" ? "30-Day Trial" : "monthly",
           updatedAt: new Date(),
         },
       });
     }
+
+    const isTrial = tier === "FREE";
+    const now = new Date();
+    const trialEndDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
     const created = await prisma.organizations.create({
       data: {
@@ -328,7 +332,9 @@ export class OrganizationService {
           create: {
             id: `sub-${Date.now()}`,
             planId: targetPlan.id,
-            status: "ACTIVE",
+            status: isTrial ? "TRIAL" : "ACTIVE",
+            startDate: now,
+            endDate: isTrial ? trialEndDate : null,
             updatedAt: new Date(),
           },
         },
@@ -407,14 +413,18 @@ export class OrganizationService {
         targetPlan = await prisma.subscription_plans.create({
           data: {
             id: `plan-${planType.toLowerCase()}`,
-            name: `${planType.charAt(0) + planType.slice(1).toLowerCase()} Plan`,
+            name: planType === "FREE" ? "30-Day Free Trial" : `${planType.charAt(0) + planType.slice(1).toLowerCase()} Plan`,
             type: planType,
             price: planType === "FREE" ? 0 : planType === "STARTER" ? 29 : planType === "BUSINESS" ? 99 : 299,
-            billingCycle: "monthly",
+            billingCycle: planType === "FREE" ? "30-Day Trial" : "monthly",
             updatedAt: new Date(),
           },
         });
       }
+
+      const isFreeTrial = planType === "FREE";
+      const now = new Date();
+      const trialEndDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
       await prisma.subscriptions.upsert({
         where: { organizationId: id },
@@ -422,12 +432,16 @@ export class OrganizationService {
           id: `sub-${Date.now()}`,
           organizationId: id,
           planId: targetPlan.id,
-          status: "ACTIVE",
+          status: isFreeTrial ? "TRIAL" : "ACTIVE",
+          startDate: now,
+          endDate: isFreeTrial ? trialEndDate : null,
           updatedAt: new Date(),
         },
         update: {
           planId: targetPlan.id,
-          status: "ACTIVE",
+          status: isFreeTrial ? "TRIAL" : "ACTIVE",
+          startDate: now,
+          endDate: isFreeTrial ? trialEndDate : null,
           updatedAt: new Date(),
         },
       });

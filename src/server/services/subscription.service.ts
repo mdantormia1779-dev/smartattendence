@@ -11,8 +11,8 @@ export interface TrialSettingsData {
 }
 
 let trialSettingsStore: TrialSettingsData = {
-  defaultTrialDays: 14,
-  trialPlanId: "plan-starter",
+  defaultTrialDays: 30,
+  trialPlanId: "plan-free",
   allowCardlessTrial: true,
   autoExtendOnRequest: false,
   maxExtensionDays: 7,
@@ -46,18 +46,18 @@ export interface SubscriptionPlanData {
 const DEFAULT_PLANS = [
   {
     id: "plan-free",
-    name: "Free Tier",
+    name: "30-Day Free Trial",
     type: SubscriptionPlanType.FREE,
     price: 0,
-    billingCycle: "monthly",
-    maxBranches: 1,
-    maxManagers: 1,
-    maxEmployees: 20,
+    billingCycle: "30-Day Trial",
+    maxBranches: 2,
+    maxManagers: 3,
+    maxEmployees: 30,
     faceRecognition: true,
     gpsVerification: true,
-    fingerprint: false,
-    payroll: false,
-    analytics: false,
+    fingerprint: true,
+    payroll: true,
+    analytics: true,
     apiAccess: false,
     whiteLabel: false,
     customDomain: false,
@@ -473,12 +473,34 @@ export class SubscriptionService {
       prisma.branches.count({ where: { organizationId: validOrgId } }).catch(() => 0),
     ]);
 
+    const isTrial = sub?.status === "TRIAL" || activePlan.type === SubscriptionPlanType.FREE;
+    const now = new Date();
+    const startDate = sub?.startDate ? new Date(sub.startDate) : new Date();
+    const elapsedDays = Math.floor((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    let daysRemaining = 30;
+    if (sub?.endDate) {
+      const end = new Date(sub.endDate);
+      daysRemaining = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+    } else {
+      daysRemaining = Math.max(0, 30 - (elapsedDays % 30));
+    }
+
+    const isExpired = sub?.status === "EXPIRED" || (isTrial && daysRemaining === 0);
+    const resolvedEndDate = sub?.endDate
+      ? sub.endDate.toISOString()
+      : new Date(now.getTime() + daysRemaining * 24 * 60 * 60 * 1000).toISOString();
+
     return {
       plan: activePlan,
-      status: sub?.status || "FREE",
-      isTrial: sub?.status === "TRIAL",
+      status: isExpired ? "EXPIRED" : (sub?.status || (isTrial ? "TRIAL" : "ACTIVE")),
+      isTrial,
+      daysRemaining,
+      trialDaysRemaining: isTrial ? daysRemaining : null,
+      isExpired,
+      isTrialExpired: isTrial && isExpired,
       startDate: sub?.startDate?.toISOString() || new Date().toISOString(),
-      endDate: sub?.endDate?.toISOString() || null,
+      endDate: resolvedEndDate,
       usage: {
         employees: employeesCount,
         managers: managersCount,

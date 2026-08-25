@@ -33,7 +33,7 @@ export default function QuotaExceededModal({
   resourceName = "Employees",
   currentCount = 20,
   maxLimit = 20,
-  planName = "Free Tier",
+  planName = "30-Day Free Trial",
   onUpgrade
 }: QuotaExceededModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);

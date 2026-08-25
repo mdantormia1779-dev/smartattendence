@@ -89,7 +89,7 @@ const HeroSection = () => {
         <div className="hero-cta flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
           <Link href="/signup">
             <Button className="w-full sm:w-auto bg-[#00B050] hover:bg-[#009644] text-white font-medium px-8 py-3 rounded-lg text-base shadow-lg transition-transform hover:scale-105 cursor-pointer">
-              Get Started Free
+              Start 30-Day Free Trial
             </Button>
           </Link>
 

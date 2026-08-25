@@ -43,7 +43,7 @@ export const OrganizationFilters: React.FC<OrganizationFiltersProps> = ({
                     <option value="Enterprise">Enterprise</option>
                     <option value="Business">Business</option>
                     <option value="Starter">Starter</option>
-                    <option value="Free">Free</option>
+                    <option value="Free">30-Day Free Trial</option>
                 </select>
                 <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             </div>

@@ -33,8 +33,8 @@ const PricingSection: React.FC = () => {
                             name: p.name || (typeTier.charAt(0) + typeTier.slice(1).toLowerCase()),
                             monthlyPrice,
                             yearlyPrice,
-                            periodMonthly: isFree ? 'forever' : '/ month',
-                            periodYearly: isFree ? 'forever' : '/ year',
+                            periodMonthly: isFree ? 'for 30 days' : '/ month',
+                            periodYearly: isFree ? 'for 30 days' : '/ year',
                             popular: typeTier === 'BUSINESS',
                             stats: [
                                 { label: 'Branches', value: p.maxBranches ? String(p.maxBranches) : 'Unlimited' },
@@ -50,7 +50,7 @@ const PricingSection: React.FC = () => {
                                 p.customDomain || p.hasCustomDomain ? 'Custom Domain' : null,
                                 p.prioritySupport ? '24/7 Priority Support' : null,
                             ].filter(Boolean) as string[],
-                            buttonText: isFree ? 'Start Free' : 'Choose Plan',
+                            buttonText: isFree ? 'Start 30-Day Free Trial' : 'Choose Plan',
                             buttonStyle: typeTier === 'BUSINESS'
                                 ? 'bg-[#00B050] hover:bg-[#009644] text-white'
                                 : 'bg-white hover:bg-gray-50 text-gray-900 border border-gray-200',

@@ -21,17 +21,17 @@ export interface PlanConfig {
 
 export const PLAN_TIERS: Record<string, PlanConfig> = {
   FREE: {
-    name: "Free",
-    maxBranches: 1,
-    maxManagers: 1,
-    maxEmployees: 10,
+    name: "30-Day Free Trial",
+    maxBranches: 2,
+    maxManagers: 3,
+    maxEmployees: 30,
     hasFaceRecog: true,
     hasGpsGeofence: true,
     hasShiftMgmt: true,
     hasLeaveMgmt: true,
-    hasPayroll: false,
-    hasBiometrics: false,
-    hasAnalytics: false,
+    hasPayroll: true,
+    hasBiometrics: true,
+    hasAnalytics: true,
     hasWhiteLabel: false,
   },
   STARTER: {
@@ -136,3 +136,15 @@ export function validateFeatureAccess(planKey: string, feature: keyof PlanConfig
   }
   return true;
 }
+
+/**
+ * Validates if the organization's subscription is active or expired.
+ */
+export function validateSubscriptionActive(status?: string, daysRemaining?: number | null): void {
+  if (status === "EXPIRED" || (daysRemaining !== null && daysRemaining !== undefined && daysRemaining <= 0)) {
+    throw new PlanLimitExceededError(
+      "Subscription Expired: Your billing cycle or free trial period has ended. Please renew or upgrade your plan to continue modifying data. All historical records are safely preserved."
+    );
+  }
+}
+

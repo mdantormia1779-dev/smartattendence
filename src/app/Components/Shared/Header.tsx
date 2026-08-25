@@ -93,7 +93,7 @@ const Header = () => {
 
                 <Link href="/login">
                     <Button className="bg-[#00B050] hover:bg-[#009644] text-white font-medium px-5 py-2 rounded-lg shadow-sm transition-transform hover:scale-105 cursor-pointer">
-                        Start Free
+                        Start Free Trial
                     </Button>
                 </Link>
             </div>
@@ -124,7 +124,7 @@ const Header = () => {
                         </Link>
                         <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
                             <Button className="w-full bg-[#00B050] hover:bg-[#009644] text-white font-medium py-3 rounded-xl shadow-sm">
-                                Start Free
+                                Start Free Trial
                             </Button>
                         </Link>
                     </div>
