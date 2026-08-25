@@ -21,7 +21,11 @@ import {
     ExternalLink,
     AlertCircle,
     CheckCircle,
-    XCircle
+    XCircle,
+    QrCode,
+    MessageCircle,
+    Mail,
+    Users
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 
@@ -59,10 +63,11 @@ export default function ManagerReferralsPage() {
     const fetchReferralAccount = async (showRefresh = false) => {
         if (showRefresh) setRefreshing(true);
         try {
-            const [accRes, linkRes, withRes] = await Promise.allSettled([
+            const [accRes, linkRes, withRes, commRes] = await Promise.allSettled([
                 api.referrals.getAccount(),
                 api.referrals.getLink(),
                 api.referrals.getWithdrawals(),
+                api.referrals.getCommissions(),
             ]);
 
             let code = "MGR-REF";
@@ -75,7 +80,7 @@ export default function ManagerReferralsPage() {
 
             if (accRes.status === "fulfilled" && accRes.value?.success && accRes.value.data) {
                 const data = accRes.value.data;
-                code = data.code || data.referralCode || code;
+                code = data.referralCode || data.code || code;
                 if (!link) {
                     const origin = typeof window !== "undefined" ? window.location.origin : "https://smartattendance.io";
                     link = `${origin}/signup?ref=${code}`;
@@ -88,10 +93,10 @@ export default function ManagerReferralsPage() {
                     commissionRate: data.commissionRate || 20.0,
                     totalClicks: data.totalClicks || 0,
                     totalRegistrations: data.totalRegistrations || data.conversions?.length || 0,
-                    totalPaidCustomers: data.totalPaidCustomers || data.conversions?.filter((c: any) => c.status === "PAID").length || 0,
-                    availableBalance: data.balance || data.availableBalance || 0,
-                    pendingCommission: data.pendingCommission || data.pendingBalance || 0,
-                    totalEarnings: data.totalEarnings || data.lifetimeEarnings || 0,
+                    totalPaidCustomers: data.totalPaidCustomers || data.conversions?.filter((c: any) => c.status === "PAID" || c.status === "ACTIVE").length || 0,
+                    availableBalance: data.availableBalance ?? data.balance ?? 0,
+                    pendingCommission: data.pendingCommission ?? data.pendingBalance ?? 0,
+                    totalEarnings: data.totalRevenue ?? data.totalEarnings ?? data.lifetimeEarnings ?? 0,
                 });
 
                 if (Array.isArray(data.commissions)) {
@@ -110,6 +115,10 @@ export default function ManagerReferralsPage() {
                     referralCode: code,
                     referralLink: `${origin}/signup?ref=${code}`,
                 }));
+            }
+
+            if (commRes.status === "fulfilled" && commRes.value?.success && Array.isArray(commRes.value.data)) {
+                setCommissions(commRes.value.data);
             }
 
             if (withRes.status === "fulfilled" && withRes.value?.success && Array.isArray(withRes.value.data)) {
@@ -192,6 +201,17 @@ export default function ManagerReferralsPage() {
         }
     };
 
+    const shareViaWhatsApp = () => {
+        const text = encodeURIComponent(`Manage attendance, shifts, and leaves with Smart Attendance! Sign up using my referral link for a 30-day free trial: ${account.referralLink}`);
+        window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
+    };
+
+    const shareViaEmail = () => {
+        const subject = encodeURIComponent("Recommendation: Smart Attendance Cloud System");
+        const body = encodeURIComponent(`Hi,\n\nI recommend using Smart Attendance to manage workforce attendance, face biometrics, shifts, and payroll.\n\nSign up with my link for an instant 30-day free trial:\n${account.referralLink}\n\nBest regards!`);
+        window.open(`mailto:?subject=${subject}&body=${body}`, "_blank");
+    };
+
     return (
         <div ref={containerRef} className="flex-1 bg-[#FBFBFA] p-4 sm:p-6 md:p-8 space-y-6 overflow-y-auto min-h-screen">
             {/* Feedback Alerts */}
@@ -227,7 +247,7 @@ export default function ManagerReferralsPage() {
                         Manager Referral & Affiliate Program
                     </h1>
                     <p className="text-xs text-neutral-500 mt-1">
-                        Recommend Smart Attendance to other companies and earn recurring 20% commission on every subscription
+                        Recommend Smart Attendance to businesses & professional connections to earn recurring 20% commission
                     </p>
                 </div>
 
@@ -259,14 +279,16 @@ export default function ManagerReferralsPage() {
             <div className="bg-linear-to-br from-neutral-900 via-neutral-800 to-neutral-900 rounded-3xl p-6 sm:p-8 text-white space-y-4 shadow-xl border border-neutral-700/50">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#00B050]/20 text-[#00B050] border border-[#00B050]/30">
-                        <Sparkles className="w-3.5 h-3.5" /> {account.commissionRate}% Recurring Reward
+                        <Sparkles className="w-3.5 h-3.5" /> {account.commissionRate}% Recurring Monthly Reward
                     </span>
-                    <span className="text-xs text-neutral-400 font-mono">Referral Code: <strong className="text-white">{account.referralCode}</strong></span>
+                    <span className="text-xs text-neutral-400 font-mono">
+                        Referral Code: <strong className="text-white bg-white/10 px-2 py-0.5 rounded-lg border border-white/10">{account.referralCode}</strong>
+                    </span>
                 </div>
 
                 <h2 className="text-xl sm:text-2xl font-bold">Your Unique Partner Referral Link</h2>
                 <p className="text-xs text-neutral-300 max-w-xl">
-                    Share your link with HR directors, business owners, or organizations. When they sign up and subscribe to any plan, you receive 20% recurring monthly payout.
+                    Share your link with business owners, HR departments, or partner companies. When they register and subscribe, you receive 20% recurring monthly commission credited straight to your balance.
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
@@ -281,6 +303,22 @@ export default function ManagerReferralsPage() {
                         {copied ? "Copied Link!" : "Copy Link"}
                     </button>
                 </div>
+
+                <div className="flex items-center gap-3 pt-2 flex-wrap text-xs text-neutral-400">
+                    <span>Quick Share:</span>
+                    <button
+                        onClick={shareViaWhatsApp}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-400 border border-emerald-800/40 transition-colors cursor-pointer"
+                    >
+                        <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+                    </button>
+                    <button
+                        onClick={shareViaEmail}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-950/60 hover:bg-blue-900/80 text-blue-400 border border-blue-800/40 transition-colors cursor-pointer"
+                    >
+                        <Mail className="w-3.5 h-3.5" /> Email
+                    </button>
+                </div>
             </div>
 
             {/* Metrics */}
@@ -288,7 +326,7 @@ export default function ManagerReferralsPage() {
                 <div className="stat-card bg-white p-5 rounded-2xl border border-neutral-200/80 shadow-xs space-y-1">
                     <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Available Balance</p>
                     <h3 className="text-2xl font-bold text-emerald-600 font-mono">${account.availableBalance.toFixed(2)}</h3>
-                    <p className="text-[11px] text-neutral-400">Ready for instant payout</p>
+                    <p className="text-[11px] text-neutral-400">Ready for instant withdrawal</p>
                 </div>
 
                 <div className="stat-card bg-white p-5 rounded-2xl border border-neutral-200/80 shadow-xs space-y-1">
@@ -306,7 +344,7 @@ export default function ManagerReferralsPage() {
                 <div className="stat-card bg-white p-5 rounded-2xl border border-neutral-200/80 shadow-xs space-y-1">
                     <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Total Link Visits</p>
                     <h3 className="text-2xl font-bold text-indigo-600 font-mono">{account.totalClicks} Clicks</h3>
-                    <p className="text-[11px] text-neutral-400">Real-time click tracker</p>
+                    <p className="text-[11px] text-neutral-400">Live referral tracker</p>
                 </div>
             </div>
 
@@ -342,7 +380,7 @@ export default function ManagerReferralsPage() {
                         <table className="w-full text-left text-xs">
                             <thead className="bg-neutral-50/80 border-b border-neutral-200 text-neutral-500 font-bold uppercase tracking-wider">
                                 <tr>
-                                    <th className="py-3.5 px-6">Company / User</th>
+                                    <th className="py-3.5 px-6">Company / Organization</th>
                                     <th className="py-3.5 px-6">Plan / Amount</th>
                                     <th className="py-3.5 px-6">Your Reward (20%)</th>
                                     <th className="py-3.5 px-6">Date</th>
@@ -353,29 +391,29 @@ export default function ManagerReferralsPage() {
                                 {commissions.length === 0 ? (
                                     <tr>
                                         <td colSpan={5} className="text-center py-12 text-neutral-400">
-                                            No referral conversions recorded yet. Share your link above to begin earning!
+                                            No referral conversions recorded yet. Share your partner link above to start earning!
                                         </td>
                                     </tr>
                                 ) : (
                                     commissions.map((c, i) => (
                                         <tr key={c.id || i} className="hover:bg-neutral-50/60 transition-colors">
                                             <td className="py-4 px-6 font-bold text-neutral-900">
-                                                {c.referredUserName || c.organizationName || c.name || `Partner #${i + 1}`}
+                                                {c.organizationName || c.referredUserName || c.name || `Partner #${i + 1}`}
                                             </td>
                                             <td className="py-4 px-6 text-neutral-700 font-mono">
-                                                ${c.amount || c.planAmount || "99.00"}
+                                                ${Number(c.baseAmount || c.amount || c.planAmount || 99).toFixed(2)}
                                             </td>
                                             <td className="py-4 px-6 font-bold text-emerald-600 font-mono">
-                                                +${c.commissionAmount || ((c.amount || 99) * 0.2).toFixed(2)}
+                                                +${Number(c.commissionAmount || ((c.baseAmount || c.amount || 99) * 0.2)).toFixed(2)}
                                             </td>
                                             <td className="py-4 px-6 text-neutral-500">
                                                 {c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "Recent"}
                                             </td>
                                             <td className="py-4 px-6">
                                                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                                                    c.status === "PAID" || c.status === "APPROVED"
+                                                    c.status === "PAID" || c.status === "APPROVED" || c.status === "AVAILABLE"
                                                         ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                                        : c.status === "PENDING"
+                                                        : c.status === "PENDING" || c.status === "UNDER_REVIEW"
                                                         ? "bg-amber-50 text-amber-700 border-amber-200"
                                                         : "bg-neutral-100 text-neutral-600 border-neutral-200"
                                                 }`}>
@@ -424,13 +462,13 @@ export default function ManagerReferralsPage() {
                                                 {w.paymentDetails || w.payoutDetails || "—"}
                                             </td>
                                             <td className="py-4 px-6 text-neutral-500">
-                                                {w.createdAt ? new Date(w.createdAt).toLocaleDateString() : "Recent"}
+                                                {w.requestedAt || w.createdAt ? new Date(w.requestedAt || w.createdAt).toLocaleDateString() : "Recent"}
                                             </td>
                                             <td className="py-4 px-6">
                                                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
                                                     w.status === "PAID" || w.status === "APPROVED"
                                                         ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                                        : w.status === "PENDING"
+                                                        : w.status === "PENDING" || w.status === "PROCESSING"
                                                         ? "bg-amber-50 text-amber-700 border-amber-200"
                                                         : "bg-rose-50 text-rose-700 border-rose-200"
                                                 }`}>
