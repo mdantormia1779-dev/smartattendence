@@ -1,4 +1,5 @@
-"use client"
+"use client";
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import Link from 'next/link';
@@ -13,11 +14,8 @@ import {
     ShieldCheck, 
     Zap, 
     AlertCircle,
-    Crown,
     Building2,
-    UserCheck,
-    User,
-    ArrowRight
+    Loader2
 } from 'lucide-react';
 import gsap from 'gsap';
 import { useForm, SubmitHandler } from 'react-hook-form';
@@ -33,61 +31,21 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
-const demoRoles = [
-    {
-        title: "Super Admin",
-        role: "Platform Owner",
-        email: "superadmin@erp.com",
-        password: "admin123",
-        path: "/admin",
-        icon: Crown,
-        color: "from-amber-500/20 to-amber-600/20 border-amber-300 text-amber-900",
-    },
-    {
-        title: "Org Admin",
-        role: "Vertex Technologies",
-        email: "antor@gmail.com",
-        password: "123456",
-        path: "/organizationadmin",
-        icon: Building2,
-        color: "from-emerald-500/20 to-emerald-600/20 border-emerald-300 text-emerald-900",
-    },
-    {
-        title: "Team Manager",
-        role: "IT Department Lead",
-        email: "test@gmail.com",
-        password: "manager123",
-        path: "/manager",
-        icon: UserCheck,
-        color: "from-blue-500/20 to-blue-600/20 border-blue-300 text-blue-900",
-    },
-    {
-        title: "Employee",
-        role: "Sr. Software Engineer",
-        email: "arif.c@vertextech.io",
-        password: "password123",
-        path: "/employee",
-        icon: User,
-        color: "from-purple-500/20 to-purple-600/20 border-purple-300 text-purple-900",
-    },
-];
-
 const LoginPage: React.FC = () => {
     const router = useRouter();
     const [showPassword, setShowPassword] = useState<boolean>(false);
-    const [selectedRole, setSelectedRole] = useState<string>("Org Admin");
+    const [loginError, setLoginError] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
 
     const {
         register,
         handleSubmit,
-        setValue,
         formState: { errors, isSubmitting },
     } = useForm<LoginFormData>({
         resolver: zodResolver(loginSchema),
         defaultValues: {
-            email: 'sarah.admin@vertextech.io',
-            password: 'password123',
+            email: '',
+            password: '',
             rememberMe: true,
         },
     });
@@ -110,29 +68,11 @@ const LoginPage: React.FC = () => {
         return () => ctx.revert();
     }, []);
 
-    const isDemoEnabled = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
-
-    const roleCookieMap: Record<string, string> = {
-        "Super Admin": "SUPER_ADMIN",
-        "Org Admin": "ORG_ADMIN",
-        "Team Manager": "MANAGER",
-        "Employee": "EMPLOYEE",
-    };
-
-    const [loginError, setLoginError] = useState<string | null>(null);
-
-    const handleSelectDemoRole = (roleItem: typeof demoRoles[0]) => {
-        setSelectedRole(roleItem.title);
-        setValue("email", roleItem.email);
-        setValue("password", roleItem.password);
-        setLoginError(null);
-    };
-
     const onSubmit: SubmitHandler<LoginFormData> = async (data) => {
         try {
             setLoginError(null);
             const res = await api.auth.login({
-                email: data.email,
+                email: data.email.trim(),
                 password: data.password,
             });
 
@@ -147,12 +87,15 @@ const LoginPage: React.FC = () => {
                     document.cookie = `auth_session=${res.data.token || "active"}; path=/; max-age=86400; SameSite=Lax`;
                 }
 
-                if (userRole === "SUPER_ADMIN") router.push("/admin");
-                else if (userRole === "MANAGER") router.push("/manager");
-                else if (userRole === "EMPLOYEE") {
+                if (userRole === "SUPER_ADMIN") {
+                    router.push("/admin");
+                } else if (userRole === "MANAGER") {
+                    router.push("/manager");
+                } else if (userRole === "EMPLOYEE") {
                     setLoginError("Employees use the Smart Attendance Mobile App (iOS / Android) for attendance and dashboard access. Please sign in via the mobile app.");
+                } else {
+                    router.push("/organizationadmin");
                 }
-                else router.push("/organizationadmin");
                 return;
             } else {
                 setLoginError(res.message || "Invalid email or password");
@@ -234,59 +177,20 @@ const LoginPage: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="login-content w-full max-w-lg mx-auto my-auto py-6 space-y-6">
+                <div className="login-content w-full max-w-md mx-auto my-auto py-8 space-y-6">
                     <div className="space-y-2 text-left">
                         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">
                             Welcome back 👋
                         </h1>
                         <p className="text-xs text-gray-500">
-                            Select any persona below to preview its dedicated workspace:
+                            Sign in with your email and password to access your dashboard:
                         </p>
                     </div>
-
-                    {/* Quick Demo Role Switcher Grid (Dev/Demo Only) */}
-                    {isDemoEnabled && (
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between text-[11px] text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
-                                <span>⚡ Demo Mode Active: Select persona to test</span>
-                                <span className="font-mono text-[10px]">NEXT_PUBLIC_DEMO_MODE</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2.5">
-                                {demoRoles.map((roleItem) => {
-                                    const Icon = roleItem.icon;
-                                    const isSelected = selectedRole === roleItem.title;
-
-                                    return (
-                                        <button
-                                            key={roleItem.title}
-                                            type="button"
-                                            onClick={() => handleSelectDemoRole(roleItem)}
-                                            className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
-                                                isSelected
-                                                    ? "bg-[#00B050]/10 border-[#00B050] shadow-xs"
-                                                    : "bg-white border-gray-200 hover:bg-gray-50"
-                                            }`}
-                                        >
-                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                                                isSelected ? "bg-[#00B050] text-white" : "bg-gray-100 text-gray-600"
-                                            }`}>
-                                                <Icon className="w-4 h-4" />
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="text-xs font-bold text-gray-900 truncate">{roleItem.title}</p>
-                                                <p className="text-[10px] text-gray-400 truncate">{roleItem.role}</p>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
 
                     {/* Form */}
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                         {loginError && (
-                            <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-xs font-semibold flex items-center gap-2">
+                            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
                                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
                                 <span>{loginError}</span>
                             </div>
@@ -352,32 +256,37 @@ const LoginPage: React.FC = () => {
                             )}
                         </div>
 
-                        {/* Direct Role Portal Shortcut Link */}
-                        <div className="p-3 bg-emerald-50/70 border border-emerald-200/60 rounded-2xl flex items-center justify-between text-xs text-emerald-900">
-                            <div>
-                                <span className="font-bold">Enter {selectedRole} Portal</span>
-                                <p className="text-[10px] text-emerald-700">Direct instant dashboard launch</p>
-                            </div>
-                            <Link
-                                href={demoRoles.find(r => r.title === selectedRole)?.path || "/organizationadmin"}
-                                className="px-3.5 py-1.5 bg-[#00B050] text-white rounded-xl font-bold flex items-center gap-1 shadow-sm hover:bg-[#009b46] transition-colors"
-                            >
-                                Launch <ArrowRight className="w-3 h-3" />
-                            </Link>
+                        {/* Remember Me */}
+                        <div className="flex items-center justify-between py-1">
+                            <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-600">
+                                <input
+                                    type="checkbox"
+                                    {...register("rememberMe")}
+                                    className="rounded text-[#00B050] focus:ring-[#00B050]"
+                                />
+                                <span>Remember me on this device</span>
+                            </label>
                         </div>
 
                         {/* Submit Button */}
                         <Button 
                             type="submit" 
                             disabled={isSubmitting}
-                            className="w-full bg-[#00B050] hover:bg-[#009644] text-white font-semibold py-3.5 rounded-2xl shadow-md transition-transform hover:scale-[1.01] cursor-pointer text-sm disabled:opacity-50"
+                            className="w-full bg-[#00B050] hover:bg-[#009644] text-white font-semibold py-3.5 rounded-2xl shadow-md transition-transform hover:scale-[1.01] cursor-pointer text-sm disabled:opacity-50 flex items-center justify-center gap-2"
                         >
-                            Sign In to {selectedRole} Dashboard
+                            {isSubmitting ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    <span>Signing In...</span>
+                                </>
+                            ) : (
+                                <span>Sign In to Dashboard</span>
+                            )}
                         </Button>
                     </form>
 
-                    <div className="text-center text-xs text-gray-500">
-                        Don't have an account yet?{" "}
+                    <div className="text-center text-xs text-gray-500 pt-2">
+                        Don't have an organization account yet?{" "}
                         <Link href="/signup" className="font-semibold text-[#00B050] hover:underline">
                             Start Free Trial
                         </Link>
