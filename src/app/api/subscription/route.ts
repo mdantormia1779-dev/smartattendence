@@ -1,5 +1,6 @@
 import { requireAuth } from "@/server/authorization";
 import { OrganizationService } from "@/server/services/organization.service";
+import { SubscriptionService } from "@/server/services/subscription.service";
 import { apiSuccess, apiError } from "@/server/errors";
 
 export async function GET(request: Request) {
@@ -7,24 +8,42 @@ export async function GET(request: Request) {
     const session = requireAuth(request);
     const orgId = session.organizationId || "org-1";
 
-    const org = await OrganizationService.getOrganizationById(orgId);
+    const [org, planInfo] = await Promise.all([
+      OrganizationService.getOrganizationById(orgId).catch(() => null),
+      SubscriptionService.getOrganizationPlan(orgId),
+    ]);
+
     const subscriptionInfo = {
-      organizationId: org.id,
-      organizationName: org.name,
-      planId: org.planId,
-      planName: org.planName,
-      planTier: org.planTier,
-      status: org.subscriptionStatus,
-      isTrial: org.subscriptionStatus === "TRIAL",
-      trialDaysRemaining: 12,
-      billingCycle: "Monthly",
-      nextBillingDate: "2026-09-01",
-      amount: org.planTier === "BUSINESS" ? 149.0 : 39.0,
+      organizationId: org?.id || orgId,
+      organizationName: org?.name || "Organization",
+      planId: planInfo.plan.id,
+      planName: planInfo.plan.name,
+      planTier: planInfo.plan.type,
+      status: planInfo.status,
+      isTrial: planInfo.isTrial,
+      trialDaysRemaining: 14,
+      billingCycle: planInfo.plan.billingCycle,
+      startDate: planInfo.startDate,
+      endDate: planInfo.endDate,
+      amount: planInfo.plan.price,
       limits: {
-        maxBranches: org.planTier === "BUSINESS" ? 10 : 2,
-        maxEmployees: org.planTier === "BUSINESS" ? 300 : 50,
-        usedBranches: org.totalBranches,
-        usedEmployees: org.totalEmployees,
+        maxBranches: planInfo.limits.maxBranches,
+        maxManagers: planInfo.limits.maxManagers,
+        maxEmployees: planInfo.limits.maxEmployees,
+        usedBranches: planInfo.usage.branches,
+        usedManagers: planInfo.usage.managers,
+        usedEmployees: planInfo.usage.employees,
+      },
+      features: {
+        faceRecognition: planInfo.limits.faceRecognition,
+        gpsVerification: planInfo.limits.gpsVerification,
+        fingerprint: planInfo.limits.fingerprint,
+        payroll: planInfo.limits.payroll,
+        analytics: planInfo.limits.analytics,
+        apiAccess: planInfo.limits.apiAccess,
+        whiteLabel: planInfo.limits.whiteLabel,
+        customDomain: planInfo.limits.customDomain,
+        prioritySupport: planInfo.limits.prioritySupport,
       },
     };
 

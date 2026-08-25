@@ -1,6 +1,7 @@
 import { ConflictError, NotFoundError, ValidationError } from "../errors";
 import { prisma } from "@/lib/prisma";
 import { OrgStatus } from "@prisma/client";
+import { SubscriptionService } from "./subscription.service";
 
 export interface BranchData {
   id: string;
@@ -180,6 +181,9 @@ export class BranchService {
     if (existing) {
       throw new ConflictError(`Branch with code '${data.code}' already exists in your organization`);
     }
+
+    // Enforce Subscription Quota for Branches
+    await SubscriptionService.assertCanAddBranch(validOrgId);
 
     const statusEnum = data.status?.toUpperCase() === "INACTIVE" ? OrgStatus.SUSPENDED : OrgStatus.ACTIVE;
 

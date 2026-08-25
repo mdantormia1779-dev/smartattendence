@@ -1,12 +1,15 @@
 "use client";
 
 import React from 'react';
-import { Download, Plus, Users, UserCheck, Briefcase } from 'lucide-react';
+import { Download, Plus, Users, UserCheck, Briefcase, Lock, AlertTriangle, Zap } from 'lucide-react';
 
 const EmployeeHeader = ({ 
   totalCount = 0, 
   activeCount = 0, 
   fullTimeCount = 0, 
+  maxLimit = null,
+  planName = "Free Tier",
+  isQuotaExceeded = false,
   onAddClick, 
   onExport 
 }) => {
@@ -18,7 +21,7 @@ const EmployeeHeader = ({
             <Users className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-stone-900">
+            <h1 className="text-2xl font-bold tracking-tight text-stone-900 flex items-center gap-2.5">
               Employee Workforce Directory
             </h1>
             <p className="text-xs text-stone-400 mt-0.5">
@@ -38,6 +41,19 @@ const EmployeeHeader = ({
           <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-semibold border border-blue-100">
             Full-Time: <strong>{fullTimeCount}</strong>
           </span>
+
+          {/* Quota Indicator */}
+          {maxLimit !== null && (
+            <span className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 border ${
+              isQuotaExceeded 
+                ? "bg-rose-50 text-rose-700 border-rose-200 animate-pulse" 
+                : "bg-amber-50 text-amber-800 border-amber-200"
+            }`}>
+              {isQuotaExceeded ? <Lock className="w-3 h-3 text-rose-600" /> : <Zap className="w-3 h-3 text-amber-600" />}
+              {planName} Quota: <strong>{totalCount}/{maxLimit}</strong>
+              {isQuotaExceeded && <span className="text-[10px] uppercase tracking-wider font-extrabold ml-0.5">(Full)</span>}
+            </span>
+          )}
         </div>
       </div>
 
@@ -52,10 +68,14 @@ const EmployeeHeader = ({
         </button>
         <button 
           onClick={onAddClick}
-          className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors shadow-md shadow-emerald-600/20 cursor-pointer active:scale-95"
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer active:scale-95 ${
+            isQuotaExceeded
+              ? "bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white shadow-amber-600/20 ring-2 ring-amber-300"
+              : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
+          }`}
         >
-          <Plus className="w-4 h-4" />
-          Add Employee
+          {isQuotaExceeded ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+          {isQuotaExceeded ? "Add Employee (Quota Full)" : "Add Employee"}
         </button>
       </div>
     </div>

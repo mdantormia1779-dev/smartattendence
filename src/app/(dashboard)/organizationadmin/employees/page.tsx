@@ -7,6 +7,7 @@ import EmployeeFilters from "./../Components/Employee/EmployeeFilters";
 import EmployeeTable from "./../Components/Employee/EmployeeTable";
 import EmployeeDetails from "./../Components/Employee/EmployeeDetails";
 import CreateEmployeeModal from "./../Components/Employee/CreateEmployeeModal";
+import QuotaExceededModal from "./../Components/QuotaExceededModal";
 import { api } from "@/lib/api-client";
 import { Loader2, Plus, Users } from "lucide-react";
 
@@ -88,16 +89,23 @@ const EmployeePage = () => {
   // Modals & Active View
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeRecord | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isQuotaModalOpen, setIsQuotaModalOpen] = useState(false);
+  const [subscription, setSubscription] = useState<any>(null);
 
   const fetchAllData = async () => {
     try {
       setLoading(true);
-      const [empRes, branchRes, deptRes, mgrRes] = await Promise.allSettled([
+      const [empRes, branchRes, deptRes, mgrRes, subRes] = await Promise.allSettled([
         api.employees.getAll({ limit: 100 }),
         api.branches.getAll(),
         api.departments.getAll(),
         api.managers.getAll(),
+        api.get("/api/subscription"),
       ]);
+
+      if (subRes.status === "fulfilled" && subRes.value.success && subRes.value.data) {
+        setSubscription(subRes.value.data);
+      }
 
       if (empRes.status === "fulfilled" && empRes.value.success) {
         const val = empRes.value as any;
@@ -367,6 +375,19 @@ const EmployeePage = () => {
     );
   }
 
+  // Quota Computations
+  const maxEmployees = subscription?.limits?.maxEmployees ?? 20;
+  const planName = subscription?.planName || "Free Tier";
+  const isQuotaExceeded = maxEmployees !== null && employees.length >= maxEmployees;
+
+  const handleOpenAddEmployee = () => {
+    if (isQuotaExceeded) {
+      setIsQuotaModalOpen(true);
+    } else {
+      setIsAddModalOpen(true);
+    }
+  };
+
   return (
     <div
       ref={containerRef}
@@ -378,7 +399,10 @@ const EmployeePage = () => {
           totalCount={employees.length} 
           activeCount={activeStaffCount}
           fullTimeCount={fullTimeStaffCount}
-          onAddClick={() => setIsAddModalOpen(true)} 
+          maxLimit={maxEmployees}
+          planName={planName}
+          isQuotaExceeded={isQuotaExceeded}
+          onAddClick={handleOpenAddEmployee} 
           onExport={handleExportCSV}
         />
 
@@ -427,7 +451,7 @@ const EmployeePage = () => {
               </button>
             ) : (
               <button 
-                onClick={() => setIsAddModalOpen(true)}
+                onClick={handleOpenAddEmployee}
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
               >
                 <Plus className="w-4 h-4" /> Add First Employee
@@ -452,6 +476,16 @@ const EmployeePage = () => {
           departments={departments as any}
           managers={managers as any}
           onCreate={handleCreateEmployee}
+        />
+
+        {/* Quota Limit Exceeded Alert Modal */}
+        <QuotaExceededModal 
+          isOpen={isQuotaModalOpen}
+          onClose={() => setIsQuotaModalOpen(false)}
+          resourceName="Employees"
+          currentCount={employees.length}
+          maxLimit={maxEmployees}
+          planName={planName}
         />
       </div>
     </div>

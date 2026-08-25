@@ -9,9 +9,10 @@ interface ManagerCardProps {
     manager: Manager & { teamCount?: number };
     onEdit: (manager: Manager) => void;
     onDelete: (id: string, name: string) => void;
+    onView?: (manager: Manager & { teamCount?: number }) => void;
 }
 
-export default function AssignedManagerCard({ manager, onEdit, onDelete }: ManagerCardProps) {
+export default function AssignedManagerCard({ manager, onEdit, onDelete, onView }: ManagerCardProps) {
     const getInitials = (name: string) => {
         if (!name) return "MG";
         const parts = name.trim().split(" ");
@@ -24,7 +25,10 @@ export default function AssignedManagerCard({ manager, onEdit, onDelete }: Manag
             {/* Top accent bar */}
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 to-[#00B050] opacity-0 group-hover:opacity-100 transition-opacity" />
 
-            <div className="space-y-3.5">
+            <div 
+                className="space-y-3.5 cursor-pointer"
+                onClick={() => onView && onView(manager)}
+            >
                 {/* Top Section: Avatar, Name & Status */}
                 <div className="flex items-start justify-between gap-2.5">
                     <div className="flex items-center gap-3">
@@ -107,21 +111,31 @@ export default function AssignedManagerCard({ manager, onEdit, onDelete }: Manag
             </div>
 
             {/* Action Buttons */}
-            <div className="pt-3 mt-3 border-t border-gray-100 flex items-center justify-end gap-2">
-                <button 
-                    onClick={() => onEdit(manager)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-50 text-gray-600 hover:bg-[#00B050]/10 hover:text-[#00B050] transition-colors cursor-pointer active:scale-95"
-                >
-                    <Edit className="w-3.5 h-3.5" />
-                    Edit
-                </button>
-                <button 
-                    onClick={() => onDelete(manager.id, manager.name)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50/50 text-rose-500 hover:bg-rose-100/60 hover:text-rose-600 transition-colors cursor-pointer active:scale-95"
-                >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Remove
-                </button>
+            <div className="pt-3 mt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                {onView && (
+                    <button 
+                        onClick={() => onView(manager)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                    >
+                        ID Card 🪪
+                    </button>
+                )}
+                <div className="flex items-center gap-1.5 ml-auto">
+                    <button 
+                        onClick={() => onEdit(manager)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-50 text-gray-600 hover:bg-[#00B050]/10 hover:text-[#00B050] transition-colors cursor-pointer active:scale-95"
+                    >
+                        <Edit className="w-3.5 h-3.5" />
+                        Edit
+                    </button>
+                    <button 
+                        onClick={() => onDelete(manager.id, manager.name)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50/50 text-rose-500 hover:bg-rose-100/60 hover:text-rose-600 transition-colors cursor-pointer active:scale-95"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Remove
+                    </button>
+                </div>
             </div>
         </div>
     );

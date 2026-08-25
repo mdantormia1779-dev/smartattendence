@@ -52,7 +52,7 @@ const DEFAULT_PLANS = [
     billingCycle: "monthly",
     maxBranches: 1,
     maxManagers: 1,
-    maxEmployees: 10,
+    maxEmployees: 20,
     faceRecognition: true,
     gpsVerification: true,
     fingerprint: false,
@@ -134,16 +134,51 @@ function isSubscriptionPlanType(val: string): val is SubscriptionPlanType {
 }
 
 function buildPlanWhereClause(id: string) {
-  const upper = id?.trim().toUpperCase();
+  if (!id) return { id: "unknown-plan" };
+  const cleanId = id.trim();
+  const upper = cleanId.toUpperCase();
+  
+  let matchedType: SubscriptionPlanType | null = null;
   if (isSubscriptionPlanType(upper)) {
+    matchedType = upper;
+  } else if (upper.includes("FREE")) {
+    matchedType = SubscriptionPlanType.FREE;
+  } else if (upper.includes("STARTER")) {
+    matchedType = SubscriptionPlanType.STARTER;
+  } else if (upper.includes("BUSINESS")) {
+    matchedType = SubscriptionPlanType.BUSINESS;
+  } else if (upper.includes("ENTERPRISE")) {
+    matchedType = SubscriptionPlanType.ENTERPRISE;
+  }
+
+  if (matchedType) {
     return {
       OR: [
-        { id },
-        { type: upper },
+        { id: cleanId },
+        { type: matchedType },
       ],
     };
   }
-  return { id };
+  return { id: cleanId };
+}
+
+async function resolveOrganizationId(inputOrgId?: string | null): Promise<string> {
+  if (inputOrgId && inputOrgId !== "org-1" && inputOrgId !== "default") {
+    const directMatch = await prisma.organizations.findUnique({
+      where: { id: inputOrgId },
+      select: { id: true },
+    }).catch(() => null);
+    if (directMatch) return directMatch.id;
+  }
+
+  const firstOrg = await prisma.organizations.findFirst({
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
+  }).catch(() => null);
+
+  if (firstOrg) return firstOrg.id;
+
+  return inputOrgId || "org-1";
 }
 
 function mapToPlanData(p: any): SubscriptionPlanData {
@@ -395,5 +430,138 @@ export class SubscriptionService {
     });
 
     return { deleted: true, id: plan.id };
+  }
+
+  /**
+   * Get an Organization's current active subscription plan, usage, and quota limits
+   */
+  static async getOrganizationPlan(organizationId: string) {
+    const validOrgId = await resolveOrganizationId(organizationId);
+
+    // 1. Find active or trial subscription
+    const sub = await prisma.subscriptions.findFirst({
+      where: {
+        organizationId: validOrgId,
+        status: { in: ["ACTIVE", "TRIAL"] },
+      },
+      include: {
+        subscription_plans: true,
+      },
+    }).catch(() => null);
+
+    let activePlan: SubscriptionPlanData;
+
+    if (sub?.subscription_plans) {
+      activePlan = mapToPlanData(sub.subscription_plans);
+    } else {
+      // Default to FREE Plan from DB or fallback
+      const freePlanDb = await prisma.subscription_plans.findFirst({
+        where: { type: SubscriptionPlanType.FREE },
+      }).catch(() => null);
+
+      if (freePlanDb) {
+        activePlan = mapToPlanData(freePlanDb);
+      } else {
+        activePlan = mapToPlanData(DEFAULT_PLANS[0]);
+      }
+    }
+
+    // 2. Count current organization usage
+    const [employeesCount, managersCount, branchesCount] = await Promise.all([
+      prisma.employees.count({ where: { organizationId: validOrgId } }).catch(() => 0),
+      prisma.managers.count({ where: { organizationId: validOrgId } }).catch(() => 0),
+      prisma.branches.count({ where: { organizationId: validOrgId } }).catch(() => 0),
+    ]);
+
+    return {
+      plan: activePlan,
+      status: sub?.status || "FREE",
+      isTrial: sub?.status === "TRIAL",
+      startDate: sub?.startDate?.toISOString() || new Date().toISOString(),
+      endDate: sub?.endDate?.toISOString() || null,
+      usage: {
+        employees: employeesCount,
+        managers: managersCount,
+        branches: branchesCount,
+      },
+      limits: {
+        maxEmployees: activePlan.maxEmployees,
+        maxManagers: activePlan.maxManagers,
+        maxBranches: activePlan.maxBranches,
+        faceRecognition: activePlan.faceRecognition,
+        gpsVerification: activePlan.gpsVerification,
+        fingerprint: activePlan.fingerprint,
+        payroll: activePlan.payroll,
+        analytics: activePlan.analytics,
+        apiAccess: activePlan.apiAccess,
+        whiteLabel: activePlan.whiteLabel,
+        customDomain: activePlan.customDomain,
+        prioritySupport: activePlan.prioritySupport,
+      },
+    };
+  }
+
+  /**
+   * Enforce employee creation limit against current subscription
+   */
+  static async assertCanAddEmployee(organizationId: string) {
+    if (!organizationId) return;
+    const planInfo = await this.getOrganizationPlan(organizationId);
+    const { maxEmployees } = planInfo.limits;
+    const currentCount = planInfo.usage.employees;
+
+    if (maxEmployees !== null && maxEmployees !== undefined && currentCount >= maxEmployees) {
+      throw new PlanLimitExceededError(
+        `Employee limit reached (${currentCount}/${maxEmployees}). Your current ${planInfo.plan.name} allows up to ${maxEmployees} employees. Please upgrade your subscription plan in billing settings.`
+      );
+    }
+  }
+
+  /**
+   * Enforce manager creation limit against current subscription
+   */
+  static async assertCanAddManager(organizationId: string) {
+    if (!organizationId) return;
+    const planInfo = await this.getOrganizationPlan(organizationId);
+    const { maxManagers } = planInfo.limits;
+    const currentCount = planInfo.usage.managers;
+
+    if (maxManagers !== null && maxManagers !== undefined && currentCount >= maxManagers) {
+      throw new PlanLimitExceededError(
+        `Manager limit reached (${currentCount}/${maxManagers}). Your current ${planInfo.plan.name} allows up to ${maxManagers} manager(s). Please upgrade your subscription plan to assign additional managers.`
+      );
+    }
+  }
+
+  /**
+   * Enforce branch creation limit against current subscription
+   */
+  static async assertCanAddBranch(organizationId: string) {
+    if (!organizationId) return;
+    const planInfo = await this.getOrganizationPlan(organizationId);
+    const { maxBranches } = planInfo.limits;
+    const currentCount = planInfo.usage.branches;
+
+    if (maxBranches !== null && maxBranches !== undefined && currentCount >= maxBranches) {
+      throw new PlanLimitExceededError(
+        `Branch location limit reached (${currentCount}/${maxBranches}). Your current ${planInfo.plan.name} allows up to ${maxBranches} branch location(s). Please upgrade your subscription plan to add more branches.`
+      );
+    }
+  }
+
+  /**
+   * Enforce feature gate assertion
+   */
+  static async assertFeatureEnabled(
+    organizationId: string, 
+    feature: "faceRecognition" | "gpsVerification" | "fingerprint" | "payroll" | "analytics" | "apiAccess" | "whiteLabel" | "customDomain" | "prioritySupport"
+  ) {
+    if (!organizationId) return;
+    const planInfo = await this.getOrganizationPlan(organizationId);
+    if (!planInfo.limits[feature]) {
+      throw new PlanLimitExceededError(
+        `The feature '${feature}' is not included in your ${planInfo.plan.name} subscription plan. Please upgrade your subscription to unlock this feature.`
+      );
+    }
   }
 }

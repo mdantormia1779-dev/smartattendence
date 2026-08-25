@@ -1,6 +1,7 @@
 import { ConflictError, NotFoundError } from "../errors";
 import { prisma } from "@/lib/prisma";
 import { EmployeeStatus, EmploymentType, SalaryType } from "@prisma/client";
+import { SubscriptionService } from "./subscription.service";
 
 export interface EmployeeRecordData {
   id: string;
@@ -285,6 +286,9 @@ export class EmployeeService {
         targetOrgId = createdOrg.id;
       }
     }
+
+    // Check Organization Subscription Quota for Employees
+    await SubscriptionService.assertCanAddEmployee(targetOrgId);
 
     // 1. Resolve Branch
     let targetBranchId = data.branchId;

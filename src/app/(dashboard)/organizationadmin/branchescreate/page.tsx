@@ -2,10 +2,11 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
-import { Building2, Plus, Loader2, MapPin, RefreshCw } from "lucide-react";
+import { Building2, Plus, Loader2, MapPin, RefreshCw, Lock, Zap } from "lucide-react";
 import BranchCard from "../Components/Branches/BranchCard";
 import BranchModal from "../Components/Branches/BranchModal";
 import DeleteModal from "../Components/Branches/DeleteModal";
+import QuotaExceededModal from "../Components/QuotaExceededModal";
 
 interface Branch {
   id: string;
@@ -44,35 +45,54 @@ export default function BranchesPage() {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [branchToDelete, setBranchToDelete] = useState<string | null>(null);
 
+  // Quota Modal State
+  const [isQuotaModalOpen, setIsQuotaModalOpen] = useState<boolean>(false);
+  const [subscription, setSubscription] = useState<any>(null);
+
   const fetchBranches = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/branches?_t=${Date.now()}`, {
-        cache: "no-store",
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-        },
-      });
-      const json = await res.json();
-      const data = json.data || json;
+      const [branchRes, subRes] = await Promise.allSettled([
+        fetch(`/api/branches?_t=${Date.now()}`, {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+          },
+        }),
+        fetch(`/api/subscription?_t=${Date.now()}`, {
+          cache: "no-store",
+        }),
+      ]);
 
-      if (json.success || Array.isArray(data)) {
-        const rawList = Array.isArray(data) ? data : (data.data || []);
-        const mapped: Branch[] = rawList.map((b: any) => ({
-          id: b.id,
-          name: b.name,
-          code: b.code || "BR-001",
-          shortName: b.name?.substring(0, 3).toUpperCase() || "BRN",
-          address: b.address || "Dhaka, Bangladesh",
-          phone: b.phone || "+880 1712-345678",
-          employees: b.totalEmployees || b.employeesCount || 0,
-          geoFence: `${b.geofenceRadius || b.geoFenceRadius || 120}m`,
-          latitude: String(b.latitude || 23.7925),
-          longitude: String(b.longitude || 90.4078),
-          status: b.status === "INACTIVE" ? "Inactive" : "Active",
-        }));
-        setBranches(mapped);
+      if (subRes.status === "fulfilled") {
+        const subJson = await subRes.value.json();
+        if (subJson.success && subJson.data) {
+          setSubscription(subJson.data);
+        }
+      }
+
+      if (branchRes.status === "fulfilled") {
+        const json = await branchRes.value.json();
+        const data = json.data || json;
+
+        if (json.success || Array.isArray(data)) {
+          const rawList = Array.isArray(data) ? data : (data.data || []);
+          const mapped: Branch[] = rawList.map((b: any) => ({
+            id: b.id,
+            name: b.name,
+            code: b.code || "BR-001",
+            shortName: b.name?.substring(0, 3).toUpperCase() || "BRN",
+            address: b.address || "Dhaka, Bangladesh",
+            phone: b.phone || "+880 1712-345678",
+            employees: b.totalEmployees || b.employeesCount || 0,
+            geoFence: `${b.geofenceRadius || b.geoFenceRadius || 120}m`,
+            latitude: String(b.latitude || 23.7925),
+            longitude: String(b.longitude || 90.4078),
+            status: b.status === "INACTIVE" ? "Inactive" : "Active",
+          }));
+          setBranches(mapped);
+        }
       }
     } catch (e) {
       console.error("Failed to load branches:", e);
@@ -171,6 +191,20 @@ export default function BranchesPage() {
     }
   };
 
+  // Quota Computations
+  const maxBranches = subscription?.limits?.maxBranches ?? 1;
+  const planName = subscription?.planName || "Free Tier";
+  const isQuotaExceeded = maxBranches !== null && branches.length >= maxBranches;
+
+  const handleOpenAddBranch = () => {
+    if (isQuotaExceeded) {
+      setIsQuotaModalOpen(true);
+    } else {
+      setBranchToEdit(null);
+      setIsModalOpen(true);
+    }
+  };
+
   return (
     <div className="flex-1 bg-[#FBFBFA] p-6 md:p-8 space-y-6 overflow-y-auto min-h-screen text-neutral-800">
       {/* Header Section */}
@@ -184,7 +218,18 @@ export default function BranchesPage() {
             {branches.length} office locations with active GPS geofenced perimeter
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {maxBranches !== null && (
+            <span className={`px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border text-xs ${
+              isQuotaExceeded 
+                ? "bg-rose-50 text-rose-700 border-rose-200 animate-pulse" 
+                : "bg-amber-50 text-amber-800 border-amber-200"
+            }`}>
+              {isQuotaExceeded ? <Lock className="w-3.5 h-3.5 text-rose-600" /> : <Zap className="w-3.5 h-3.5 text-amber-600" />}
+              {planName} Quota: <strong>{branches.length}/{maxBranches}</strong>
+              {isQuotaExceeded && <span className="text-[10px] uppercase tracking-wider font-extrabold ml-0.5">(Full)</span>}
+            </span>
+          )}
           <button
             onClick={fetchBranches}
             className="p-2.5 rounded-xl border border-neutral-200 hover:bg-neutral-50 text-neutral-600 transition-colors cursor-pointer"
@@ -193,11 +238,15 @@ export default function BranchesPage() {
             <RefreshCw className="w-4 h-4" />
           </button>
           <button 
-            onClick={() => { setBranchToEdit(null); setIsModalOpen(true); }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-[#10b981] text-white shadow-xs hover:bg-emerald-600 transition-colors cursor-pointer active:scale-95"
+            onClick={handleOpenAddBranch}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer active:scale-95 ${
+              isQuotaExceeded
+                ? "bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white shadow-amber-600/20 ring-2 ring-amber-300"
+                : "bg-[#10b981] text-white hover:bg-emerald-600"
+            }`}
           >
-            <Plus className="w-4 h-4" />
-            Add Branch
+            {isQuotaExceeded ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            {isQuotaExceeded ? "Add Branch (Quota Full)" : "Add Branch"}
           </button>
         </div>
       </div>
@@ -214,7 +263,7 @@ export default function BranchesPage() {
           <p className="font-bold text-neutral-800 text-sm">No branch locations created yet</p>
           <p className="text-neutral-400 max-w-sm mx-auto">Click "Add Branch" to set up your primary office location and GPS geofence radius for employee clock-ins.</p>
           <button 
-            onClick={() => { setBranchToEdit(null); setIsModalOpen(true); }}
+            onClick={handleOpenAddBranch}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-[#10b981] text-white shadow-xs hover:bg-emerald-600 transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4" />
@@ -247,6 +296,16 @@ export default function BranchesPage() {
         isOpen={isDeleteOpen} 
         onClose={() => setIsDeleteOpen(false)} 
         onConfirm={confirmDelete} 
+      />
+
+      {/* Quota Limit Exceeded Alert Modal */}
+      <QuotaExceededModal 
+        isOpen={isQuotaModalOpen}
+        onClose={() => setIsQuotaModalOpen(false)}
+        resourceName="Branch Locations"
+        currentCount={branches.length}
+        maxLimit={maxBranches}
+        planName={planName}
       />
     </div>
   );

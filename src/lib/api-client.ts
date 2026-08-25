@@ -24,18 +24,26 @@ export interface ApiResponse<T = any> {
 class ApiClient {
   private getAuthHeader(): Record<string, string> {
     if (typeof window !== "undefined") {
-      const token = localStorage.getItem("auth_token") || localStorage.getItem("token") || "super-admin-token";
-      const storedUser = localStorage.getItem("user");
-      let userRole = "SUPER_ADMIN";
-      let userId = "user-super-1";
-      let orgId = localStorage.getItem("organizationId") || "";
-      if (storedUser) {
-        try {
-          const parsed = JSON.parse(storedUser);
-          if (parsed.role) userRole = parsed.role;
-          if (parsed.id || parsed.userId) userId = parsed.id || parsed.userId;
-          if (parsed.organizationId || parsed.orgId) orgId = parsed.organizationId || parsed.orgId;
-        } catch {}
+      const pathname = window.location.pathname || "";
+      const isSuperAdminRoute = pathname.startsWith("/admin") && !pathname.startsWith("/organizationadmin");
+
+      let token = localStorage.getItem("auth_token") || localStorage.getItem("token") || "super-admin-token";
+      let userRole = isSuperAdminRoute ? "SUPER_ADMIN" : "ORG_ADMIN";
+      let userId = isSuperAdminRoute ? "user-super-1" : "user-org-1";
+      let orgId = isSuperAdminRoute ? "" : (localStorage.getItem("organizationId") || "");
+
+      if (isSuperAdminRoute) {
+        token = "super-admin-token";
+      } else {
+        const storedUser = localStorage.getItem("user");
+        if (storedUser) {
+          try {
+            const parsed = JSON.parse(storedUser);
+            if (parsed.role) userRole = parsed.role;
+            if (parsed.id || parsed.userId) userId = parsed.id || parsed.userId;
+            if (parsed.organizationId || parsed.orgId) orgId = parsed.organizationId || parsed.orgId;
+          } catch {}
+        }
       }
 
       return {

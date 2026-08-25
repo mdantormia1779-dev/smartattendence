@@ -13,11 +13,15 @@ import {
   Building2, 
   Layers, 
   AlertTriangle,
+  Lock,
+  Zap,
   X 
 } from "lucide-react";
 import { Manager, ManagerFormData } from "@/types/manager";
 import ManagerCard from "../Components/Managers/AssignedManagerCard";
 import ManagerModal from "../Components/Managers/ManagerModal";
+import ManagerDetails from "../Components/Managers/ManagerDetails";
+import QuotaExceededModal from "../Components/QuotaExceededModal";
 import { api } from "@/lib/api-client";
 
 interface Branch {
@@ -40,6 +44,9 @@ export default function ManagersPage() {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Active Selected Manager for Details & ID Card
+  const [selectedManager, setSelectedManager] = useState<(Manager & { teamCount?: number }) | null>(null);
+
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "Active" | "Inactive">("ALL");
@@ -54,14 +61,23 @@ export default function ManagersPage() {
   const [isDeleteOpen, setIsDeleteOpen] = useState<boolean>(false);
   const [managerToDelete, setManagerToDelete] = useState<{ id: string; name: string } | null>(null);
 
+  // Quota Modal State
+  const [isQuotaModalOpen, setIsQuotaModalOpen] = useState<boolean>(false);
+  const [subscription, setSubscription] = useState<any>(null);
+
   const fetchAllData = async () => {
     try {
       setLoading(true);
-      const [mgrRes, branchRes, deptRes] = await Promise.allSettled([
+      const [mgrRes, branchRes, deptRes, subRes] = await Promise.allSettled([
         api.managers.getAll(),
         api.branches.getAll(),
         api.departments.getAll(),
+        api.get("/api/subscription"),
       ]);
+
+      if (subRes.status === "fulfilled" && subRes.value.success && subRes.value.data) {
+        setSubscription(subRes.value.data);
+      }
 
       if (mgrRes.status === "fulfilled" && mgrRes.value.success && Array.isArray(mgrRes.value.data)) {
         const mapped = mgrRes.value.data.map((m: any, index: number) => ({
@@ -197,9 +213,41 @@ export default function ManagersPage() {
     return managers.reduce((acc, curr) => acc + (curr.teamCount || 0), 0);
   }, [managers]);
 
-  const activeManagersCount = useMemo(() => {
-    return managers.filter(m => m.status === "Active").length;
-  }, [managers]);
+  // Quota Computations
+  const maxManagers = subscription?.limits?.maxManagers ?? 1;
+  const planName = subscription?.planName || "Free Tier";
+  const isQuotaExceeded = maxManagers !== null && managers.length >= maxManagers;
+
+  const handleOpenAssignManager = () => {
+    if (isQuotaExceeded) {
+      setIsQuotaModalOpen(true);
+    } else {
+      setManagerToEdit(null);
+      setIsModalOpen(true);
+    }
+  };
+
+  // Single Manager Details & ID Card View
+  if (selectedManager) {
+    return (
+      <ManagerDetails 
+        manager={selectedManager} 
+        onBack={() => {
+          setSelectedManager(null);
+          fetchAllData();
+        }}
+        onEdit={(m: Manager) => {
+          setSelectedManager(null);
+          setManagerToEdit(m);
+          setIsModalOpen(true);
+        }}
+        onDelete={(id: string, name: string) => {
+          setSelectedManager(null);
+          openDeleteModal(id, name);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex-1 bg-[#FBFBFA] p-6 md:p-8 space-y-6 overflow-y-auto min-h-screen text-neutral-800">
@@ -215,7 +263,18 @@ export default function ManagersPage() {
             Assign team supervisors, branch leaders, and departmental operations heads
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {maxManagers !== null && (
+            <span className={`px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border text-xs ${
+              isQuotaExceeded 
+                ? "bg-rose-50 text-rose-700 border-rose-200 animate-pulse" 
+                : "bg-amber-50 text-amber-800 border-amber-200"
+            }`}>
+              {isQuotaExceeded ? <Lock className="w-3.5 h-3.5 text-rose-600" /> : <Zap className="w-3.5 h-3.5 text-amber-600" />}
+              {planName} Quota: <strong>{managers.length}/{maxManagers}</strong>
+              {isQuotaExceeded && <span className="text-[10px] uppercase tracking-wider font-extrabold ml-0.5">(Full)</span>}
+            </span>
+          )}
           <button
             onClick={fetchAllData}
             className="p-2.5 rounded-xl border border-neutral-200 hover:bg-neutral-50 text-neutral-600 transition-colors cursor-pointer"
@@ -224,11 +283,15 @@ export default function ManagersPage() {
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-[#00B050]" : ""}`} />
           </button>
           <button 
-            onClick={() => { setManagerToEdit(null); setIsModalOpen(true); }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#00B050] text-white shadow-md shadow-[#00B050]/20 hover:bg-[#009b46] transition-colors cursor-pointer active:scale-95"
+            onClick={handleOpenAssignManager}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer active:scale-95 ${
+              isQuotaExceeded
+                ? "bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white shadow-amber-600/20 ring-2 ring-amber-300"
+                : "bg-[#00B050] text-white shadow-[#00B050]/20 hover:bg-[#009b46]"
+            }`}
           >
-            <Plus className="w-4 h-4" />
-            Assign Manager
+            {isQuotaExceeded ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            {isQuotaExceeded ? "Assign Manager (Quota Full)" : "Assign Manager"}
           </button>
         </div>
       </div>
@@ -396,6 +459,7 @@ export default function ManagersPage() {
             <ManagerCard 
               key={manager.id} 
               manager={manager} 
+              onView={(m) => setSelectedManager(m)}
               onEdit={(m: Manager) => { setManagerToEdit(m); setIsModalOpen(true); }}
               onDelete={openDeleteModal}
             />
@@ -444,6 +508,16 @@ export default function ManagersPage() {
           </div>
         </div>
       )}
+
+      {/* Quota Limit Exceeded Alert Modal */}
+      <QuotaExceededModal 
+        isOpen={isQuotaModalOpen}
+        onClose={() => setIsQuotaModalOpen(false)}
+        resourceName="Managers"
+        currentCount={managers.length}
+        maxLimit={maxManagers}
+        planName={planName}
+      />
 
     </div>
   );

@@ -1,5 +1,6 @@
 import { ConflictError, NotFoundError, ValidationError } from "../errors";
 import { prisma } from "@/lib/prisma";
+import { SubscriptionService } from "./subscription.service";
 
 export interface ManagerData {
   id: string;
@@ -153,6 +154,9 @@ export class ManagerService {
     if (existing) {
       throw new ConflictError(`Manager with email '${cleanEmail}' already exists in your organization`);
     }
+
+    // Enforce Subscription Quota for Managers
+    await SubscriptionService.assertCanAddManager(validOrgId);
 
     // Resolve branch ID if string name passed
     let branchId = data.branchId || null;
