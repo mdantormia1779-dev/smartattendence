@@ -32,9 +32,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    requireRole(request, ["SUPER_ADMIN", "ORG_ADMIN"]);
+    const session = requireRole(request, ["SUPER_ADMIN", "ORG_ADMIN"]);
+    const orgId = session.organizationId || "org-1";
 
-    return apiSuccess({ deleted: true, id }, "Shift removed successfully");
+    const result = await ShiftService.deleteShift(id, orgId);
+    return apiSuccess(result, "Shift removed successfully");
   } catch (error: any) {
     return apiError(error);
   }

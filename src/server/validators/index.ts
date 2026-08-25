@@ -187,13 +187,15 @@ export const RegisterFaceSchema = z.object({
 // ==========================================
 export const CreateShiftSchema = z.object({
   name: z.string().min(2, "Shift name is required"),
-  type: z.enum(["MORNING", "EVENING", "NIGHT", "FLEXIBLE", "ROTATIONAL"]).default("MORNING"),
+  type: z.enum(["MORNING", "EVENING", "NIGHT", "FLEXIBLE", "ROTATIONAL"]).default("MORNING").optional(),
   startTime: z.string().min(1, "Start time is required"),
   endTime: z.string().min(1, "End time is required"),
-  breakMinutes: z.number().int().min(0).default(60),
-  graceMinutes: z.number().int().min(0).default(15),
-  overtimeThresholdHours: z.number().min(1).default(8.0),
-  workingDays: z.array(z.string()).min(1, "At least 1 working day is required"),
+  branchId: z.string().optional().nullable(),
+  breakMinutes: z.number().int().min(0).default(60).optional(),
+  graceMinutes: z.number().int().min(0).default(15).optional(),
+  overtimeThresholdHours: z.number().min(1).default(8.0).optional(),
+  workingDays: z.array(z.string()).optional().default(["Sun", "Mon", "Tue", "Wed", "Thu"]),
+  status: z.string().optional(),
 });
 
 export const CreateOvertimeClaimSchema = z.object({

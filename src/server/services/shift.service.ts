@@ -1,8 +1,11 @@
 import { NotFoundError, ConflictError, ValidationError } from "../errors";
+import { prisma } from "@/lib/prisma";
 
 export interface ShiftData {
   id: string;
   organizationId: string;
+  branchId: string;
+  branchName?: string;
   name: string;
   type: "MORNING" | "EVENING" | "NIGHT" | "FLEXIBLE" | "ROTATIONAL";
   startTime: string;
@@ -12,92 +15,369 @@ export interface ShiftData {
   overtimeThresholdHours: number;
   workingDays: string[];
   status: "Active" | "Inactive";
-  assignedEmployeesCount: number;
+  activeEmployees: number;
   createdAt: string;
 }
 
-let shiftsStore: ShiftData[] = [
-  {
-    id: "shift-1",
-    organizationId: "org-1",
-    name: "General Morning Shift",
-    type: "MORNING",
-    startTime: "09:00 AM",
-    endTime: "05:00 PM",
-    breakMinutes: 60,
-    graceMinutes: 15,
-    overtimeThresholdHours: 8.0,
-    workingDays: ["Sun", "Mon", "Tue", "Wed", "Thu"],
-    status: "Active",
-    assignedEmployeesCount: 245,
-    createdAt: "2026-01-15",
-  },
-  {
-    id: "shift-2",
-    organizationId: "org-1",
-    name: "Evening Support Shift",
-    type: "EVENING",
-    startTime: "02:00 PM",
-    endTime: "10:00 PM",
-    breakMinutes: 45,
-    graceMinutes: 15,
-    overtimeThresholdHours: 8.0,
-    workingDays: ["Sun", "Mon", "Tue", "Wed", "Thu"],
-    status: "Active",
-    assignedEmployeesCount: 46,
-    createdAt: "2026-02-01",
-  },
-];
+async function resolveOrganizationId(inputOrgId?: string | null): Promise<string> {
+  if (inputOrgId && inputOrgId !== "org-1" && inputOrgId !== "default") {
+    const directMatch = await prisma.organizations.findUnique({
+      where: { id: inputOrgId },
+      select: { id: true },
+    }).catch(() => null);
+    if (directMatch) return directMatch.id;
+  }
+
+  const firstOrg = await prisma.organizations.findFirst({
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
+  }).catch(() => null);
+
+  if (firstOrg) return firstOrg.id;
+
+  return inputOrgId || "org-1";
+}
 
 export class ShiftService {
-  static async getShifts(organizationId: string) {
-    return shiftsStore.filter((s) => s.organizationId === organizationId);
+  /**
+   * Get all shifts for an organization (with automatic default seed if table empty)
+   */
+  static async getShifts(organizationId: string): Promise<ShiftData[]> {
+    const validOrgId = await resolveOrganizationId(organizationId);
+
+    // 1. Find all branches for this organization
+    const branches = await prisma.branches.findMany({
+      where: { organizationId: validOrgId },
+      select: { id: true, name: true },
+    });
+
+    let branchIds = branches.map((b) => b.id);
+
+    // If organization has no branch yet, ensure a default branch exists
+    if (branchIds.length === 0) {
+      const defaultBranch = await prisma.branches.create({
+        data: {
+          id: `branch-main-${Date.now()}`,
+          organizationId: validOrgId,
+          name: "Main Head Office",
+          code: "HQ-01",
+          address: "Dhaka, Bangladesh",
+          latitude: 23.8103,
+          longitude: 90.4125,
+          geoFenceRadius: 150,
+          status: "ACTIVE",
+          updatedAt: new Date(),
+        },
+      });
+      branchIds = [defaultBranch.id];
+    }
+
+    // 2. Query real shifts from database
+    let dbShifts = await prisma.shifts.findMany({
+      where: { branchId: { in: branchIds } },
+      include: {
+        branches: { select: { id: true, name: true, organizationId: true } },
+        _count: {
+          select: {
+            shift_assignments: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    // If no shifts exist yet for this organization, auto-create standard initial shifts
+    if (dbShifts.length === 0 && branchIds.length > 0) {
+      const primaryBranchId = branchIds[0];
+      const initialShifts = [
+        {
+          id: `shift-morning-${Date.now()}`,
+          branchId: primaryBranchId,
+          name: "Morning Regular Shift",
+          startTime: "09:00 AM",
+          endTime: "05:00 PM",
+          breakMinutes: 60,
+          gracePeriod: 15,
+          lateAfter: 30,
+        },
+        {
+          id: `shift-evening-${Date.now() + 1}`,
+          branchId: primaryBranchId,
+          name: "Evening Support Shift",
+          startTime: "02:00 PM",
+          endTime: "10:00 PM",
+          breakMinutes: 45,
+          gracePeriod: 15,
+          lateAfter: 30,
+        },
+        {
+          id: `shift-night-${Date.now() + 2}`,
+          branchId: primaryBranchId,
+          name: "Night Operations Shift",
+          startTime: "10:00 PM",
+          endTime: "06:00 AM",
+          breakMinutes: 60,
+          gracePeriod: 15,
+          lateAfter: 30,
+        },
+      ];
+
+      for (const s of initialShifts) {
+        await prisma.shifts.create({ data: s }).catch(() => {});
+      }
+
+      dbShifts = await prisma.shifts.findMany({
+        where: { branchId: { in: branchIds } },
+        include: {
+          branches: { select: { id: true, name: true, organizationId: true } },
+          _count: {
+            select: {
+              shift_assignments: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      });
+    }
+
+    // 3. Count total active employees per shift
+    return dbShifts.map((s) => {
+      const nameUpper = s.name.toUpperCase();
+      let shiftType: ShiftData["type"] = "MORNING";
+      if (nameUpper.includes("EVENING")) shiftType = "EVENING";
+      else if (nameUpper.includes("NIGHT")) shiftType = "NIGHT";
+      else if (nameUpper.includes("FLEX")) shiftType = "FLEXIBLE";
+      else if (nameUpper.includes("ROTAT")) shiftType = "ROTATIONAL";
+
+      return {
+        id: s.id,
+        organizationId: s.branches?.organizationId || validOrgId,
+        branchId: s.branchId,
+        branchName: s.branches?.name || "Main Branch",
+        name: s.name,
+        type: shiftType,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        breakMinutes: s.breakMinutes,
+        graceMinutes: s.gracePeriod,
+        overtimeThresholdHours: 8.0,
+        workingDays: ["Sun", "Mon", "Tue", "Wed", "Thu"],
+        status: "Active",
+        activeEmployees: s._count?.shift_assignments || 0,
+        createdAt: s.createdAt.toISOString().split("T")[0],
+      };
+    });
   }
 
-  static async getShiftById(id: string, organizationId: string) {
-    const shift = shiftsStore.find((s) => s.id === id && s.organizationId === organizationId);
+  /**
+   * Get single shift by ID
+   */
+  static async getShiftById(id: string, organizationId: string): Promise<ShiftData> {
+    const shift = await prisma.shifts.findUnique({
+      where: { id },
+      include: {
+        branches: { select: { id: true, name: true, organizationId: true } },
+        _count: { select: { shift_assignments: true } },
+      },
+    });
+
     if (!shift) throw new NotFoundError("Shift");
-    return shift;
+
+    const nameUpper = shift.name.toUpperCase();
+    let shiftType: ShiftData["type"] = "MORNING";
+    if (nameUpper.includes("EVENING")) shiftType = "EVENING";
+    else if (nameUpper.includes("NIGHT")) shiftType = "NIGHT";
+    else if (nameUpper.includes("FLEX")) shiftType = "FLEXIBLE";
+    else if (nameUpper.includes("ROTAT")) shiftType = "ROTATIONAL";
+
+    return {
+      id: shift.id,
+      organizationId: shift.branches?.organizationId || organizationId,
+      branchId: shift.branchId,
+      branchName: shift.branches?.name || "Main Branch",
+      name: shift.name,
+      type: shiftType,
+      startTime: shift.startTime,
+      endTime: shift.endTime,
+      breakMinutes: shift.breakMinutes,
+      graceMinutes: shift.gracePeriod,
+      overtimeThresholdHours: 8.0,
+      workingDays: ["Sun", "Mon", "Tue", "Wed", "Thu"],
+      status: "Active",
+      activeEmployees: shift._count?.shift_assignments || 0,
+      createdAt: shift.createdAt.toISOString().split("T")[0],
+    };
   }
 
+  /**
+   * Create a new shift in the database
+   */
   static async createShift(data: {
     organizationId: string;
+    branchId?: string | null;
     name: string;
-    type?: ShiftData["type"];
+    type?: ShiftData["type"] | string;
     startTime: string;
     endTime: string;
     breakMinutes?: number;
     graceMinutes?: number;
     overtimeThresholdHours?: number;
-    workingDays: string[];
-  }) {
-    if (data.breakMinutes !== undefined && data.breakMinutes < 0) {
-      throw new ValidationError("Break duration cannot be negative");
+    workingDays?: string[];
+    status?: string;
+  }): Promise<ShiftData> {
+    const validOrgId = await resolveOrganizationId(data.organizationId);
+
+    if (!data.name || !data.startTime || !data.endTime) {
+      throw new ValidationError("Shift name, start time, and end time are required.");
     }
 
-    const newShift: ShiftData = {
-      id: `shift-${Date.now()}`,
-      organizationId: data.organizationId,
-      name: data.name,
-      type: data.type || "MORNING",
-      startTime: data.startTime,
-      endTime: data.endTime,
-      breakMinutes: data.breakMinutes ?? 60,
-      graceMinutes: data.graceMinutes ?? 15,
-      overtimeThresholdHours: data.overtimeThresholdHours ?? 8.0,
-      workingDays: data.workingDays,
-      status: "Active",
-      assignedEmployeesCount: 0,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
+    // Resolve branch ID
+    let targetBranchId = data.branchId;
+    if (!targetBranchId) {
+      const branch = await prisma.branches.findFirst({
+        where: { organizationId: validOrgId },
+      });
+      if (branch) {
+        targetBranchId = branch.id;
+      } else {
+        const newBranch = await prisma.branches.create({
+          data: {
+            id: `branch-main-${Date.now()}`,
+            organizationId: validOrgId,
+            name: "Main Head Office",
+            code: "HQ-01",
+            address: "Dhaka, Bangladesh",
+            latitude: 23.8103,
+            longitude: 90.4125,
+            geoFenceRadius: 150,
+            status: "ACTIVE",
+            updatedAt: new Date(),
+          },
+        });
+        targetBranchId = newBranch.id;
+      }
+    }
 
-    shiftsStore.push(newShift);
-    return newShift;
+    const created = await prisma.shifts.create({
+      data: {
+        id: `shift-${Date.now()}`,
+        branchId: targetBranchId,
+        name: data.name.trim(),
+        startTime: data.startTime.trim(),
+        endTime: data.endTime.trim(),
+        breakMinutes: data.breakMinutes ?? 60,
+        gracePeriod: data.graceMinutes ?? 15,
+        lateAfter: (data.graceMinutes ?? 15) * 2,
+        createdAt: new Date(),
+      },
+      include: {
+        branches: { select: { id: true, name: true, organizationId: true } },
+      },
+    });
+
+    const nameUpper = created.name.toUpperCase();
+    let shiftType: ShiftData["type"] = (data.type?.toUpperCase() as any) || "MORNING";
+    if (!data.type) {
+      if (nameUpper.includes("EVENING")) shiftType = "EVENING";
+      else if (nameUpper.includes("NIGHT")) shiftType = "NIGHT";
+      else if (nameUpper.includes("FLEX")) shiftType = "FLEXIBLE";
+      else if (nameUpper.includes("ROTAT")) shiftType = "ROTATIONAL";
+    }
+
+    return {
+      id: created.id,
+      organizationId: validOrgId,
+      branchId: created.branchId,
+      branchName: created.branches?.name || "Main Branch",
+      name: created.name,
+      type: shiftType,
+      startTime: created.startTime,
+      endTime: created.endTime,
+      breakMinutes: created.breakMinutes,
+      graceMinutes: created.gracePeriod,
+      overtimeThresholdHours: data.overtimeThresholdHours ?? 8.0,
+      workingDays: data.workingDays || ["Sun", "Mon", "Tue", "Wed", "Thu"],
+      status: (data.status === "Inactive" || data.status === "INACTIVE" ? "Inactive" : "Active"),
+      activeEmployees: 0,
+      createdAt: created.createdAt.toISOString().split("T")[0],
+    };
   }
 
-  static async updateShift(id: string, organizationId: string, updates: Partial<ShiftData>) {
-    const shift = await this.getShiftById(id, organizationId);
-    Object.assign(shift, updates);
-    return shift;
+  /**
+   * Update an existing shift in the database
+   */
+  static async updateShift(
+    id: string,
+    organizationId: string,
+    updates: Partial<ShiftData> & { graceMinutes?: number }
+  ): Promise<ShiftData> {
+    const existing = await prisma.shifts.findUnique({
+      where: { id },
+      include: {
+        branches: true,
+        _count: { select: { shift_assignments: true } },
+      },
+    });
+
+    if (!existing) throw new NotFoundError("Shift");
+
+    const updated = await prisma.shifts.update({
+      where: { id },
+      data: {
+        ...(updates.name ? { name: updates.name.trim() } : {}),
+        ...(updates.startTime ? { startTime: updates.startTime.trim() } : {}),
+        ...(updates.endTime ? { endTime: updates.endTime.trim() } : {}),
+        ...(updates.breakMinutes !== undefined ? { breakMinutes: updates.breakMinutes } : {}),
+        ...(updates.graceMinutes !== undefined ? { gracePeriod: updates.graceMinutes } : {}),
+        ...(updates.branchId ? { branchId: updates.branchId } : {}),
+      },
+      include: {
+        branches: { select: { id: true, name: true, organizationId: true } },
+        _count: { select: { shift_assignments: true } },
+      },
+    });
+
+    const shiftType = (updates.type || "MORNING") as ShiftData["type"];
+
+    return {
+      id: updated.id,
+      organizationId: updated.branches?.organizationId || organizationId,
+      branchId: updated.branchId,
+      branchName: updated.branches?.name || "Main Branch",
+      name: updated.name,
+      type: shiftType,
+      startTime: updated.startTime,
+      endTime: updated.endTime,
+      breakMinutes: updated.breakMinutes,
+      graceMinutes: updated.gracePeriod,
+      overtimeThresholdHours: updates.overtimeThresholdHours ?? 8.0,
+      workingDays: updates.workingDays || ["Sun", "Mon", "Tue", "Wed", "Thu"],
+      status: updates.status || "Active",
+      activeEmployees: updated._count?.shift_assignments || 0,
+      createdAt: updated.createdAt.toISOString().split("T")[0],
+    };
+  }
+
+  /**
+   * Delete a shift and unassign employees
+   */
+  static async deleteShift(id: string, organizationId: string): Promise<{ deleted: boolean; id: string }> {
+    const existing = await prisma.shifts.findUnique({
+      where: { id },
+    });
+
+    if (!existing) throw new NotFoundError("Shift");
+
+    // Remove shift assignments first
+    await prisma.shift_assignments.deleteMany({
+      where: { shiftId: id },
+    }).catch(() => {});
+
+    // Delete shift record
+    await prisma.shifts.delete({
+      where: { id },
+    });
+
+    return { deleted: true, id };
   }
 }

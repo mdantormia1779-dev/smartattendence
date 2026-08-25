@@ -46,8 +46,8 @@ const demoRoles = [
     {
         title: "Org Admin",
         role: "Vertex Technologies",
-        email: "sarah.admin@vertextech.io",
-        password: "admin123",
+        email: "antor@gmail.com",
+        password: "123456",
         path: "/organizationadmin",
         icon: Building2,
         color: "from-emerald-500/20 to-emerald-600/20 border-emerald-300 text-emerald-900",
