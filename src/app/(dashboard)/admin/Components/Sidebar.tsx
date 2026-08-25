@@ -1,7 +1,8 @@
-"use client"
-import React from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+"use client";
+
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { 
     LayoutDashboard,
     Building2, 
@@ -13,74 +14,238 @@ import {
     Settings, 
     LogOut,
     Share2,
-    BellRing
-} from 'lucide-react';
+    BellRing,
+    ShieldAlert,
+    ShieldCheck,
+    Sparkles,
+    CheckCircle2
+} from "lucide-react";
+import { api } from "@/lib/api-client";
 
-const menuItems = [
-    { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-    { name: 'Create Organization', href: '/admin/create-organization', icon: Building2 },
-    { name: 'Subscription Plans', href: '/admin/subscription-plans', icon: CreditCard },
-    { name: 'Approve Payments', href: '/admin/approve-payments', icon: DollarSign },
-    { name: 'Manage Coupons', href: '/admin/coupons', icon: Ticket },
-    { name: 'View Revenue', href: '/admin/revenue', icon: DollarSign },
-    { name: 'Referrals & Affiliates', href: '/admin/referrals', icon: Share2 },
-    { name: 'Notification Center', href: '/admin/notifications', icon: BellRing },
-    { name: 'Suspend Organizations', href: '/admin/suspend', icon: UserX },
-    { name: 'View Audit Logs', href: '/admin/audit-logs', icon: FileText },
-    { name: 'System Settings', href: '/admin/settings', icon: Settings },
+interface MenuItem {
+    name: string;
+    href: string;
+    icon: React.ComponentType<{ className?: string }>;
+    badgeKey?: "pendingPayments" | "pendingWithdrawals" | "unreadNotifications" | "suspendedOrgs";
+}
+
+const menuItems: MenuItem[] = [
+    { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
+    { name: "Create Organization", href: "/admin/create-organization", icon: Building2 },
+    { name: "Subscription Plans", href: "/admin/subscription-plans", icon: CreditCard },
+    { name: "Approve Payments", href: "/admin/approve-payments", icon: DollarSign, badgeKey: "pendingPayments" },
+    { name: "Manage Coupons", href: "/admin/coupons", icon: Ticket },
+    { name: "View Revenue", href: "/admin/revenue", icon: DollarSign },
+    { name: "Referrals & Affiliates", href: "/admin/referrals", icon: Share2, badgeKey: "pendingWithdrawals" },
+    { name: "Notification Center", href: "/admin/notifications", icon: BellRing, badgeKey: "unreadNotifications" },
+    { name: "Suspend Organizations", href: "/admin/suspend", icon: UserX, badgeKey: "suspendedOrgs" },
+    { name: "View Audit Logs", href: "/admin/audit-logs", icon: FileText },
+    { name: "System Settings", href: "/admin/settings", icon: Settings },
 ];
 
-const Sidebar = () => {
+export default function Sidebar() {
     const pathname = usePathname();
+    const router = useRouter();
+
+    // Real Super Admin Profile State
+    const [adminName, setAdminName] = useState("Super Admin");
+    const [adminEmail, setAdminEmail] = useState("admin@smartattendance.io");
+
+    // Real Live Badge Counts
+    const [badgeCounts, setBadgeCounts] = useState({
+        pendingPayments: 0,
+        pendingWithdrawals: 0,
+        unreadNotifications: 0,
+        suspendedOrgs: 0,
+    });
+
+    // 1. Load Real Super Admin Session & Dynamic Badges
+    const loadAdminData = async () => {
+        // Read user session from localStorage
+        if (typeof window !== "undefined") {
+            const rawUser =
+                localStorage.getItem("user") ||
+                localStorage.getItem("user_info") ||
+                localStorage.getItem("userData");
+
+            if (rawUser) {
+                try {
+                    const parsed = JSON.parse(rawUser);
+                    if (parsed.name || parsed.fullName) setAdminName(parsed.name || parsed.fullName);
+                    if (parsed.email) setAdminEmail(parsed.email);
+                } catch {}
+            }
+        }
+
+        // Fetch live badge counts from real backend APIs
+        try {
+            const [paymentsRes, withdrawalsRes, notifsRes, orgsRes] = await Promise.allSettled([
+                api.payments.getAll(),
+                api.adminReferrals.getWithdrawals(),
+                api.notifications.getAll(),
+                api.organizations.getAll(),
+            ]);
+
+            let pendingPayCount = 0;
+            if (paymentsRes.status === "fulfilled" && paymentsRes.value?.success && Array.isArray(paymentsRes.value.data)) {
+                pendingPayCount = paymentsRes.value.data.filter((p: any) => 
+                    p.status === "PENDING" || p.paymentStatus === "PENDING"
+                ).length;
+            }
+
+            let pendingWithCount = 0;
+            if (withdrawalsRes.status === "fulfilled" && withdrawalsRes.value?.success && Array.isArray(withdrawalsRes.value.data)) {
+                pendingWithCount = withdrawalsRes.value.data.filter((w: any) => 
+                    w.status === "PENDING" || w.status === "REQUESTED"
+                ).length;
+            }
+
+            let unreadNotifCount = 0;
+            if (notifsRes.status === "fulfilled" && notifsRes.value?.success && Array.isArray(notifsRes.value.data)) {
+                unreadNotifCount = notifsRes.value.data.filter((n: any) => !n.read && !n.isRead).length;
+            }
+
+            let suspendedOrgCount = 0;
+            if (orgsRes.status === "fulfilled" && orgsRes.value?.success && Array.isArray(orgsRes.value.data)) {
+                suspendedOrgCount = orgsRes.value.data.filter((o: any) => 
+                    o.status === "SUSPENDED" || o.isSuspended === true
+                ).length;
+            }
+
+            setBadgeCounts({
+                pendingPayments: pendingPayCount,
+                pendingWithdrawals: pendingWithCount,
+                unreadNotifications: unreadNotifCount,
+                suspendedOrgs: suspendedOrgCount,
+            });
+        } catch (e) {
+            console.warn("Super Admin badge metrics load fallback:", e);
+        }
+    };
+
+    useEffect(() => {
+        loadAdminData();
+
+        const handleUpdate = () => loadAdminData();
+        window.addEventListener("user-profile-updated", handleUpdate);
+        window.addEventListener("notifications-updated", handleUpdate);
+        window.addEventListener("payments-updated", handleUpdate);
+        return () => {
+            window.removeEventListener("user-profile-updated", handleUpdate);
+            window.removeEventListener("notifications-updated", handleUpdate);
+            window.removeEventListener("payments-updated", handleUpdate);
+        };
+    }, []);
+
+    // 2. Real Safe Logout
+    const handleLogout = async () => {
+        try {
+            await api.auth.logout();
+        } catch {}
+
+        if (typeof window !== "undefined") {
+            localStorage.removeItem("auth_token");
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+            localStorage.removeItem("user_info");
+            localStorage.removeItem("userData");
+            document.cookie = "auth_session=; path=/; max-age=0";
+            document.cookie = "user_role=; path=/; max-age=0";
+        }
+        router.push("/login");
+    };
+
+    const getInitials = (name: string) => {
+        if (!name) return "SA";
+        const parts = name.trim().split(" ");
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+        }
+        return name.slice(0, 2).toUpperCase();
+    };
 
     return (
-        <aside className="w-64 bg-white border-r border-gray-100 flex flex-col h-screen sticky top-0 z-40 md:flex">
+        <aside className="w-64 bg-white border-r border-neutral-200 flex flex-col h-screen sticky top-0 z-40 select-none">
             {/* Logo Area */}
-            <div className="h-16 flex items-center px-6 border-b border-gray-100">
+            <div className="h-16 flex items-center px-6 border-b border-neutral-200 justify-between">
                 <Link href="/admin" className="flex items-center gap-3">
-                    <div className="bg-[#00B050] text-white font-bold px-3 py-1.5 rounded-lg text-lg tracking-wider">
-                        VX
+                    <div className="bg-[#00B050] text-white font-black px-2.5 py-1.5 rounded-xl text-sm tracking-wider shadow-2xs">
+                        SA
                     </div>
-                    <div className="text-xl font-bold tracking-tight text-gray-900">
-                        Super<span className="text-[#00B050]">Admin</span>
+                    <div>
+                        <div className="text-sm font-black tracking-tight text-neutral-900 leading-tight">
+                            Super<span className="text-[#00B050]">Admin</span>
+                        </div>
+                        <span className="text-[10px] text-neutral-400 font-medium">Control Center</span>
                     </div>
                 </Link>
             </div>
 
-            {/* Navigation Links */}
-            <div className="flex-1 overflow-y-auto py-4 px-4 space-y-1 custom-scrollbar">
+            {/* Super Admin Live Profile Pill */}
+            <div className="p-3 mx-4 my-3 bg-neutral-50 rounded-2xl border border-neutral-200/80">
+                <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-linear-to-br from-emerald-600 to-teal-800 text-white flex items-center justify-center font-bold text-xs shadow-2xs shrink-0">
+                        {getInitials(adminName)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1">
+                            <p className="text-xs font-bold text-neutral-900 truncate">{adminName}</p>
+                            <ShieldCheck className="w-3.5 h-3.5 text-[#00B050] shrink-0" />
+                        </div>
+                        <p className="text-[10px] text-neutral-500 font-medium truncate">{adminEmail}</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Navigation Links with Real Dynamic Badges */}
+            <div className="flex-1 overflow-y-auto py-2 px-3 space-y-1 custom-scrollbar">
                 {menuItems.map((item) => {
                     const Icon = item.icon;
-                    const isActive = pathname === item.href;
+                    const isActive = pathname === item.href || (item.href !== "/admin" && pathname?.startsWith(`${item.href}/`));
+                    const badgeCount = item.badgeKey ? badgeCounts[item.badgeKey] : 0;
+
                     return (
                         <Link
                             key={item.name}
                             href={item.href}
-                            className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+                            className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
                                 isActive 
-                                    ? 'bg-[#00B050]/10 text-[#00B050] font-bold' 
-                                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                    ? "bg-[#00B050]/10 text-[#00B050] font-bold shadow-2xs" 
+                                    : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
                             }`}
                         >
-                            <Icon className={`w-5 h-5 ${isActive ? 'text-[#00B050]' : 'text-gray-400'}`} />
-                            <span>{item.name}</span>
+                            <div className="flex items-center gap-3 min-w-0">
+                                <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-[#00B050]" : "text-neutral-400"}`} />
+                                <span className="truncate">{item.name}</span>
+                            </div>
+
+                            {/* Dynamic Real Badge */}
+                            {badgeCount > 0 && (
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 ${
+                                    item.badgeKey === "suspendedOrgs"
+                                        ? "bg-rose-100 text-rose-700 border border-rose-200"
+                                        : item.badgeKey === "unreadNotifications"
+                                        ? "bg-blue-100 text-blue-700 border border-blue-200"
+                                        : "bg-amber-100 text-amber-800 border border-amber-200"
+                                }`}>
+                                    {badgeCount}
+                                </span>
+                            )}
                         </Link>
                     );
                 })}
             </div>
 
-            {/* Logout / Footer */}
-            <div className="p-4 border-t border-gray-100">
-                <Link 
-                    href="/login"
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+            {/* Real Logout Action */}
+            <div className="p-3 border-t border-neutral-200 bg-white">
+                <button 
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer text-left"
                 >
-                    <LogOut className="w-5 h-5 text-red-500" />
+                    <LogOut className="w-4 h-4 text-rose-500 shrink-0" />
                     <span>Logout</span>
-                </Link>
+                </button>
             </div>
         </aside>
     );
-};
-
-export default Sidebar;
+}
