@@ -236,11 +236,15 @@ export default function EmployeeSalaryPage() {
 
                         <div className="flex items-center justify-end gap-3 pt-2">
                             <button
-                                onClick={() => {
-                                    alert(`Downloading PDF payslip for ${selectedPayslip.month}...`);
-                                    window.open(`/api/payslips/${selectedPayslip.id}/download`, "_blank");
-                                }}
-                                className="flex items-center gap-1.5 px-4 py-2 bg-[#00B050] text-white hover:bg-[#009b46] rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                                onClick={() => window.open(`/api/payslips/${selectedPayslip.id}/download?print=true`, "_blank")}
+                                className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 hover:bg-gray-50 rounded-xl text-xs font-bold text-gray-700 transition-colors cursor-pointer"
+                            >
+                                <Printer className="w-3.5 h-3.5 text-gray-500" />
+                                Print
+                            </button>
+                            <button
+                                onClick={() => window.open(`/api/payslips/${selectedPayslip.id}/download`, "_blank")}
+                                className="flex items-center gap-1.5 px-4 py-2 bg-[#00B050] text-white hover:bg-[#009b46] rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-md shadow-[#00B050]/20"
                             >
                                 <Download className="w-3.5 h-3.5" />
                                 Download PDF

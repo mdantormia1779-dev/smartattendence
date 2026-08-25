@@ -8,10 +8,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const session = requireRole(request, ["SUPER_ADMIN", "ORG_ADMIN"]);
     const orgId = session.organizationId || "org-1";
 
-    const batch = await PayrollService.getBatchById(id, orgId);
-    batch.status = "APPROVED";
-    batch.payslips.forEach((p) => (p.status = "APPROVED"));
-
+    const batch = await PayrollService.approveBatch(id, orgId);
     return apiSuccess(batch, "Payroll batch approved successfully");
   } catch (error: any) {
     return apiError(error);

@@ -9,7 +9,9 @@ export interface LeaveRequestData {
   organizationId: string;
   employeeId: string;
   employeeName: string;
+  avatar: string;
   department: string;
+  branch: string;
   type: "CASUAL" | "SICK" | "ANNUAL" | "MATERNITY" | "UNPAID";
   startDate: string;
   endDate: string;
@@ -32,10 +34,34 @@ export interface LeaveQuota {
   maternity: { total: number; used: number; remaining: number };
 }
 
+async function resolveOrganizationId(inputOrgId?: string | null): Promise<string> {
+  if (inputOrgId && inputOrgId !== "org-1" && inputOrgId !== "default") {
+    const directMatch = await prisma.organizations.findUnique({
+      where: { id: inputOrgId },
+      select: { id: true },
+    }).catch(() => null);
+    if (directMatch) return directMatch.id;
+  }
+
+  const firstOrg = await prisma.organizations.findFirst({
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
+  }).catch(() => null);
+
+  if (firstOrg) return firstOrg.id;
+
+  return inputOrgId || "org-1";
+}
+
 export class LeaveService {
-  static async getLeaveRequests(organizationId: string, query?: { employeeId?: string; status?: string }) {
+  /**
+   * Get all company leave requests
+   */
+  static async getLeaveRequests(organizationId: string, query?: { employeeId?: string; status?: string }): Promise<LeaveRequestData[]> {
+    const validOrgId = await resolveOrganizationId(organizationId);
+
     const where: any = {
-      employees: { organizationId },
+      employees: { organizationId: validOrgId },
     };
 
     if (query?.employeeId) {
@@ -45,7 +71,7 @@ export class LeaveService {
       ];
     }
 
-    if (query?.status && query.status !== "ALL") {
+    if (query?.status && query.status !== "ALL" && query.status !== "All") {
       where.status = query.status.toUpperCase() as LeaveStatus;
     }
 
@@ -54,7 +80,10 @@ export class LeaveService {
       orderBy: { createdAt: "desc" },
       include: {
         employees: {
-          include: { departments: true },
+          include: { 
+            departments: true,
+            branches: true,
+          },
         },
       },
     });
@@ -68,7 +97,9 @@ export class LeaveService {
         organizationId: r.employees.organizationId,
         employeeId: r.employees.employeeCode,
         employeeName: r.employees.fullName,
+        avatar: r.employees.profilePicture || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
         department: r.employees.departments?.name || "General",
+        branch: r.employees.branches?.name || "Main Branch",
         type: r.type as any,
         startDate: r.startDate.toISOString().split("T")[0],
         endDate: r.endDate.toISOString().split("T")[0],
@@ -85,17 +116,22 @@ export class LeaveService {
     });
   }
 
+  /**
+   * Get employee leave quota balances
+   */
   static async getEmployeeQuotas(organizationId: string, employeeId: string): Promise<LeaveQuota> {
+    const validOrgId = await resolveOrganizationId(organizationId);
+
     const emp = await prisma.employees.findFirst({
       where: {
-        organizationId,
+        organizationId: validOrgId,
         OR: [{ id: employeeId }, { employeeCode: employeeId }],
       },
     });
 
     if (!emp) {
       return {
-        casual: { total: 10, used: 0, remaining: 10 },
+        casual: { total: 14, used: 0, remaining: 14 },
         sick: { total: 14, used: 0, remaining: 14 },
         annual: { total: 20, used: 0, remaining: 20 },
         maternity: { total: 112, used: 0, remaining: 112 },
@@ -125,13 +161,16 @@ export class LeaveService {
     }
 
     return {
-      casual: { total: 10, used: casualUsed, remaining: Math.max(0, 10 - casualUsed) },
+      casual: { total: 14, used: casualUsed, remaining: Math.max(0, 14 - casualUsed) },
       sick: { total: 14, used: sickUsed, remaining: Math.max(0, 14 - sickUsed) },
       annual: { total: 20, used: annualUsed, remaining: Math.max(0, 20 - annualUsed) },
       maternity: { total: 112, used: maternityUsed, remaining: Math.max(0, 112 - maternityUsed) },
     };
   }
 
+  /**
+   * Apply Leave Application
+   */
   static async applyLeave(data: {
     organizationId: string;
     employeeId: string;
@@ -141,7 +180,8 @@ export class LeaveService {
     reason: string;
     attachmentS3Key?: string;
   }) {
-    const employee = await EmployeeService.getEmployeeById(data.employeeId, data.organizationId);
+    const validOrgId = await resolveOrganizationId(data.organizationId);
+    const employee = await EmployeeService.getEmployeeById(data.employeeId, validOrgId);
 
     const netDays = calculateNetLeaveDays(data.startDate, data.endDate, {
       workingDays: ["Sun", "Mon", "Tue", "Wed", "Thu"],
@@ -169,7 +209,7 @@ export class LeaveService {
 
     return {
       id: newLeave.id,
-      organizationId: data.organizationId,
+      organizationId: validOrgId,
       employeeId: employee.employeeId,
       employeeName: employee.name,
       department: employee.department,
@@ -187,6 +227,9 @@ export class LeaveService {
     };
   }
 
+  /**
+   * Approve or reject by manager
+   */
   static async approveByManager(id: string, organizationId: string, decision: "APPROVED" | "REJECTED", comment?: string) {
     const statusEnum = decision === "APPROVED" ? LeaveStatus.APPROVED : LeaveStatus.REJECTED;
     const leave = await prisma.leaves.update({
@@ -200,6 +243,9 @@ export class LeaveService {
     return leave;
   }
 
+  /**
+   * Approve or reject by org admin
+   */
   static async approveByOrgAdmin(id: string, organizationId: string, decision: "APPROVED" | "REJECTED", comment?: string) {
     const statusEnum = decision === "APPROVED" ? LeaveStatus.APPROVED : LeaveStatus.REJECTED;
     const leave = await prisma.leaves.update({
