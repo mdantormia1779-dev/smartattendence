@@ -149,7 +149,9 @@ const LoginPage: React.FC = () => {
 
                 if (userRole === "SUPER_ADMIN") router.push("/admin");
                 else if (userRole === "MANAGER") router.push("/manager");
-                else if (userRole === "EMPLOYEE") router.push("/employee");
+                else if (userRole === "EMPLOYEE") {
+                    setLoginError("Employees use the Smart Attendance Mobile App (iOS / Android) for attendance and dashboard access. Please sign in via the mobile app.");
+                }
                 else router.push("/organizationadmin");
                 return;
             } else {
