@@ -5,7 +5,12 @@ import { apiSuccess, apiError } from "@/server/errors";
 export async function GET(request: Request) {
   try {
     const session = requireAuth(request);
-    const account = getReferralAccount(session.userId);
+    const account = getReferralAccount(session.userId, {
+      fullName: session.fullName,
+      email: session.email,
+      role: session.role,
+      organizationId: session.organizationId,
+    });
 
     const totalConversions = account.totalPaidCustomers || 0;
     const conversionRate = account.totalClicks > 0

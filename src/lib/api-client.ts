@@ -133,6 +133,7 @@ class ApiClient {
     logout: () => this.post("/api/auth/logout"),
     session: () => this.get("/api/auth/session"),
     me: () => this.get("/api/auth/me"),
+    changePassword: (body: { currentPassword: string; newPassword: string }) => this.post("/api/auth/change-password", body),
   };
 
   organizations = {

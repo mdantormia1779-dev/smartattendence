@@ -5,7 +5,12 @@ import { apiSuccess, apiError } from "@/server/errors";
 export async function GET(request: Request) {
   try {
     const session = requireAuth(request);
-    const account = getReferralAccount(session.userId);
+    const account = getReferralAccount(session.userId, {
+      fullName: session.fullName,
+      email: session.email,
+      role: session.role,
+      organizationId: session.organizationId,
+    });
 
     return apiSuccess(account, "Referral account fetched successfully");
   } catch (error: any) {

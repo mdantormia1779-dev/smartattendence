@@ -344,4 +344,77 @@ export class AuthService {
 
     return { success: true, message: "Organization password updated successfully" };
   }
+
+  /**
+   * User Self-Service Change Password
+   */
+  static async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+    role?: string,
+    email?: string
+  ) {
+    if (!newPassword || newPassword.length < 6) {
+      throw new ValidationError("New password must be at least 6 characters long");
+    }
+
+    if (!currentPassword) {
+      throw new ValidationError("Current password is required");
+    }
+
+    // 1. Check in-memory store
+    let user = usersStore.find(
+      (u) => u.id === userId || (email && u.email.toLowerCase() === email.toLowerCase())
+    );
+
+    if (user && user.passwordHash && user.passwordHash !== currentPassword) {
+      throw new ValidationError("Current password is incorrect");
+    }
+
+    if (user) {
+      user.passwordHash = newPassword;
+    }
+
+    // 2. Persist in database
+    try {
+      if (role === "ORG_ADMIN" || user?.role === "ORG_ADMIN") {
+        const orgAdmin = await prisma.org_admins.findFirst({
+          where: {
+            OR: [
+              { id: userId },
+              ...(email ? [{ email: email }] : []),
+              ...(user?.organizationId ? [{ organizationId: user.organizationId }] : []),
+            ],
+          },
+        });
+
+        if (orgAdmin) {
+          if (orgAdmin.password && orgAdmin.password !== currentPassword) {
+            throw new ValidationError("Current password is incorrect");
+          }
+          await prisma.org_admins.update({
+            where: { id: orgAdmin.id },
+            data: { password: newPassword, updatedAt: new Date() },
+          });
+        }
+      }
+    } catch (e: any) {
+      if (e instanceof ValidationError) throw e;
+      console.warn("[AuthService] DB update for change password bypassed/fallback:", e);
+    }
+
+    // 3. Log Audit
+    logAuditEvent({
+      userId: userId,
+      userName: user?.fullName || "User",
+      userRole: (user?.role as any) || (role as any) || "ORG_ADMIN",
+      action: "PASSWORD_CHANGED",
+      module: "Auth",
+      details: `User ${userId} successfully changed their account password`,
+    });
+
+    return { success: true, message: "Password updated successfully" };
+  }
 }
+

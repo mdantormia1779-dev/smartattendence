@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { requireAuth } from "@/server/authorization";
 import { apiSuccess, apiError } from "@/server/errors";
+import { AuthService } from "@/server/services/auth.service";
 
 const ChangePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
@@ -13,7 +14,15 @@ export async function POST(request: Request) {
     const body = await request.json();
     const validated = ChangePasswordSchema.parse(body);
 
-    return apiSuccess({ updated: true, userId: session.userId }, "Password updated successfully");
+    const result = await AuthService.changePassword(
+      session.userId,
+      validated.currentPassword,
+      validated.newPassword,
+      session.role,
+      session.email
+    );
+
+    return apiSuccess(result, "Password updated successfully");
   } catch (error: any) {
     return apiError(error);
   }
