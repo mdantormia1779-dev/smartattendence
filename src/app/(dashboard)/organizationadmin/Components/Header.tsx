@@ -38,6 +38,9 @@ export default function Header({ title = "Dashboard" }: HeaderProps) {
     const [companyName, setCompanyName] = useState("Vertex Technologies Ltd.");
     const [planTier, setPlanTier] = useState("Business Plan");
     const [orgLogo, setOrgLogo] = useState<string | null>(null);
+    const [logoError, setLogoError] = useState(false);
+    const [userAvatar, setUserAvatar] = useState<string | null>(null);
+    const [avatarError, setAvatarError] = useState(false);
 
     // UI States
     const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -272,10 +275,11 @@ export default function Header({ title = "Dashboard" }: HeaderProps) {
                         }`}
                     >
                         {/* Avatar */}
-                        {orgLogo ? (
+                        {orgLogo && !logoError ? (
                             <img 
                                 src={orgLogo} 
                                 alt={companyName} 
+                                onError={() => setLogoError(true)}
                                 className="w-8 h-8 rounded-xl object-cover border border-gray-100 shadow-2xs shrink-0" 
                             />
                         ) : (
@@ -306,9 +310,18 @@ export default function Header({ title = "Dashboard" }: HeaderProps) {
                                 {/* Header Profile Card */}
                                 <div className="p-4 bg-gradient-to-br from-gray-50 via-white to-gray-50 border-b border-gray-100">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#00B050] to-emerald-600 text-white font-extrabold flex items-center justify-center text-sm shadow-md shrink-0">
-                                            {getInitials(userName)}
-                                        </div>
+                                        {userAvatar && !avatarError ? (
+                                            <img
+                                                src={userAvatar}
+                                                alt={userName}
+                                                onError={() => setAvatarError(true)}
+                                                className="w-10 h-10 rounded-2xl object-cover border border-gray-100 shadow-md shrink-0"
+                                            />
+                                        ) : (
+                                            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#00B050] to-emerald-600 text-white font-extrabold flex items-center justify-center text-sm shadow-md shrink-0">
+                                                {getInitials(userName)}
+                                            </div>
+                                        )}
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-1">
                                                 <h4 className="text-xs font-bold text-gray-900 truncate">{userName}</h4>

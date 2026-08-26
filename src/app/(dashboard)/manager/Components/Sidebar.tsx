@@ -42,6 +42,9 @@ export default function ManagerSidebar() {
     const [deptName, setDeptName] = useState("Operations");
     const [companyName, setCompanyName] = useState("Smart Attendance");
     const [orgLogo, setOrgLogo] = useState<string | null>(null);
+    const [logoError, setLogoError] = useState(false);
+    const [managerAvatar, setManagerAvatar] = useState<string | null>(null);
+    const [avatarError, setAvatarError] = useState(false);
 
     // 1. Load Live Manager & Organization Profile
     const loadProfile = async () => {
@@ -162,10 +165,11 @@ export default function ManagerSidebar() {
             {/* Logo & Role Section */}
             <div className="h-16 flex items-center px-6 border-b border-neutral-200 justify-between">
                 <Link href="/manager" className="flex items-center gap-3 min-w-0">
-                    {orgLogo ? (
+                    {orgLogo && (orgLogo.startsWith("http") || orgLogo.startsWith("data:") || orgLogo.startsWith("/")) && !logoError ? (
                         <img 
                             src={orgLogo} 
                             alt={companyName} 
+                            onError={() => setLogoError(true)}
                             className="w-9 h-9 rounded-xl object-cover border border-neutral-200 shadow-2xs shrink-0" 
                         />
                     ) : (
@@ -188,9 +192,18 @@ export default function ManagerSidebar() {
             {/* Manager Live Profile Pill */}
             <div className="p-3 mx-4 my-3 bg-neutral-50 rounded-2xl border border-neutral-200/80">
                 <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-linear-to-br from-emerald-500 to-teal-700 text-white flex items-center justify-center font-bold text-xs shadow-2xs shrink-0">
-                        {getInitials(managerName)}
-                    </div>
+                    {managerAvatar && !avatarError ? (
+                        <img
+                            src={managerAvatar}
+                            alt={managerName}
+                            onError={() => setAvatarError(true)}
+                            className="w-9 h-9 rounded-xl object-cover border border-neutral-200 shadow-2xs shrink-0"
+                        />
+                    ) : (
+                        <div className="w-9 h-9 rounded-xl bg-linear-to-br from-emerald-500 to-teal-700 text-white flex items-center justify-center font-bold text-xs shadow-2xs shrink-0">
+                            {getInitials(managerName)}
+                        </div>
+                    )}
                     <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1">
                             <p className="text-xs font-bold text-neutral-900 truncate">{managerName}</p>

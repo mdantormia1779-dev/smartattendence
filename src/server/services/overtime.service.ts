@@ -72,57 +72,7 @@ export class OvertimeService {
       },
     });
 
-    // If no claims exist in DB, auto-seed realistic sample overtime claims from existing employees
-    if (records.length === 0) {
-      const activeEmps = await prisma.employees.findMany({
-        where: { organizationId: validOrgId },
-        take: 3,
-      });
-
-      if (activeEmps.length > 0) {
-        const sampleClaims = [
-          {
-            id: `ot-1-${Date.now()}`,
-            employeeId: activeEmps[0].id,
-            date: new Date(Date.now() - 24 * 60 * 60 * 1000),
-            type: OvertimeType.REGULAR,
-            minutes: 180, // 3 hours
-            multiplier: 1.5,
-            approved: false,
-          },
-          ...(activeEmps.length > 1
-            ? [
-                {
-                  id: `ot-2-${Date.now() + 1}`,
-                  employeeId: activeEmps[1].id,
-                  date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-                  type: OvertimeType.WEEKEND,
-                  minutes: 240, // 4 hours
-                  multiplier: 2.0,
-                  approved: true,
-                },
-              ]
-            : []),
-        ];
-
-        for (const s of sampleClaims) {
-          await prisma.overtime.create({ data: s }).catch(() => {});
-        }
-
-        records = await prisma.overtime.findMany({
-          where,
-          orderBy: { date: "desc" },
-          include: {
-            employees: {
-              include: {
-                departments: true,
-                branches: true,
-              },
-            },
-          },
-        });
-      }
-    }
+    // Return real database records only
 
     return records.map((r): OvertimeEntry => {
       const basicSalary = Number(r.employees.basicSalary || 50000);

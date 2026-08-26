@@ -210,11 +210,11 @@ export const CreateOvertimeClaimSchema = z.object({
 // Leaves & Holidays Validators
 // ==========================================
 export const ApplyLeaveSchema = z.object({
-  employeeId: z.string().min(1, "Employee ID is required"),
+  employeeId: z.string().optional(),
   type: z.enum(["CASUAL", "SICK", "ANNUAL", "MATERNITY", "UNPAID"]).default("CASUAL"),
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
-  reason: z.string().min(3, "Reason is required"),
+  reason: z.string().min(1, "Reason is required"),
   attachmentS3Key: z.string().optional(),
 });
 

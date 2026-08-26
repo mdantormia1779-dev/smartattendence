@@ -57,10 +57,13 @@ export default function Sidebar() {
     // Live Real States
     const [companyName, setCompanyName] = useState("Vertex Technologies");
     const [orgLogo, setOrgLogo] = useState<string | null>(null);
+    const [logoError, setLogoError] = useState(false);
     const [planName, setPlanName] = useState("Business Plan");
     const [daysRemaining, setDaysRemaining] = useState<number | null>(30);
     const [adminName, setAdminName] = useState("Admin User");
     const [adminRole, setAdminRole] = useState("Organization Admin");
+    const [adminAvatar, setAdminAvatar] = useState<string | null>(null);
+    const [adminAvatarError, setAdminAvatarError] = useState(false);
 
     // Real Live Badge Counts
     const [badgeCounts, setBadgeCounts] = useState({
@@ -226,10 +229,11 @@ export default function Sidebar() {
             {/* Logo & Company Section */}
             <div className="h-16 flex items-center px-6 border-b border-neutral-200 justify-between">
                 <Link href="/organizationadmin" className="flex items-center gap-3 min-w-0">
-                    {orgLogo ? (
+                    {orgLogo && !logoError ? (
                         <img 
                             src={orgLogo} 
                             alt={companyName} 
+                            onError={() => setLogoError(true)}
                             className="w-9 h-9 rounded-xl object-cover border border-neutral-200 shadow-2xs shrink-0" 
                         />
                     ) : (
@@ -254,9 +258,18 @@ export default function Sidebar() {
             {/* Logged-in User Profile Card */}
             <div className="p-3 mx-4 my-2.5 bg-neutral-50 rounded-2xl border border-neutral-200/80">
                 <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-linear-to-br from-emerald-500 to-teal-700 text-white flex items-center justify-center font-bold text-xs shadow-2xs shrink-0">
-                        {getInitials(adminName)}
-                    </div>
+                    {adminAvatar && !adminAvatarError ? (
+                        <img
+                            src={adminAvatar}
+                            alt={adminName}
+                            onError={() => setAdminAvatarError(true)}
+                            className="w-8 h-8 rounded-xl object-cover border border-neutral-200 shadow-2xs shrink-0"
+                        />
+                    ) : (
+                        <div className="w-8 h-8 rounded-xl bg-linear-to-br from-emerald-500 to-teal-700 text-white flex items-center justify-center font-bold text-xs shadow-2xs shrink-0">
+                            {getInitials(adminName)}
+                        </div>
+                    )}
                     <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1">
                             <p className="text-xs font-bold text-neutral-900 truncate">{adminName}</p>

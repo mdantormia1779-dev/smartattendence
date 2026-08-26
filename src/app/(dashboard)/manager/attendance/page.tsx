@@ -100,16 +100,33 @@ export default function ManagerAttendancePage() {
                 const mapped: TeamAttendance[] = attendanceRes.value.data.map((item: any) => {
                     const emp = empMap[item.employeeId] || item.employee || {};
 
+                    const isLateTime = (timeStr?: string | null): boolean => {
+                        if (!timeStr || timeStr === "—" || timeStr === "-") return false;
+                        const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
+                        if (match) {
+                            let hour = parseInt(match[1], 10);
+                            const minute = parseInt(match[2], 10);
+                            const meridian = match[3]?.toUpperCase();
+                            if (meridian === "PM" && hour < 12) hour += 12;
+                            if (meridian === "AM" && hour === 12) hour = 0;
+                            if (hour > 9 || (hour === 9 && minute > 15)) return true;
+                        }
+                        return false;
+                    };
+
+                    const timeStr = item.checkInTime || item.punchIn || null;
+                    const hasValidPunch = timeStr && timeStr !== "—" && timeStr !== "-";
+
                     let formattedStatus: TeamAttendance["status"] = "Present";
                     if (todayLeavesMap[item.employeeId] || item.status === "ON_LEAVE") {
                         formattedStatus = "On Leave";
-                    } else if (item.status === "LATE") {
+                    } else if (item.status === "LATE" || isLateTime(timeStr)) {
                         formattedStatus = "Late";
-                    } else if (item.status === "ABSENT") {
-                        formattedStatus = "Absent";
                     } else if (item.status === "HALF_DAY") {
                         formattedStatus = "Half-Day";
-                    } else if (item.status === "PRESENT" || item.checkInTime) {
+                    } else if (item.status === "ABSENT" || !hasValidPunch) {
+                        formattedStatus = "Absent";
+                    } else if (item.status === "PRESENT" || hasValidPunch) {
                         formattedStatus = "Present";
                     }
 
@@ -169,13 +186,16 @@ export default function ManagerAttendancePage() {
     }, []);
 
     useEffect(() => {
-        if (!loading) {
+        if (!loading && attendance.length > 0) {
             const ctx = gsap.context(() => {
-                gsap.fromTo(
-                    ".att-row",
-                    { opacity: 0, y: 15 },
-                    { opacity: 1, y: 0, duration: 0.35, stagger: 0.04, ease: "power2.out" }
-                );
+                const rows = containerRef.current?.querySelectorAll(".att-row");
+                if (rows && rows.length > 0) {
+                    gsap.fromTo(
+                        rows,
+                        { opacity: 0, y: 15 },
+                        { opacity: 1, y: 0, duration: 0.35, stagger: 0.04, ease: "power2.out" }
+                    );
+                }
             }, containerRef);
             return () => ctx.revert();
         }
@@ -229,6 +249,7 @@ export default function ManagerAttendancePage() {
 
         return matchesSearch && matchesStatus;
     });
+    console.log(filteredRecords);
 
     const presentCount = attendance.filter(a => a.status === "Present").length;
     const lateCount = attendance.filter(a => a.status === "Late").length;

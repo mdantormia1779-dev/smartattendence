@@ -26,10 +26,21 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 
+interface ActivityLog {
+    id: string;
+    name: string;
+    employeeId: string;
+    role: string;
+    time: string;
+    status: "Present" | "Late" | "On Leave" | "Absent" | "Half Day";
+    method: string;
+    avatar: string | null;
+}
+
 export default function ManagerDashboardPage() {
     // Manager Profile
     const [managerName, setManagerName] = useState("Manager");
-    const [deptName, setDeptName] = useState("Operations");
+    const [deptName, setDeptName] = useState("All Departments");
     const [branchName, setBranchName] = useState("Main Branch");
 
     // 100% Real API Metrics
@@ -39,7 +50,7 @@ export default function ManagerDashboardPage() {
     const [leaveCount, setLeaveCount] = useState<number>(0);
     
     // Live Streams & Pending Action Lists
-    const [displayLogs, setDisplayLogs] = useState<any[]>([]);
+    const [displayLogs, setDisplayLogs] = useState<ActivityLog[]>([]);
     const [pendingLeaves, setPendingLeaves] = useState<any[]>([]);
     const [pendingOvertimes, setPendingOvertimes] = useState<any[]>([]);
     const [activeShift, setActiveShift] = useState<any>(null);
@@ -51,12 +62,17 @@ export default function ManagerDashboardPage() {
     // Fetch Full Real Data from Backend APIs
     const fetchManagerDashboardData = async (showRefresh = false) => {
         if (showRefresh) setRefreshing(true);
+        else setLoading(true);
+
         try {
-            // 1. Resolve logged in manager details from session
+            // 1. Resolve logged-in manager details from session & DB
             let currentUserId = "";
             let currentOrgId = "";
+            let managerDeptId = "";
+            let managerBranchId = "";
+
             if (typeof window !== "undefined") {
-                const rawUser = localStorage.getItem("user");
+                const rawUser = localStorage.getItem("user") || localStorage.getItem("user_info") || localStorage.getItem("userData");
                 if (rawUser) {
                     try {
                         const parsed = JSON.parse(rawUser);
@@ -65,6 +81,8 @@ export default function ManagerDashboardPage() {
                         if (parsed.name || parsed.fullName) setManagerName(parsed.name || parsed.fullName);
                         if (parsed.department || parsed.departmentName) setDeptName(parsed.department || parsed.departmentName);
                         if (parsed.branch || parsed.branchName) setBranchName(parsed.branch || parsed.branchName);
+                        if (parsed.departmentId) managerDeptId = parsed.departmentId;
+                        if (parsed.branchId) managerBranchId = parsed.branchId;
                     } catch {}
                 }
             }
@@ -84,51 +102,67 @@ export default function ManagerDashboardPage() {
                 api.shifts.getAll()
             ]);
 
-            // Real Employees Count & Dept Mapping
-            let totalStaff = 0;
+            // Filter Team Employees
+            let teamEmployees: any[] = [];
             if (employeesRes.status === "fulfilled" && employeesRes.value?.success && Array.isArray(employeesRes.value.data)) {
-                totalStaff = employeesRes.value.data.length;
-                setTeamMembersCount(totalStaff);
-                if (employeesRes.value.data.length > 0 && employeesRes.value.data[0].department) {
-                    setDeptName(employeesRes.value.data[0].department);
+                teamEmployees = employeesRes.value.data;
+                if (managerDeptId) {
+                    const scoped = teamEmployees.filter((e) => e.departmentId === managerDeptId || e.department === deptName);
+                    if (scoped.length > 0) teamEmployees = scoped;
+                }
+                setTeamMembersCount(teamEmployees.length);
+                if (teamEmployees.length > 0 && teamEmployees[0].department && deptName === "All Departments") {
+                    setDeptName(teamEmployees[0].department);
                 }
             } else {
                 setTeamMembersCount(0);
             }
 
-            // Real Attendance Metrics & Live Stream
+            // Real Attendance Logs & Metrics
             if (attendanceRes.status === "fulfilled" && attendanceRes.value?.success && Array.isArray(attendanceRes.value.data)) {
-                const logs = attendanceRes.value.data;
-                const presents = logs.filter((a: any) => a.status === "PRESENT" || a.checkInTime);
-                const lates = logs.filter((a: any) => a.status === "LATE");
-                const onLeaves = logs.filter((a: any) => a.status === "ON_LEAVE");
+                const allLogs = attendanceRes.value.data;
+                
+                // Count Today's Status
+                const presents = allLogs.filter((a: any) => a.status === "PRESENT" && a.checkInTime);
+                const lates = allLogs.filter((a: any) => a.status === "LATE");
+                const onLeaves = allLogs.filter((a: any) => a.status === "ON_LEAVE");
 
                 setPresentCount(presents.length);
                 setLateCount(lates.length);
                 setLeaveCount(onLeaves.length);
 
-                // Format Real Logs for Live Activity Stream
-                const formatted = logs.slice(0, 8).map((log: any, idx: number) => {
-                    let checkInFormatted = "09:00 AM";
+                // Format Only Active / Checked-in Activity
+                const activePunches = allLogs.filter((log: any) => log.checkInTime || log.status === "PRESENT" || log.status === "LATE");
+
+                const formatted: ActivityLog[] = activePunches.slice(0, 10).map((log: any) => {
+                    let formattedTime = "—";
                     if (log.checkInTime) {
-                        checkInFormatted = log.checkInTime.includes("T") 
-                            ? new Date(log.checkInTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) 
+                        formattedTime = log.checkInTime.includes("T")
+                            ? new Date(log.checkInTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
                             : log.checkInTime;
                     }
 
+                    let methodText = "Verified";
+                    if (log.verificationMethod === "FACE_RECOGNITION") methodText = "Face AI Biometric";
+                    else if (log.verificationMethod === "GPS_GEOFENCE" || log.isGeofenceVerified) methodText = "GPS Geofence Verified";
+                    else if (log.verificationMethod === "BIOMETRIC_DEVICE") methodText = "Biometric Machine";
+                    else if (log.verificationMethod === "MANUAL_OVERRIDE") methodText = "Manual Entry";
+
+                    let statusMapped: ActivityLog["status"] = "Present";
+                    if (log.status === "LATE") statusMapped = "Late";
+                    else if (log.status === "ON_LEAVE") statusMapped = "On Leave";
+                    else if (log.status === "HALF_DAY") statusMapped = "Half Day";
+                    else if (log.status === "ABSENT") statusMapped = "Absent";
+
                     return {
-                        id: log.id || `att-${idx}`,
-                        name: log.employeeName || log.employee?.name || log.name || `Staff #${log.employeeId || idx + 1}`,
-                        employeeId: log.employeeCode || log.employee?.code || log.employeeId || `EMP-${1000 + idx}`,
-                        role: log.department || log.employee?.department || deptName || "Team Staff",
-                        time: checkInFormatted,
-                        status: log.status === "LATE" ? "Late" : log.status === "ON_LEAVE" ? "On Leave" : "Present",
-                        method: log.verificationMethod === "FACE_RECOGNITION" 
-                            ? "Face Match AI (99.2%)" 
-                            : log.verificationMethod === "GPS" 
-                            ? "GPS Geofence Verified" 
-                            : "Biometric Verified",
-                        avatar: log.employee?.avatarUrl || log.avatar || `https://images.unsplash.com/photo-${1534528741775 + (idx * 1000)}?w=100`,
+                        id: log.id,
+                        name: log.employeeName || log.employeeId || "Staff Member",
+                        employeeId: log.employeeId || "EMP",
+                        role: log.department || deptName || "General",
+                        time: formattedTime,
+                        status: statusMapped,
+                        method: methodText,
+                        avatar: log.avatar || null,
                     };
                 });
 
@@ -143,7 +177,7 @@ export default function ManagerDashboardPage() {
             // Real Pending Leaves
             if (leavesRes.status === "fulfilled" && leavesRes.value?.success && Array.isArray(leavesRes.value.data)) {
                 const pending = leavesRes.value.data.filter((l: any) => 
-                    l.status === "PENDING" || l.managerApproval === "PENDING" || !l.managerApproval
+                    l.status === "PENDING" || l.managerApproval === "PENDING" || (l.managerStatus && l.managerStatus.includes("Pending"))
                 );
                 setPendingLeaves(pending);
             } else {
@@ -153,21 +187,21 @@ export default function ManagerDashboardPage() {
             // Real Pending Overtime Claims
             if (overtimeRes.status === "fulfilled" && overtimeRes.value?.success && Array.isArray(overtimeRes.value.data)) {
                 const pendingOt = overtimeRes.value.data.filter((o: any) => 
-                    o.status === "PENDING" || o.approvalStatus === "PENDING"
+                    o.status === "PENDING" || o.managerApproval === "PENDING_MANAGER" || (o.managerStatus && o.managerStatus.includes("Pending"))
                 );
                 setPendingOvertimes(pendingOt);
             } else {
                 setPendingOvertimes([]);
             }
 
-            // Real Active Shift
+            // Real Active Shifts
             if (shiftsRes.status === "fulfilled" && shiftsRes.value?.success && Array.isArray(shiftsRes.value.data)) {
                 if (shiftsRes.value.data.length > 0) {
                     const s = shiftsRes.value.data[0];
                     setActiveShift({
-                        name: s.name || s.title || "Morning Shift",
+                        name: s.name || "Default Shift",
                         timing: `${s.startTime || "09:00 AM"} – ${s.endTime || "05:00 PM"}`,
-                        assignedCount: s.assignedCount || s.employeesCount || s.employees?.length || totalStaff,
+                        assignedCount: s.activeEmployees || s.assignedCount || teamEmployees.length,
                     });
                 } else {
                     setActiveShift(null);
@@ -176,7 +210,7 @@ export default function ManagerDashboardPage() {
                 setActiveShift(null);
             }
         } catch (e) {
-            console.error("Failed to load manager dashboard real data:", e);
+            console.error("Failed to load manager dashboard data:", e);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -189,24 +223,30 @@ export default function ManagerDashboardPage() {
 
     // GSAP Animation Context on load
     useEffect(() => {
-        if (!loading) {
+        if (!loading && containerRef.current) {
             const ctx = gsap.context(() => {
                 gsap.fromTo(
                     ".manager-card",
                     { opacity: 0, y: 15 },
-                    { opacity: 1, y: 0, duration: 0.45, stagger: 0.07, ease: "power2.out" }
+                    { opacity: 1, y: 0, duration: 0.35, stagger: 0.05, ease: "power2.out" }
                 );
             }, containerRef);
             return () => ctx.revert();
         }
     }, [loading]);
 
-    // Dynamic greeting calculation
     const getGreeting = () => {
         const hour = new Date().getHours();
         if (hour < 12) return "Good morning";
         if (hour < 17) return "Good afternoon";
         return "Good evening";
+    };
+
+    const getInitials = (name: string) => {
+        if (!name) return "EM";
+        const parts = name.trim().split(" ").filter(Boolean);
+        if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+        return name.slice(0, 2).toUpperCase();
     };
 
     const todayDateFormatted = new Date().toLocaleDateString("en-US", {
@@ -231,17 +271,17 @@ export default function ManagerDashboardPage() {
     const firstPendingOt = pendingOvertimes.length > 0 ? pendingOvertimes[0] : null;
 
     return (
-        <div ref={containerRef} className="flex-1 bg-[#FBFBFA] p-4 sm:p-6 md:p-8 space-y-6 overflow-y-auto min-h-screen">
+        <div ref={containerRef} className="flex-1 bg-[#FBFBFA] p-4 sm:p-6 md:p-8 space-y-6 overflow-y-auto min-h-screen text-neutral-800">
             {/* Top Welcome Card */}
             <div className="manager-card flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-neutral-200/80 shadow-xs">
                 <div>
                     <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight flex items-center gap-2">
                         {getGreeting()}, {managerName} <span className="inline-block animate-bounce">☕</span>
                     </h1>
-                    <p className="text-xs text-neutral-500 mt-1 flex items-center gap-2">
+                    <p className="text-xs text-neutral-500 mt-1 flex items-center gap-2 flex-wrap">
                         <span>Live attendance & operational status — {todayDateFormatted}</span>
-                        <span className="hidden sm:inline text-neutral-300">|</span>
-                        <span className="hidden sm:inline font-semibold text-[#00B050]">{branchName}</span>
+                        <span className="text-neutral-300">|</span>
+                        <span className="font-semibold text-[#00B050]">{branchName}</span>
                     </p>
                 </div>
                 <div className="flex items-center gap-2.5 flex-wrap">
@@ -273,14 +313,14 @@ export default function ManagerDashboardPage() {
                 </div>
             </div>
 
-            {/* 100% Real Team Metric Stat Cards */}
+            {/* Real Team Metric Stat Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Total Team */}
                 <div className="manager-card bg-white p-5 rounded-2xl border border-neutral-200/80 shadow-xs hover:border-neutral-300 transition-all">
                     <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">Assigned Team Members</p>
                     <div className="flex items-baseline justify-between mt-2">
-                        <h3 className="text-2xl font-black text-neutral-900">{teamMembersCount} Staff</h3>
-                        <span className="text-xs font-bold text-[#00B050] bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-100">
+                        <h3 className="text-2xl font-black text-neutral-900 font-mono">{teamMembersCount} Staff</h3>
+                        <span className="text-xs font-bold text-[#00B050] bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-100 truncate max-w-[120px]">
                             {deptName}
                         </span>
                     </div>
@@ -290,7 +330,7 @@ export default function ManagerDashboardPage() {
                 <div className="manager-card bg-white p-5 rounded-2xl border border-neutral-200/80 shadow-xs hover:border-neutral-300 transition-all">
                     <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">Present Today</p>
                     <div className="flex items-baseline justify-between mt-2">
-                        <h3 className="text-2xl font-black text-emerald-600">{presentCount} Members</h3>
+                        <h3 className="text-2xl font-black text-emerald-600 font-mono">{presentCount} Members</h3>
                         <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg">Punctual</span>
                     </div>
                 </div>
@@ -299,7 +339,7 @@ export default function ManagerDashboardPage() {
                 <div className="manager-card bg-white p-5 rounded-2xl border border-neutral-200/80 shadow-xs hover:border-neutral-300 transition-all">
                     <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">Late Arrivals</p>
                     <div className="flex items-baseline justify-between mt-2">
-                        <h3 className="text-2xl font-black text-amber-600">{lateCount} Members</h3>
+                        <h3 className="text-2xl font-black text-amber-600 font-mono">{lateCount} Members</h3>
                         <span className="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg font-bold">Shift Delay</span>
                     </div>
                 </div>
@@ -308,7 +348,7 @@ export default function ManagerDashboardPage() {
                 <div className="manager-card bg-white p-5 rounded-2xl border border-neutral-200/80 shadow-xs hover:border-neutral-300 transition-all">
                     <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">On Approved Leave</p>
                     <div className="flex items-baseline justify-between mt-2">
-                        <h3 className="text-2xl font-black text-blue-600">{leaveCount} Members</h3>
+                        <h3 className="text-2xl font-black text-blue-600 font-mono">{leaveCount} Members</h3>
                         <span className="text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded-lg font-bold">Scheduled</span>
                     </div>
                 </div>
@@ -342,14 +382,20 @@ export default function ManagerDashboardPage() {
                             displayLogs.map((emp) => (
                                 <div key={emp.id} className="py-3 flex items-center justify-between hover:bg-neutral-50/60 px-2 rounded-xl transition-colors">
                                     <div className="flex items-center gap-3">
-                                        <img
-                                            src={emp.avatar}
-                                            alt={emp.name}
-                                            className="w-9 h-9 rounded-full object-cover ring-2 ring-neutral-100"
-                                            onError={(e: any) => {
-                                                e.target.src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100";
-                                            }}
-                                        />
+                                        {emp.avatar ? (
+                                            <img
+                                                src={emp.avatar}
+                                                alt={emp.name}
+                                                className="w-9 h-9 rounded-full object-cover ring-2 ring-neutral-100"
+                                                onError={(e: any) => {
+                                                    e.target.style.display = "none";
+                                                }}
+                                            />
+                                        ) : (
+                                            <div className="w-9 h-9 rounded-full bg-linear-to-br from-emerald-500 to-teal-700 text-white flex items-center justify-center font-bold text-xs shadow-2xs shrink-0">
+                                                {getInitials(emp.name)}
+                                            </div>
+                                        )}
                                         <div>
                                             <p className="font-bold text-neutral-900">{emp.name}</p>
                                             <span className="text-[11px] text-neutral-400 font-mono">{emp.employeeId} · {emp.role}</span>
@@ -363,6 +409,8 @@ export default function ManagerDashboardPage() {
                                                     ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                                     : emp.status === "Late"
                                                     ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                                    : emp.status === "Half Day"
+                                                    ? "bg-purple-50 text-purple-700 border border-purple-200"
                                                     : "bg-blue-50 text-blue-700 border border-blue-200"
                                             }`}>
                                                 {emp.status}
@@ -398,7 +446,7 @@ export default function ManagerDashboardPage() {
                                 </div>
                                 <p className="text-neutral-600 text-[11px]">
                                     {firstPendingLeave
-                                        ? `${firstPendingLeave.employeeName || firstPendingLeave.employee?.name || "Staff"} applied for ${firstPendingLeave.type || "Annual"} Leave.`
+                                        ? `${firstPendingLeave.employeeName || "Staff"} applied for ${firstPendingLeave.type || firstPendingLeave.leaveType || "Leave"} (${firstPendingLeave.totalDays || 1} day${(firstPendingLeave.totalDays || 1) > 1 ? "s" : ""}).`
                                         : pendingLeaves.length === 0
                                         ? "All caught up. No pending leave requests."
                                         : "Review and approve pending team leave requests."}
@@ -421,7 +469,7 @@ export default function ManagerDashboardPage() {
                                 </div>
                                 <p className="text-neutral-600 text-[11px]">
                                     {firstPendingOt
-                                        ? `${firstPendingOt.employeeName || firstPendingOt.employee?.name || "Staff"} submitted ${firstPendingOt.hours || 3}h OT claim.`
+                                        ? `${firstPendingOt.employeeName || "Staff"} submitted ${firstPendingOt.claimedHours || (firstPendingOt.minutes ? (firstPendingOt.minutes / 60).toFixed(1) : "0")}h OT claim.`
                                         : pendingOvertimes.length === 0
                                         ? "All caught up. No pending overtime claims."
                                         : "Review extra shift & overtime hour submissions."}
