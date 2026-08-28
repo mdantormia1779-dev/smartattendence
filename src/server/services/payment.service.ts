@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { generateSubscriptionCommission } from "@/lib/referral-engine";
 import { NotFoundError, ConflictError } from "../errors";
 import { logAuditEvent } from "@/lib/audit-logger";
+import { SubscriptionPlanType } from "@prisma/client";
 
 export interface PaymentTransactionData {
   id: string;
@@ -22,6 +23,25 @@ export interface PaymentTransactionData {
 }
 
 export class PaymentService {
+  /**
+   * Helper: Resolves matching SubscriptionPlanType from planName or amount
+   */
+  private static resolvePlanType(planName?: string | null, amount?: number): SubscriptionPlanType {
+    const p = (planName || "").toUpperCase();
+    if (p.includes("ENTERPRISE")) return SubscriptionPlanType.ENTERPRISE;
+    if (p.includes("BUSINESS")) return SubscriptionPlanType.BUSINESS;
+    if (p.includes("STARTER")) return SubscriptionPlanType.STARTER;
+    if (p.includes("FREE") || p.includes("TRIAL")) return SubscriptionPlanType.FREE;
+
+    if (amount !== undefined) {
+      if (amount >= 20000) return SubscriptionPlanType.ENTERPRISE;
+      if (amount >= 8000) return SubscriptionPlanType.BUSINESS;
+      return SubscriptionPlanType.STARTER;
+    }
+
+    return SubscriptionPlanType.BUSINESS;
+  }
+
   /**
    * Directly query database for payment records
    */
@@ -50,14 +70,27 @@ export class PaymentService {
         mappedStatus = "REJECTED";
       }
 
+      // Resolve plan name from relations, invoiceUrl, or amount
+      let resolvedPlanName = p.subscriptions?.subscription_plans?.name || p.invoiceUrl;
+      if (!resolvedPlanName || resolvedPlanName === "Standard Plan" || resolvedPlanName === "Subscription Plan") {
+        const inferredType = this.resolvePlanType(p.invoiceUrl, Number(p.amount));
+        resolvedPlanName = inferredType === SubscriptionPlanType.ENTERPRISE 
+          ? "Enterprise Plan" 
+          : inferredType === SubscriptionPlanType.BUSINESS 
+          ? "Business Plan" 
+          : "Starter Plan";
+      }
+
+      const isYearly = Number(p.amount) >= 30000;
+
       return {
         id: p.id,
         organizationId: p.organizationId,
         organizationName: p.organizations?.name || "Organization",
-        planName: p.subscriptions?.subscription_plans?.name || "Standard Plan",
+        planName: resolvedPlanName,
         amount: Number(p.amount) || 0,
         currency: p.currency || "BDT",
-        billingCycle: (p.subscriptions?.subscription_plans?.billingCycle === "yearly" ? "Yearly" : "Monthly") as "Monthly" | "Yearly",
+        billingCycle: (isYearly ? "Yearly" : "Monthly") as "Monthly" | "Yearly",
         transactionId: p.id.startsWith("TXN-") ? p.id : `TXN-${p.id.substring(0, 8).toUpperCase()}`,
         senderNumber: "+880 1700-000000",
         provider: p.provider || "bKash",
@@ -68,7 +101,7 @@ export class PaymentService {
   }
 
   /**
-   * Create payment record directly in database
+   * Create payment record directly in database and link to organization subscription plan
    */
   static async createPayment(data: {
     organizationId?: string;
@@ -119,16 +152,46 @@ export class PaymentService {
       }
     }
 
+    // Resolve target Subscription Plan
+    const planType = this.resolvePlanType(data.planName, data.amount);
+    let targetPlan = await prisma.subscription_plans.findUnique({
+      where: { type: planType },
+    });
+
+    if (!targetPlan) {
+      targetPlan = await prisma.subscription_plans.findFirst();
+    }
+
+    // Ensure organization subscription record is linked
+    let sub = await prisma.subscriptions.findUnique({
+      where: { organizationId: targetOrgId },
+    });
+
+    if (!sub && targetPlan) {
+      sub = await prisma.subscriptions.create({
+        data: {
+          id: `sub-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          organizationId: targetOrgId,
+          planId: targetPlan.id,
+          status: "TRIAL",
+          startDate: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+    }
+
     const appliedPromo = (data.couponCode || data.referralCode)?.trim().toUpperCase() || null;
 
     const createdPayment = await prisma.payments.create({
       data: {
         id: paymentId,
         organizationId: targetOrgId,
+        subscriptionId: sub?.id || null,
         amount: data.amount,
         currency: "BDT",
         provider: data.provider || "bKash",
         status: "PENDING",
+        invoiceUrl: data.planName, // Store intended plan name
         couponCode: appliedPromo,
         createdAt: new Date(),
       },
@@ -172,7 +235,7 @@ export class PaymentService {
   }
 
   /**
-   * Update payment status directly in database
+   * Update payment status directly in database & automatically upgrade/activate organization subscription plan
    */
   static async updatePaymentStatus(
     id: string,
@@ -209,19 +272,82 @@ export class PaymentService {
     });
 
     if (decision === "APPROVED" && payment.organizationId) {
-      await prisma.subscriptions.updateMany({
-        where: { organizationId: payment.organizationId },
-        data: { status: "ACTIVE" },
+      // 1. Automatically determine purchased plan type
+      const targetPlanType = this.resolvePlanType(
+        payment.invoiceUrl || payment.subscriptions?.subscription_plans?.name,
+        Number(payment.amount)
+      );
+
+      let matchedPlan = await prisma.subscription_plans.findUnique({
+        where: { type: targetPlanType },
       });
+
+      if (!matchedPlan) {
+        matchedPlan = await prisma.subscription_plans.findFirst({
+          where: { type: { not: SubscriptionPlanType.FREE } },
+          orderBy: { price: "desc" },
+        });
+      }
+
+      // 2. Calculate subscription duration (Yearly >= 30,000 BDT = 365 days; else 30 days)
+      const durationDays = Number(payment.amount) >= 30000 ? 365 : 30;
+      const targetEndDate = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
+
+      // 3. Atomically upsert & upgrade organization subscription plan
+      if (matchedPlan) {
+        await prisma.subscriptions.upsert({
+          where: { organizationId: payment.organizationId },
+          update: {
+            planId: matchedPlan.id,
+            status: "ACTIVE",
+            startDate: new Date(),
+            endDate: targetEndDate,
+            autoRenew: true,
+            updatedAt: new Date(),
+          },
+          create: {
+            id: `sub-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            organizationId: payment.organizationId,
+            planId: matchedPlan.id,
+            status: "ACTIVE",
+            startDate: new Date(),
+            endDate: targetEndDate,
+            autoRenew: true,
+            updatedAt: new Date(),
+          },
+        });
+
+        // 4. Update organization status to ACTIVE
+        await prisma.organizations.update({
+          where: { id: payment.organizationId },
+          data: {
+            status: "ACTIVE",
+            updatedAt: new Date(),
+          },
+        });
+      }
+
+      // 5. Trigger Automated Affiliate Commission
+      try {
+        const { AffiliateService } = await import("./affiliate.service");
+        await AffiliateService.processPaymentCommission({
+          paymentId: payment.id,
+          organizationId: payment.organizationId,
+          amount: Number(payment.amount),
+          referralCode: payment.couponCode,
+        });
+      } catch (affErr) {
+        console.error("Failed to process affiliate commission:", affErr);
+      }
 
       if (payment.couponCode) {
         generateSubscriptionCommission({
           referralCode: payment.couponCode,
           orgName: payment.organizations?.name || "Organization",
           orgEmail: payment.organizations?.email || "contact@org.com",
-          planName: payment.subscriptions?.subscription_plans?.name || "Subscription Plan",
+          planName: matchedPlan?.name || "Subscription Plan",
           paymentAmount: Number(payment.amount),
-          billingCycle: "Monthly",
+          billingCycle: durationDays === 365 ? "Yearly" : "Monthly",
         });
       }
 
@@ -231,18 +357,28 @@ export class PaymentService {
         userRole: "SUPER_ADMIN",
         action: "PAYMENT_APPROVED",
         module: "Subscriptions",
-        details: `Approved subscription payment of $${payment.amount} for ${payment.organizations?.name || "Organization"}`,
+        details: `Approved payment of ৳${payment.amount} for ${payment.organizations?.name || "Organization"}. Upgraded plan to ${matchedPlan?.name || "Premium Plan"}.`,
       });
     }
+
+    // Resolve final display plan name
+    const finalPlanName = this.resolvePlanType(
+      payment.invoiceUrl || updated.subscriptions?.subscription_plans?.name,
+      Number(updated.amount)
+    ) === SubscriptionPlanType.ENTERPRISE 
+      ? "Enterprise Plan" 
+      : this.resolvePlanType(payment.invoiceUrl, Number(updated.amount)) === SubscriptionPlanType.BUSINESS 
+      ? "Business Plan" 
+      : "Starter Plan";
 
     return {
       id: updated.id,
       organizationId: updated.organizationId,
       organizationName: updated.organizations?.name || "Organization",
-      planName: updated.subscriptions?.subscription_plans?.name || "Subscription Plan",
+      planName: finalPlanName,
       amount: Number(updated.amount),
       currency: updated.currency || "BDT",
-      billingCycle: (updated.subscriptions?.subscription_plans?.billingCycle === "yearly" ? "Yearly" : "Monthly") as "Monthly" | "Yearly",
+      billingCycle: (Number(updated.amount) >= 30000 ? "Yearly" : "Monthly") as "Monthly" | "Yearly",
       transactionId: updated.id,
       senderNumber: "+880 1700-000000",
       provider: updated.provider || "bKash",

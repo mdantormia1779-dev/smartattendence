@@ -202,6 +202,13 @@ export class AuthService {
 
     // Track Referral conversion if applicable
     if (data.referralCode) {
+      try {
+        const { AffiliateService } = await import("./affiliate.service");
+        await AffiliateService.trackReferral(data.referralCode, org.id, data.companyEmail);
+      } catch (refErr) {
+        console.error("Failed to track affiliate referral:", refErr);
+      }
+
       logAuditEvent({
         organizationId: org.id,
         userId: userId,

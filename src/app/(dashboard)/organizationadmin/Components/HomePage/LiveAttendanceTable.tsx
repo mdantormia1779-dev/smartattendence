@@ -109,8 +109,8 @@ export default function LiveAttendanceTable() {
             <p className="text-[11px] text-neutral-400">When employees clock in via mobile or face punch, events will appear here in real time.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto mt-4">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto custom-scrollbar mt-4">
+            <table className="w-full min-w-[580px] text-left border-collapse">
               <thead>
                 <tr className="border-b border-neutral-100 text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
                   <th className="pb-3 px-3">Employee</th>

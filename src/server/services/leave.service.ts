@@ -1,6 +1,5 @@
 import { calculateNetLeaveDays } from "@/lib/datetime";
-import { NotFoundError, ValidationError } from "../errors";
-import { EmployeeService } from "./employee.service";
+import { NotFoundError, UnauthorizedError, ValidationError } from "../errors";
 import { prisma } from "@/lib/prisma";
 import { LeaveStatus, LeaveType } from "@prisma/client";
 
@@ -34,35 +33,19 @@ export interface LeaveQuota {
   maternity: { total: number; used: number; remaining: number };
 }
 
-async function resolveOrganizationId(inputOrgId?: string | null): Promise<string> {
-  if (inputOrgId && inputOrgId !== "org-1" && inputOrgId !== "default") {
-    const directMatch = await prisma.organizations.findUnique({
-      where: { id: inputOrgId },
-      select: { id: true },
-    }).catch(() => null);
-    if (directMatch) return directMatch.id;
-  }
-
-  const firstOrg = await prisma.organizations.findFirst({
-    select: { id: true },
-    orderBy: { createdAt: "asc" },
-  }).catch(() => null);
-
-  if (firstOrg) return firstOrg.id;
-
-  return inputOrgId || "org-1";
-}
-
 export class LeaveService {
   /**
-   * Get all company leave requests
+   * Get all company leave requests with strict multi-tenant scoping
    */
   static async getLeaveRequests(organizationId: string, query?: { employeeId?: string; status?: string }): Promise<LeaveRequestData[]> {
-    const validOrgId = await resolveOrganizationId(organizationId);
+    if (!organizationId) return [];
 
-    const where: any = {
-      employees: { organizationId: validOrgId },
-    };
+    const where: any = {};
+    if (organizationId !== "all") {
+      where.employees = {
+        organizationId: organizationId,
+      };
+    }
 
     if (query?.employeeId) {
       where.OR = [
@@ -90,7 +73,7 @@ export class LeaveService {
 
     return records.map((r): LeaveRequestData => {
       const diffTime = Math.abs(r.endDate.getTime() - r.startDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
 
       return {
         id: r.id,
@@ -117,16 +100,27 @@ export class LeaveService {
   }
 
   /**
-   * Get employee leave quota balances
+   * Get employee leave quota balances within organization
    */
   static async getEmployeeQuotas(organizationId: string, employeeId: string): Promise<LeaveQuota> {
-    const validOrgId = await resolveOrganizationId(organizationId);
+    if (!organizationId || !employeeId) {
+      return {
+        casual: { total: 14, used: 0, remaining: 14 },
+        sick: { total: 14, used: 0, remaining: 14 },
+        annual: { total: 20, used: 0, remaining: 20 },
+        maternity: { total: 112, used: 0, remaining: 112 },
+      };
+    }
+
+    const whereEmp: any = {
+      OR: [{ id: employeeId }, { employeeCode: employeeId }],
+    };
+    if (organizationId !== "all") {
+      whereEmp.organizationId = organizationId;
+    }
 
     const emp = await prisma.employees.findFirst({
-      where: {
-        organizationId: validOrgId,
-        OR: [{ id: employeeId }, { employeeCode: employeeId }],
-      },
+      where: whereEmp,
     });
 
     if (!emp) {
@@ -151,8 +145,8 @@ export class LeaveService {
     let maternityUsed = 0;
 
     for (const l of approvedLeaves) {
-      const diffTime = Math.abs(l.endDate.getTime() - l.startDate.getTime());
-      const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      const diff = Math.abs(l.endDate.getTime() - l.startDate.getTime());
+      const days = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1);
 
       if (l.type === LeaveType.CASUAL) casualUsed += days;
       else if (l.type === LeaveType.SICK) sickUsed += days;
@@ -169,7 +163,7 @@ export class LeaveService {
   }
 
   /**
-   * Apply Leave Application
+   * Apply Leave Application strictly scoped to employee's organization
    */
   static async applyLeave(data: {
     organizationId: string;
@@ -180,8 +174,32 @@ export class LeaveService {
     reason: string;
     attachmentS3Key?: string;
   }) {
-    const validOrgId = await resolveOrganizationId(data.organizationId);
-    const employee = await EmployeeService.getEmployeeById(data.employeeId, validOrgId);
+    if (!data.organizationId) {
+      throw new ValidationError("Organization ID is required to apply for leave.");
+    }
+
+    const whereEmp: any = {
+      OR: [
+        { id: data.employeeId },
+        { employeeCode: data.employeeId },
+        { email: data.employeeId },
+      ],
+    };
+    if (data.organizationId !== "all") {
+      whereEmp.organizationId = data.organizationId;
+    }
+
+    const employee = await prisma.employees.findFirst({
+      where: whereEmp,
+      include: {
+        departments: true,
+        branches: true,
+      },
+    });
+
+    if (!employee) {
+      throw new NotFoundError(`Employee with ID '${data.employeeId}' not found in your organization.`);
+    }
 
     const start = new Date(data.startDate);
     const end = new Date(data.endDate);
@@ -201,64 +219,57 @@ export class LeaveService {
 
     const typeEnum = data.type as LeaveType;
 
-    try {
-      const newLeave = await prisma.leaves.create({
-        data: {
-          id: `leave-${Date.now()}`,
-          employeeId: employee.id,
-          type: typeEnum,
-          startDate: new Date(data.startDate),
-          endDate: new Date(data.endDate),
-          reason: data.reason || "Personal Leave",
-          status: LeaveStatus.PENDING,
-          updatedAt: new Date(),
-        },
-      });
+    const newLeave = await prisma.leaves.create({
+      data: {
+        id: `leave-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        employeeId: employee.id,
+        type: typeEnum,
+        startDate: new Date(data.startDate),
+        endDate: new Date(data.endDate),
+        reason: data.reason || "Personal Leave",
+        status: LeaveStatus.PENDING,
+        updatedAt: new Date(),
+      },
+    });
 
-      return {
-        id: newLeave.id,
-        organizationId: validOrgId,
-        employeeId: employee.employeeId,
-        employeeName: employee.name,
-        department: employee.department,
-        type: data.type,
-        startDate: data.startDate,
-        endDate: data.endDate,
-        totalDays: netDays,
-        days: netDays,
-        status: "PENDING",
-        reason: data.reason,
-        attachmentS3Key: data.attachmentS3Key,
-        managerApproval: "PENDING_MANAGER",
-        orgApproval: "PENDING_ORG_ADMIN",
-        createdAt: new Date().toISOString().split("T")[0],
-      };
-    } catch (dbErr) {
-      return {
-        id: `leave-${Date.now()}`,
-        organizationId: validOrgId,
-        employeeId: employee.employeeId || "EMP-0001",
-        employeeName: employee.name || "Employee",
-        department: employee.department || "Operations",
-        type: data.type,
-        startDate: data.startDate,
-        endDate: data.endDate,
-        totalDays: netDays,
-        days: netDays,
-        status: "PENDING",
-        reason: data.reason,
-        attachmentS3Key: data.attachmentS3Key,
-        managerApproval: "PENDING_MANAGER",
-        orgApproval: "PENDING_ORG_ADMIN",
-        createdAt: new Date().toISOString().split("T")[0],
-      };
-    }
+    return {
+      id: newLeave.id,
+      organizationId: employee.organizationId,
+      employeeId: employee.employeeCode,
+      employeeName: employee.fullName,
+      department: employee.departments?.name || "General",
+      branch: employee.branches?.name || "Main Branch",
+      type: data.type,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      totalDays: netDays,
+      days: netDays,
+      status: "PENDING",
+      reason: data.reason,
+      attachmentS3Key: data.attachmentS3Key,
+      managerApproval: "PENDING_MANAGER",
+      orgApproval: "PENDING_ORG_ADMIN",
+      createdAt: new Date().toISOString().split("T")[0],
+    };
   }
 
   /**
    * Approve or reject by manager
    */
   static async approveByManager(id: string, organizationId: string, decision: "APPROVED" | "REJECTED", comment?: string) {
+    const existing = await prisma.leaves.findUnique({
+      where: { id },
+      include: { employees: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundError("Leave Request");
+    }
+
+    if (organizationId && organizationId !== "all" && existing.employees.organizationId !== organizationId) {
+      throw new UnauthorizedError("You are not authorized to manage leaves for another organization.");
+    }
+
     const statusEnum = decision === "APPROVED" ? LeaveStatus.APPROVED : LeaveStatus.REJECTED;
     const leave = await prisma.leaves.update({
       where: { id },
@@ -275,6 +286,19 @@ export class LeaveService {
    * Approve or reject by org admin
    */
   static async approveByOrgAdmin(id: string, organizationId: string, decision: "APPROVED" | "REJECTED", comment?: string) {
+    const existing = await prisma.leaves.findUnique({
+      where: { id },
+      include: { employees: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundError("Leave Request");
+    }
+
+    if (organizationId && organizationId !== "all" && existing.employees.organizationId !== organizationId) {
+      throw new UnauthorizedError("You are not authorized to manage leaves for another organization.");
+    }
+
     const statusEnum = decision === "APPROVED" ? LeaveStatus.APPROVED : LeaveStatus.REJECTED;
     const leave = await prisma.leaves.update({
       where: { id },

@@ -202,8 +202,8 @@ export default function ApprovePaymentsPage() {
                         <span className="text-xs font-medium">Loading payment verification records...</span>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                    <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full min-w-[720px] text-left border-collapse">
                             <thead>
                                 <tr className="border-b border-neutral-100 bg-neutral-50/70 text-neutral-400 text-[11px] font-bold uppercase tracking-wider">
                                     <th className="py-4 px-6">Organization</th>

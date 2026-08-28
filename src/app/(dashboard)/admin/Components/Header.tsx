@@ -15,7 +15,8 @@ import {
     X,
     Building2,
     Sparkles,
-    Shield
+    Shield,
+    Menu
 } from "lucide-react";
 import NotificationDropdown from "@/components/NotificationDropdown";
 import { api } from "@/lib/api-client";
@@ -159,26 +160,38 @@ export default function Header() {
 
     return (
         <header className="h-16 bg-white border-b border-neutral-200 px-4 sm:px-6 md:px-8 flex items-center justify-between sticky top-0 z-30 shadow-xs">
-            {/* Search Box */}
-            <form onSubmit={handleSearchSubmit} className="relative w-64 sm:w-80 md:w-96">
-                <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input 
-                    type="text" 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search organizations, plans, payments..." 
-                    className="w-full pl-9.5 pr-8 py-2 bg-neutral-50 hover:bg-neutral-100/60 focus:bg-white border border-neutral-200 rounded-xl text-xs text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050] transition-all"
-                />
-                {searchTerm && (
-                    <button
-                        type="button"
-                        onClick={() => setSearchTerm("")}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 p-0.5 cursor-pointer"
-                    >
-                        <X className="w-3.5 h-3.5" />
-                    </button>
-                )}
-            </form>
+            {/* Left Area: Mobile Hamburger Menu & Search */}
+            <div className="flex items-center gap-3 min-w-0">
+                <button
+                    type="button"
+                    onClick={() => window.dispatchEvent(new CustomEvent("toggle-admin-sidebar"))}
+                    className="p-2 rounded-xl border border-neutral-200 text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 transition-colors lg:hidden shrink-0 cursor-pointer"
+                    aria-label="Open Navigation Menu"
+                >
+                    <Menu className="w-5 h-5 text-neutral-700" />
+                </button>
+
+                {/* Search Box */}
+                <form onSubmit={handleSearchSubmit} className="relative w-48 sm:w-72 md:w-80 lg:w-96">
+                    <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input 
+                        type="text" 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Search..." 
+                        className="w-full pl-8.5 pr-7 py-1.5 sm:py-2 bg-neutral-50 hover:bg-neutral-100/60 focus:bg-white border border-neutral-200 rounded-xl text-xs text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050] transition-all"
+                    />
+                    {searchTerm && (
+                        <button
+                            type="button"
+                            onClick={() => setSearchTerm("")}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 p-0.5 cursor-pointer"
+                        >
+                            <X className="w-3 h-3" />
+                        </button>
+                    )}
+                </form>
+            </div>
 
             {/* Right Side Actions */}
             <div className="flex items-center gap-2 sm:gap-3.5">

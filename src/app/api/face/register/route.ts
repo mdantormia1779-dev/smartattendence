@@ -10,8 +10,14 @@ export async function POST(request: Request) {
     const body = await request.json();
     const validated = RegisterFaceSchema.parse(body);
 
-    const empId = validated.employeeId || session.employeeId || "EMP-1042";
-    const result = await BiometricsService.registerFace(empId, validated.vectorData, validated.antiSpoofScore);
+    const empId = validated.employeeId || session.employeeId || "EMP-0001";
+    const result = await BiometricsService.registerFace(
+      empId,
+      validated.vectorData,
+      "ArcFace-MobileFaceNet-ONNX",
+      5,
+      session.organizationId || undefined
+    );
 
     return NextResponse.json({ success: true, data: result });
   } catch (error: any) {

@@ -79,6 +79,10 @@ const Header = () => {
                 <a href="#how-it-works" onClick={(e) => handleScrollToSection(e, 'how-it-works')} className="nav-item hover:text-[#00B050] transition-colors cursor-pointer">How it works</a>
                 <a href="#solutions" onClick={(e) => handleScrollToSection(e, 'solutions')} className="nav-item hover:text-[#00B050] transition-colors cursor-pointer">Solutions</a>
                 <a href="#pricing" onClick={(e) => handleScrollToSection(e, 'pricing')} className="nav-item hover:text-[#00B050] transition-colors cursor-pointer">Pricing</a>
+                <Link href="/affiliate" className="nav-item hover:text-[#00B050] transition-colors cursor-pointer text-emerald-700 font-semibold flex items-center gap-1.5">
+                    <span>Affiliate</span>
+                    <span className="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0.5 rounded-full font-bold">20%</span>
+                </Link>
                 <a href="#faq" onClick={(e) => handleScrollToSection(e, 'faq')} className="nav-item hover:text-[#00B050] transition-colors cursor-pointer">FAQ</a>
             </nav>
 
@@ -116,6 +120,10 @@ const Header = () => {
                     <a href="#how-it-works" onClick={(e) => handleScrollToSection(e, 'how-it-works')} className="text-gray-700 hover:text-[#00B050] font-medium py-2 transition-colors">How it works</a>
                     <a href="#solutions" onClick={(e) => handleScrollToSection(e, 'solutions')} className="text-gray-700 hover:text-[#00B050] font-medium py-2 transition-colors">Solutions</a>
                     <a href="#pricing" onClick={(e) => handleScrollToSection(e, 'pricing')} className="text-gray-700 hover:text-[#00B050] font-medium py-2 transition-colors">Pricing</a>
+                    <Link href="/affiliate" onClick={() => setIsMobileMenuOpen(false)} className="text-emerald-700 font-semibold py-2 transition-colors flex items-center justify-between">
+                        <span>Affiliate Program</span>
+                        <span className="bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 rounded-full font-bold">Earn 20%</span>
+                    </Link>
                     <a href="#faq" onClick={(e) => handleScrollToSection(e, 'faq')} className="text-gray-700 hover:text-[#00B050] font-medium py-2 transition-colors">FAQ</a>
                     
                     <div className="border-t border-gray-100 pt-4 flex flex-col gap-3">

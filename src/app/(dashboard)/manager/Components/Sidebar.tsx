@@ -16,7 +16,8 @@ import {
     Building2,
     Shield,
     Share2,
-    Briefcase
+    Briefcase,
+    X
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 
@@ -160,10 +161,30 @@ export default function ManagerSidebar() {
         return name.slice(0, 2).toUpperCase();
     };
 
-    return (
-        <aside className="w-64 bg-white border-r border-neutral-200 flex flex-col h-screen sticky top-0 z-40 select-none">
+    const [mobileOpen, setMobileOpen] = useState(false);
+
+    useEffect(() => {
+        const handleToggle = () => setMobileOpen((prev) => !prev);
+        const handleClose = () => setMobileOpen(false);
+
+        window.addEventListener("toggle-manager-sidebar", handleToggle);
+        window.addEventListener("close-manager-sidebar", handleClose);
+
+        return () => {
+            window.removeEventListener("toggle-manager-sidebar", handleToggle);
+            window.removeEventListener("close-manager-sidebar", handleClose);
+        };
+    }, []);
+
+    // Auto-close on route change
+    useEffect(() => {
+        setMobileOpen(false);
+    }, [pathname]);
+
+    const renderManagerSidebarContent = (isMobile = false) => (
+        <>
             {/* Logo & Role Section */}
-            <div className="h-16 flex items-center px-6 border-b border-neutral-200 justify-between">
+            <div className="h-16 flex items-center px-6 border-b border-neutral-200 justify-between shrink-0">
                 <Link href="/manager" className="flex items-center gap-3 min-w-0">
                     {orgLogo && (orgLogo.startsWith("http") || orgLogo.startsWith("data:") || orgLogo.startsWith("/")) && !logoError ? (
                         <img 
@@ -187,10 +208,18 @@ export default function ManagerSidebar() {
                         </span>
                     </div>
                 </Link>
+                {isMobile && (
+                    <button 
+                        onClick={() => setMobileOpen(false)}
+                        className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 cursor-pointer lg:hidden ml-2"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                )}
             </div>
 
             {/* Manager Live Profile Pill */}
-            <div className="p-3 mx-4 my-3 bg-neutral-50 rounded-2xl border border-neutral-200/80">
+            <div className="p-3 mx-4 my-3 bg-neutral-50 rounded-2xl border border-neutral-200/80 shrink-0">
                 <div className="flex items-center gap-3">
                     {managerAvatar && !avatarError ? (
                         <img
@@ -226,6 +255,7 @@ export default function ManagerSidebar() {
                         <Link
                             key={item.name}
                             href={item.href}
+                            onClick={() => setMobileOpen(false)}
                             className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
                                 isActive
                                     ? "bg-[#00B050]/10 text-[#00B050] font-bold shadow-2xs"
@@ -240,7 +270,7 @@ export default function ManagerSidebar() {
             </div>
 
             {/* Real Logout Action */}
-            <div className="p-3 border-t border-neutral-200 bg-white">
+            <div className="p-3 border-t border-neutral-200 bg-white shrink-0">
                 <button
                     onClick={handleLogout}
                     className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer text-left"
@@ -249,6 +279,28 @@ export default function ManagerSidebar() {
                     <span>Sign out</span>
                 </button>
             </div>
-        </aside>
+        </>
+    );
+
+    return (
+        <>
+            {/* Desktop Fixed Sidebar */}
+            <aside className="hidden lg:flex w-64 bg-white border-r border-neutral-200 flex-col h-screen sticky top-0 z-40 select-none shrink-0">
+                {renderManagerSidebarContent(false)}
+            </aside>
+
+            {/* Mobile Drawer Sheet */}
+            {mobileOpen && (
+                <div className="fixed inset-0 z-50 lg:hidden flex">
+                    <div 
+                        className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity animate-fadeIn"
+                        onClick={() => setMobileOpen(false)}
+                    />
+                    <div className="relative w-72 max-w-[85vw] bg-white h-full shadow-2xl flex flex-col z-10 animate-slideRight">
+                        {renderManagerSidebarContent(true)}
+                    </div>
+                </div>
+            )}
+        </>
     );
 }

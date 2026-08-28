@@ -6,14 +6,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const { id } = await params;
     const session = requireRole(request, ["SUPER_ADMIN", "ORG_ADMIN", "MANAGER"]);
-    const orgId = session.organizationId || "org-1";
+    const orgId = session.role === "SUPER_ADMIN" ? "all" : (session.organizationId || "");
 
     const body = await request.json();
     let result;
     if (session.role === "MANAGER") {
-      result = await LeaveService.approveByManager(id, orgId, "REJECTED", body.comment || "Rejected by manager");
+      result = await LeaveService.approveByManager(id, orgId, "REJECTED", body.comment || body.reason || "Rejected by manager");
     } else {
-      result = await LeaveService.approveByOrgAdmin(id, orgId, "REJECTED", body.comment || "Rejected by admin");
+      result = await LeaveService.approveByOrgAdmin(id, orgId, "REJECTED", body.comment || body.reason || "Rejected by admin");
     }
 
     return apiSuccess(result, "Leave request rejected");

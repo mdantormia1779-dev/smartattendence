@@ -7,7 +7,23 @@ import { handleApiError } from "@/server/errors";
 export async function GET(request: Request) {
   try {
     const session = requireAuth(request);
-    const orgId = request.headers.get("x-organization-id") || session.organizationId || "org-1";
+    
+    // Strict Multi-Tenant Scoping:
+    // If not SUPER_ADMIN, user is strictly locked to their own organizationId
+    let orgId = session.organizationId;
+    if (session.role === "SUPER_ADMIN") {
+      const { searchParams } = new URL(request.url);
+      orgId = searchParams.get("organizationId") || request.headers.get("x-organization-id") || "all";
+    }
+
+    if (!orgId) {
+      return NextResponse.json({
+        success: true,
+        data: { items: [], pagination: { total: 0, page: 1, limit: 20, totalPages: 0 } },
+        items: [],
+        pagination: { total: 0, page: 1, limit: 20, totalPages: 0 }
+      });
+    }
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1");

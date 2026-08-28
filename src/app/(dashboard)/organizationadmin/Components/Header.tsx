@@ -16,7 +16,8 @@ import {
     Sparkles, 
     X,
     ExternalLink,
-    HelpCircle
+    HelpCircle,
+    Menu
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import NotificationDropdown from "@/components/NotificationDropdown";
@@ -213,8 +214,17 @@ export default function Header({ title = "Dashboard" }: HeaderProps) {
 
     return (
         <header className="h-16 bg-white border-b border-gray-100 px-4 sm:px-6 md:px-8 flex items-center justify-between sticky top-0 z-30 shadow-xs">
-            {/* Left: Page Title & Org Context */}
+            {/* Left: Hamburger & Page Title & Org Context */}
             <div className="flex items-center gap-3">
+                <button
+                    type="button"
+                    onClick={() => window.dispatchEvent(new CustomEvent("toggle-orgadmin-sidebar"))}
+                    className="p-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors lg:hidden shrink-0 cursor-pointer"
+                    aria-label="Open Organization Navigation Menu"
+                >
+                    <Menu className="w-5 h-5 text-gray-700" />
+                </button>
+
                 <div>
                     <h1 className="text-sm md:text-base font-bold text-gray-900 leading-tight flex items-center gap-2">
                         {title}

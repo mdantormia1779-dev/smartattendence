@@ -1,12 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import gsap from "gsap";
 import { 
     Share2, 
     DollarSign, 
     Users, 
-    MousePointerClick, 
     TrendingUp, 
     ShieldAlert, 
     CheckCircle2, 
@@ -18,79 +16,80 @@ import {
     X, 
     RefreshCw,
     Wallet,
-    Loader2
+    Loader2,
+    Building2,
+    ExternalLink,
+    AlertCircle,
+    Copy,
+    Save,
+    FileText,
+    CreditCard
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 
 export default function AdminReferralsPage() {
-    const [activeTab, setActiveTab] = useState<"affiliates" | "commissions" | "withdrawals" | "fraud">("affiliates");
+    const [activeTab, setActiveTab] = useState<"applications" | "payouts" | "ledger" | "settings">("applications");
     const [searchQuery, setSearchQuery] = useState("");
+    const [statusFilter, setStatusFilter] = useState<string>("ALL");
     const [isLoading, setIsLoading] = useState(false);
     
-    // Data State (Starts clean from database)
+    // Database State
+    const [affiliates, setAffiliates] = useState<any[]>([]);
+    const [payouts, setPayouts] = useState<any[]>([]);
     const [metrics, setMetrics] = useState<any>({
-        totalAffiliates: 0,
-        totalClicks: 0,
-        totalRegistrations: 0,
-        totalPaidCustomers: 0,
-        totalReferralRevenue: 0.0,
-        pendingCommissionsTotal: 0.0,
-        availableCommissionsTotal: 0.0,
-        totalPayoutsDistributed: 0.0,
-        pendingWithdrawalsCount: 0,
-        fraudAlertsCount: 0,
+        total: 0,
+        pending: 0,
+        approved: 0,
+        rejected: 0,
+        totalEarnedSum: 0,
+        totalBalanceSum: 0,
+    });
+    const [settings, setSettings] = useState<any>({
+        oneTimeBonus: 500,
+        recurringPercentage: 10,
+        minimumPayoutThreshold: 500,
+        cookieDays: 30,
+        autoApprovePayouts: false,
     });
 
-    const [config, setConfig] = useState<any>({
-        name: "Standard Growth Affiliate Program",
-        status: "ACTIVE",
-        commissionType: "RECURRING",
-        defaultCommissionRate: 20.0,
-        holdingPeriodDays: 30,
-        cookieDurationDays: 30,
-        minimumWithdrawal: 500.0,
-        recurringEnabled: true,
-        recurringMonths: 12,
-        selfReferralBlocked: true,
-    });
-
-    const [accounts, setAccounts] = useState<any[]>([]);
-    const [commissions, setCommissions] = useState<any[]>([]);
-    const [withdrawals, setWithdrawals] = useState<any[]>([]);
-    const [fraudAlerts, setFraudAlerts] = useState<any[]>([]);
-    
-    // Modals
-    const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
-    const [selectedWithdrawal, setSelectedWithdrawal] = useState<any>(null);
+    // Modals & Actions State
+    const [selectedAffiliate, setSelectedAffiliate] = useState<any>(null);
+    const [customRefCode, setCustomRefCode] = useState("");
+    const [rejectModalOpen, setRejectModalOpen] = useState(false);
     const [rejectionReason, setRejectionReason] = useState("");
-    const [isProcessing, setIsProcessing] = useState(false);
+    
+    const [selectedPayout, setSelectedPayout] = useState<any>(null);
+    const [payoutModalOpen, setPayoutModalOpen] = useState(false);
+    const [payoutDecision, setPayoutDecision] = useState<"COMPLETED" | "REJECTED">("COMPLETED");
+    const [transactionId, setTransactionId] = useState("");
+    const [payoutRejectReason, setPayoutRejectReason] = useState("");
 
-    const containerRef = useRef<HTMLDivElement>(null);
+    const [isSavingSettings, setIsSavingSettings] = useState(false);
+    const [settingsSuccessMsg, setSettingsSuccessMsg] = useState("");
+    const [actionLoading, setActionLoading] = useState(false);
 
+    // Fetch All Data
     const fetchData = async () => {
         try {
             setIsLoading(true);
-            const res = await fetch(`/api/referral/admin?_t=${Date.now()}`, {
-                cache: "no-store",
-                headers: {
-                    "Cache-Control": "no-cache, no-store, must-revalidate",
-                    Pragma: "no-cache",
-                    "x-user-role": "SUPER_ADMIN",
-                    Authorization: "Bearer super-admin-token",
-                },
-            });
-            const json = await res.json();
-            const data = json.data || json;
-            if (json.success || data.metrics) {
-                if (data.metrics) setMetrics(data.metrics);
-                if (data.config) setConfig(data.config);
-                setAccounts(data.accounts || []);
-                setCommissions(data.commissions || []);
-                setWithdrawals(data.withdrawals || []);
-                setFraudAlerts(data.fraudAlerts || []);
+            const [affRes, payoutRes, setRes] = await Promise.all([
+                api.adminAffiliates.getAll({ status: statusFilter, search: searchQuery }),
+                api.adminAffiliates.getPayouts(),
+                api.adminAffiliates.getSettings(),
+            ]);
+
+            if (affRes.success && affRes.data) {
+                setAffiliates(affRes.data.affiliates || []);
+                if (affRes.data.metrics) setMetrics(affRes.data.metrics);
+            }
+            if (payoutRes.success && payoutRes.data) {
+                setPayouts(payoutRes.data.payouts || []);
+            }
+            if (setRes.success && setRes.data) {
+                setSettings(setRes.data);
             }
         } catch (e) {
-            console.error("Failed to load referral admin data", e);
+            console.error("Failed to load affiliate admin data:", e);
         } finally {
             setIsLoading(false);
         }
@@ -98,660 +97,716 @@ export default function AdminReferralsPage() {
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [statusFilter]);
 
-    useEffect(() => {
-        const ctx = gsap.context(() => {
-            gsap.fromTo(
-                ".ref-kpi",
-                { opacity: 0, y: 15 },
-                { opacity: 1, y: 0, duration: 0.5, stagger: 0.06, ease: "power2.out" }
-            );
-        }, containerRef);
-        return () => ctx.revert();
-    }, [metrics.totalAffiliates]);
+    const handleSearch = (e: React.FormEvent) => {
+        e.preventDefault();
+        fetchData();
+    };
 
-    const handlePayoutAction = async (withdrawalId: string, decision: "APPROVED" | "PAID" | "REJECTED") => {
+    // Approve Affiliate
+    const handleApproveAffiliate = async (id: string) => {
         try {
-            setIsProcessing(true);
-            const res = await fetch("/api/referral/admin", {
-                method: "POST",
-                headers: { 
-                    "Content-Type": "application/json",
-                    "x-user-role": "SUPER_ADMIN",
-                    Authorization: "Bearer super-admin-token",
-                },
-                body: JSON.stringify({
-                    action: "PROCESS_PAYOUT",
-                    withdrawalId,
-                    decision,
-                    rejectionReason: decision === "REJECTED" ? rejectionReason : undefined,
-                }),
-            });
-            const data = await res.json();
-            if (data.success) {
-                setSelectedWithdrawal(null);
-                setRejectionReason("");
-                await fetchData();
+            setActionLoading(true);
+            const res = await api.adminAffiliates.approve(id, customRefCode || undefined);
+            if (res.success) {
+                setSelectedAffiliate(null);
+                setCustomRefCode("");
+                fetchData();
+            } else {
+                alert(res.message || "Failed to approve affiliate");
             }
-        } catch (e) {
-            console.error(e);
+        } catch (e: any) {
+            alert(e.message || "Approval failed");
         } finally {
-            setIsProcessing(false);
+            setActionLoading(false);
         }
     };
 
-    const handleSaveConfig = async (e: React.FormEvent) => {
+    // Reject Affiliate
+    const handleRejectAffiliate = async () => {
+        if (!selectedAffiliate) return;
+        try {
+            setActionLoading(true);
+            const res = await api.adminAffiliates.reject(selectedAffiliate.id, rejectionReason);
+            if (res.success) {
+                setRejectModalOpen(false);
+                setSelectedAffiliate(null);
+                setRejectionReason("");
+                fetchData();
+            } else {
+                alert(res.message || "Failed to reject affiliate");
+            }
+        } catch (e: any) {
+            alert(e.message || "Rejection failed");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // Process Payout Request
+    const handleProcessPayout = async () => {
+        if (!selectedPayout) return;
+        try {
+            setActionLoading(true);
+            const res = await api.adminAffiliates.processPayout(
+                selectedPayout.id,
+                payoutDecision,
+                transactionId,
+                payoutRejectReason
+            );
+
+            if (res.success) {
+                setPayoutModalOpen(false);
+                setSelectedPayout(null);
+                setTransactionId("");
+                setPayoutRejectReason("");
+                fetchData();
+            } else {
+                alert(res.message || "Failed to process payout");
+            }
+        } catch (e: any) {
+            alert(e.message || "Process payout failed");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // Save Settings
+    const handleSaveSettings = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            setIsProcessing(true);
-            const res = await fetch("/api/referral/admin", {
-                method: "POST",
-                headers: { 
-                    "Content-Type": "application/json",
-                    "x-user-role": "SUPER_ADMIN",
-                    Authorization: "Bearer super-admin-token",
-                },
-                body: JSON.stringify({
-                    action: "UPDATE_CONFIG",
-                    config,
-                }),
-            });
-            const data = await res.json();
-            if (data.success) {
-                setIsConfigModalOpen(false);
-                await fetchData();
+            setIsSavingSettings(true);
+            setSettingsSuccessMsg("");
+            const res = await api.adminAffiliates.updateSettings(settings);
+            if (res.success) {
+                setSettingsSuccessMsg("Affiliate commission rates & thresholds updated successfully!");
+                setTimeout(() => setSettingsSuccessMsg(""), 3000);
             }
-        } catch (e) {
-            console.error(e);
+        } catch (e: any) {
+            alert(e.message || "Failed to save settings");
         } finally {
-            setIsProcessing(false);
+            setIsSavingSettings(false);
         }
     };
 
     return (
-        <div ref={containerRef} className="flex-1 bg-[#FBFBFA] p-6 md:p-10 space-y-6 overflow-y-auto min-h-screen">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-neutral-200/80 shadow-xs">
+        <div className="flex-1 bg-[#FBF9F5] p-6 md:p-8 space-y-6 overflow-y-auto min-h-screen text-neutral-800">
+            {/* Top Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-neutral-200 shadow-xs">
                 <div>
                     <h1 className="text-2xl font-bold text-neutral-900 tracking-tight flex items-center gap-2.5">
-                        <Share2 className="w-6 h-6 text-[#10b981]" />
-                        Referral & Affiliate Management
+                        <Share2 className="w-6 h-6 text-[#00B050]" />
+                        Affiliate & Referral Network Management
                     </h1>
                     <p className="text-xs text-neutral-500 mt-1">
-                        Real-time affiliate acquisition, commission ledgers, anti-fraud rules & automated payout processing
+                        Verify NID partner applications, manage recurring commission logic, and process mobile wallet payouts.
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
                     <button
                         onClick={fetchData}
                         className="p-2.5 rounded-xl border border-neutral-200 hover:bg-neutral-50 text-neutral-600 transition-colors cursor-pointer"
-                        title="Refresh data"
+                        title="Refresh metrics"
                     >
-                        <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-[#10b981]" : ""}`} />
+                        <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
                     </button>
-
-                    <button
-                        onClick={() => setIsConfigModalOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-[#10b981] hover:bg-emerald-600 text-white rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer active:scale-95"
+                    <a
+                        href="/affiliate"
+                        target="_blank"
+                        className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold border border-neutral-200 text-neutral-700 hover:bg-neutral-50 transition-colors cursor-pointer"
                     >
-                        <Sliders className="w-4 h-4" />
-                        Program Rules
-                    </button>
+                        <ExternalLink className="w-3.5 h-3.5 text-[#00B050]" />
+                        Public Partner Portal
+                    </a>
                 </div>
             </div>
 
-            {/* KPI Overview Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="ref-kpi bg-white p-5 rounded-3xl border border-neutral-200/80 shadow-xs">
+            {/* Metrics Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Total Partners */}
+                <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-xs flex flex-col justify-between">
                     <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Total Affiliates</span>
-                        <div className="p-2 rounded-xl bg-emerald-50 text-[#10b981]"><Users className="w-4 h-4" /></div>
+                        <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Total Partners</span>
+                        <div className="w-8 h-8 rounded-xl bg-emerald-50 text-[#00B050] flex items-center justify-center">
+                            <Users className="w-4 h-4" />
+                        </div>
                     </div>
-                    <h3 className="text-2xl font-extrabold text-neutral-900 mt-2">
-                        {isLoading ? <Loader2 className="w-5 h-5 animate-spin inline text-[#10b981]" /> : `${metrics.totalAffiliates} Partners`}
-                    </h3>
-                    <p className="text-[11px] text-neutral-400 mt-0.5">{metrics.totalClicks} Total Clicks tracked</p>
+                    <div className="mt-3">
+                        <span className="text-2xl font-extrabold text-neutral-900">{metrics.total}</span>
+                        <span className="text-xs text-neutral-400 ml-1.5 font-medium">registered</span>
+                    </div>
+                    <div className="mt-3 pt-2.5 border-t border-neutral-100 text-[11px] text-emerald-700 font-semibold">
+                        {metrics.approved} approved & active
+                    </div>
                 </div>
 
-                <div className="ref-kpi bg-white p-5 rounded-3xl border border-neutral-200/80 shadow-xs">
+                {/* Pending Applications */}
+                <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-xs flex flex-col justify-between">
                     <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Paid Conversions</span>
-                        <div className="p-2 rounded-xl bg-blue-50 text-blue-600"><TrendingUp className="w-4 h-4" /></div>
+                        <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Pending Review</span>
+                        <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                            <Clock className="w-4 h-4" />
+                        </div>
                     </div>
-                    <h3 className="text-2xl font-extrabold text-neutral-900 mt-2">
-                        {isLoading ? <Loader2 className="w-5 h-5 animate-spin inline text-[#10b981]" /> : `${metrics.totalPaidCustomers} Orgs`}
-                    </h3>
-                    <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">
-                        {metrics.totalRegistrations > 0 
-                            ? `${((metrics.totalPaidCustomers / metrics.totalRegistrations) * 100).toFixed(1)}% Conversion Rate`
-                            : "0.0% Conversion Rate"}
-                    </p>
+                    <div className="mt-3">
+                        <span className="text-2xl font-extrabold text-amber-600">{metrics.pending}</span>
+                        <span className="text-xs text-neutral-400 ml-1.5 font-medium">applications</span>
+                    </div>
+                    <div className="mt-3 pt-2.5 border-t border-neutral-100 text-[11px] text-amber-700 font-semibold">
+                        Awaiting NID compliance check
+                    </div>
                 </div>
 
-                <div className="ref-kpi bg-white p-5 rounded-3xl border border-neutral-200/80 shadow-xs">
+                {/* Total Paid Out */}
+                <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-xs flex flex-col justify-between">
                     <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Referral Revenue</span>
-                        <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600"><DollarSign className="w-4 h-4" /></div>
+                        <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Cumulative Rewards</span>
+                        <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                            <DollarSign className="w-4 h-4" />
+                        </div>
                     </div>
-                    <h3 className="text-2xl font-extrabold text-indigo-600 mt-2 font-mono">
-                        {isLoading ? <Loader2 className="w-5 h-5 animate-spin inline" /> : `৳${Number(metrics.totalReferralRevenue || 0).toLocaleString()}`}
-                    </h3>
-                    <p className="text-[11px] text-neutral-400 mt-0.5">৳{Number(metrics.availableCommissionsTotal || 0).toLocaleString()} Available to Payout</p>
+                    <div className="mt-3">
+                        <span className="text-2xl font-extrabold text-blue-600">৳{metrics.totalEarnedSum?.toFixed(2) || "0.00"}</span>
+                        <span className="text-xs text-neutral-400 ml-1.5 font-medium">BDT</span>
+                    </div>
+                    <div className="mt-3 pt-2.5 border-t border-neutral-100 text-[11px] text-neutral-500 font-medium">
+                        Total partner commissions
+                    </div>
                 </div>
 
-                <div className="ref-kpi bg-white p-5 rounded-3xl border border-neutral-200/80 shadow-xs">
+                {/* Pending Payout Requests */}
+                <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-xs flex flex-col justify-between">
                     <div className="flex items-center justify-between">
                         <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Pending Withdrawals</span>
-                        <div className="p-2 rounded-xl bg-amber-50 text-amber-600"><Wallet className="w-4 h-4" /></div>
+                        <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                            <Wallet className="w-4 h-4" />
+                        </div>
                     </div>
-                    <h3 className="text-2xl font-extrabold text-amber-600 mt-2">
-                        {isLoading ? <Loader2 className="w-5 h-5 animate-spin inline" /> : `${metrics.pendingWithdrawalsCount} Requests`}
-                    </h3>
-                    <p className="text-[11px] text-neutral-400 mt-0.5">৳{Number(metrics.totalPayoutsDistributed || 0).toLocaleString()} Lifetime Paid</p>
+                    <div className="mt-3">
+                        <span className="text-2xl font-extrabold text-purple-600">
+                            {payouts.filter((p) => p.status === "REQUESTED").length}
+                        </span>
+                        <span className="text-xs text-neutral-400 ml-1.5 font-medium">requests</span>
+                    </div>
+                    <div className="mt-3 pt-2.5 border-t border-neutral-100 text-[11px] text-purple-700 font-semibold">
+                        bKash / Nagad / Bank
+                    </div>
                 </div>
             </div>
 
-            {/* Main Tabs Navigation */}
-            <div className="flex items-center gap-2 border-b border-neutral-200 pb-2 overflow-x-auto">
-                {[
-                    { id: "affiliates", label: `Affiliate Directory (${accounts.length})` },
-                    { id: "commissions", label: `Commission Ledger (${commissions.length})` },
-                    { id: "withdrawals", label: `Payout Requests (${withdrawals.filter(w => w.status === "PENDING").length} pending)` },
-                    { id: "fraud", label: `Fraud & Security Alerts (${fraudAlerts.length})` },
-                ].map((tab) => (
+            {/* Navigation Tabs */}
+            <div className="bg-white rounded-3xl border border-neutral-200 shadow-xs overflow-hidden">
+                <div className="flex items-center border-b border-neutral-200 px-6 pt-4 gap-6 bg-neutral-50/50">
                     <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id as any)}
-                        className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                            activeTab === tab.id
-                                ? "bg-[#10b981] text-white shadow-xs"
-                                : "bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50"
+                        onClick={() => setActiveTab("applications")}
+                        className={`pb-3 text-xs font-bold transition-all border-b-2 cursor-pointer ${
+                            activeTab === "applications"
+                                ? "border-[#00B050] text-[#00B050]"
+                                : "border-transparent text-neutral-500 hover:text-neutral-800"
                         }`}
                     >
-                        {tab.label}
+                        Partners & Applications ({affiliates.length})
                     </button>
-                ))}
-            </div>
-
-            {/* TAB 1: Affiliates Directory */}
-            {activeTab === "affiliates" && (
-                <div className="bg-white rounded-3xl border border-neutral-200/80 shadow-xs overflow-hidden">
-                    <div className="p-4 border-b border-neutral-100 flex items-center justify-between gap-4">
-                        <div className="relative w-72">
-                            <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                            <input
-                                type="text"
-                                placeholder="Search affiliate name, email, code..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-9 pr-4 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981]"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="border-b border-neutral-100 bg-neutral-50/70 text-neutral-400 text-[11px] font-bold uppercase tracking-wider">
-                                    <th className="py-4 px-6">Affiliate / User</th>
-                                    <th className="py-4 px-6">Referral Code</th>
-                                    <th className="py-4 px-6">Role & Rate</th>
-                                    <th className="py-4 px-6">Clicks / Signups</th>
-                                    <th className="py-4 px-6">Paid Customers</th>
-                                    <th className="py-4 px-6">Total Revenue</th>
-                                    <th className="py-4 px-6">Available Wallet</th>
-                                    <th className="py-4 px-6">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-neutral-100 text-xs">
-                                {accounts.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={8} className="py-12 text-center text-neutral-400">
-                                            No affiliate accounts created yet.
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    accounts
-                                        .filter((a) =>
-                                            (a.userName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                            (a.referralCode || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                            (a.userEmail || "").toLowerCase().includes(searchQuery.toLowerCase())
-                                        )
-                                        .map((acc) => (
-                                            <tr key={acc.id} className="hover:bg-neutral-50/60 transition-colors">
-                                                <td className="py-4 px-6">
-                                                    <p className="font-bold text-neutral-900 text-xs">{acc.userName}</p>
-                                                    <span className="text-[11px] text-neutral-400 font-mono">{acc.userEmail}</span>
-                                                </td>
-
-                                                <td className="py-4 px-6">
-                                                    <span className="font-mono text-xs font-bold px-2 py-1 bg-emerald-50 text-[#10b981] rounded-md border border-emerald-200/60">
-                                                        {acc.referralCode}
-                                                    </span>
-                                                </td>
-
-                                                <td className="py-4 px-6">
-                                                    <span className="text-xs font-semibold text-neutral-800">{acc.referralType}</span>
-                                                    <p className="text-[11px] text-emerald-600 font-bold">{acc.commissionRate}% Commission</p>
-                                                </td>
-
-                                                <td className="py-4 px-6 text-xs text-neutral-700">
-                                                    <span className="font-bold">{acc.totalClicks}</span> Clicks · <span className="font-bold">{acc.totalRegistrations}</span> Signups
-                                                </td>
-
-                                                <td className="py-4 px-6 font-bold text-xs text-emerald-700">
-                                                    {acc.totalPaidCustomers} Orgs
-                                                </td>
-
-                                                <td className="py-4 px-6 font-mono text-xs font-bold text-neutral-900">
-                                                    ৳{Number(acc.totalRevenue || 0).toLocaleString()}
-                                                </td>
-
-                                                <td className="py-4 px-6 font-mono text-xs font-bold text-[#10b981]">
-                                                    ৳{Number(acc.availableBalance || 0).toLocaleString()}
-                                                    <p className="text-[10px] text-neutral-400 font-normal">Pending: ৳{Number(acc.pendingCommission || 0).toLocaleString()}</p>
-                                                </td>
-
-                                                <td className="py-4 px-6">
-                                                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">
-                                                        {acc.status}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                    <button
+                        onClick={() => setActiveTab("payouts")}
+                        className={`pb-3 text-xs font-bold transition-all border-b-2 cursor-pointer ${
+                            activeTab === "payouts"
+                                ? "border-[#00B050] text-[#00B050]"
+                                : "border-transparent text-neutral-500 hover:text-neutral-800"
+                        }`}
+                    >
+                        Withdrawal Requests ({payouts.length})
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("settings")}
+                        className={`pb-3 text-xs font-bold transition-all border-b-2 cursor-pointer ${
+                            activeTab === "settings"
+                                ? "border-[#00B050] text-[#00B050]"
+                                : "border-transparent text-neutral-500 hover:text-neutral-800"
+                        }`}
+                    >
+                        Program Commission Rates & Thresholds
+                    </button>
                 </div>
-            )}
 
-            {/* TAB 2: Commission Ledger */}
-            {activeTab === "commissions" && (
-                <div className="bg-white rounded-3xl border border-neutral-200/80 shadow-xs overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="border-b border-neutral-100 bg-neutral-50/70 text-neutral-400 text-[11px] font-bold uppercase tracking-wider">
-                                    <th className="py-4 px-6">Referred Organization</th>
-                                    <th className="py-4 px-6">Affiliate Code</th>
-                                    <th className="py-4 px-6">Plan & Cycle</th>
-                                    <th className="py-4 px-6">Base Payment</th>
-                                    <th className="py-4 px-6">Commission</th>
-                                    <th className="py-4 px-6">Status</th>
-                                    <th className="py-4 px-6">Available Date</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-neutral-100 text-xs">
-                                {commissions.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={7} className="py-12 text-center text-neutral-400">
-                                            No referral commissions earned yet. Commissions will automatically appear when invited organizations purchase subscriptions.
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    commissions.map((c) => (
-                                        <tr key={c.id} className="hover:bg-neutral-50/60 transition-colors">
-                                            <td className="py-4 px-6 font-bold text-xs text-neutral-900">
-                                                {c.organizationName}
-                                                <p className="text-[10px] text-neutral-400 font-mono">Date: {c.createdAt}</p>
-                                            </td>
-
-                                            <td className="py-4 px-6 font-mono text-xs text-[#10b981] font-bold">
-                                                {c.referralCode}
-                                            </td>
-
-                                            <td className="py-4 px-6 text-xs text-neutral-700">
-                                                {c.planName} · <span className="font-semibold text-neutral-500">{c.billingCycle}</span>
-                                            </td>
-
-                                            <td className="py-4 px-6 font-mono text-xs text-neutral-800">
-                                                ৳{Number(c.baseAmount || 0).toLocaleString()}
-                                            </td>
-
-                                            <td className="py-4 px-6 font-mono text-xs font-bold text-[#10b981]">
-                                                +৳{Number(c.commissionAmount || 0).toLocaleString()}
-                                            </td>
-
-                                            <td className="py-4 px-6">
-                                                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                                                    c.status === "AVAILABLE" || c.status === "APPROVED"
-                                                        ? "bg-emerald-50 text-emerald-700"
-                                                        : c.status === "REVERSED"
-                                                        ? "bg-rose-50 text-rose-700"
-                                                        : "bg-amber-50 text-amber-700"
-                                                }`}>
-                                                    {c.status === "AVAILABLE" && <CheckCircle2 className="w-3.5 h-3.5" />}
-                                                    {c.status === "PENDING" && <Clock className="w-3.5 h-3.5" />}
-                                                    {c.status}
-                                                </span>
-                                            </td>
-
-                                            <td className="py-4 px-6 font-mono text-xs text-neutral-500">
-                                                {c.availableAt}
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
-            {/* TAB 3: Payout / Withdrawal Requests */}
-            {activeTab === "withdrawals" && (
-                <div className="bg-white rounded-3xl border border-neutral-200/80 shadow-xs overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="border-b border-neutral-100 bg-neutral-50/70 text-neutral-400 text-[11px] font-bold uppercase tracking-wider">
-                                    <th className="py-4 px-6">Affiliate Name</th>
-                                    <th className="py-4 px-6">Requested Amount</th>
-                                    <th className="py-4 px-6">Payout Method</th>
-                                    <th className="py-4 px-6">Account Details</th>
-                                    <th className="py-4 px-6">Requested Date</th>
-                                    <th className="py-4 px-6">Status</th>
-                                    <th className="py-4 px-6 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-neutral-100 text-xs">
-                                {withdrawals.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={7} className="py-12 text-center text-neutral-400">
-                                            No withdrawal payout requests submitted yet.
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    withdrawals.map((w) => (
-                                        <tr key={w.id} className="hover:bg-neutral-50/60 transition-colors">
-                                            <td className="py-4 px-6">
-                                                <p className="font-bold text-neutral-900 text-xs">{w.affiliateName}</p>
-                                                <span className="text-[11px] text-neutral-400 font-mono">{w.affiliateEmail}</span>
-                                            </td>
-
-                                            <td className="py-4 px-6 font-mono text-sm font-bold text-neutral-900">
-                                                ৳{Number(w.amount || 0).toLocaleString()} {w.currency || "BDT"}
-                                            </td>
-
-                                            <td className="py-4 px-6">
-                                                <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-indigo-50 text-indigo-700">
-                                                    {w.paymentMethod}
-                                                </span>
-                                            </td>
-
-                                            <td className="py-4 px-6 font-mono text-xs text-neutral-700 max-w-xs truncate">
-                                                {w.paymentDetails}
-                                            </td>
-
-                                            <td className="py-4 px-6 text-xs text-neutral-500">
-                                                {w.requestedAt}
-                                            </td>
-
-                                            <td className="py-4 px-6">
-                                                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                                                    w.status === "PAID"
-                                                        ? "bg-emerald-50 text-emerald-700"
-                                                        : w.status === "REJECTED"
-                                                        ? "bg-rose-50 text-rose-700"
-                                                        : "bg-amber-50 text-amber-700"
-                                                }`}>
-                                                    {w.status === "PAID" && <CheckCircle2 className="w-3.5 h-3.5" />}
-                                                    {w.status === "PENDING" && <Clock className="w-3.5 h-3.5" />}
-                                                    {w.status}
-                                                </span>
-                                            </td>
-
-                                            <td className="py-4 px-6 text-right">
-                                                {w.status === "PENDING" ? (
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        <button
-                                                            disabled={isProcessing}
-                                                            onClick={() => handlePayoutAction(w.id, "PAID")}
-                                                            className="px-3 py-1.5 bg-[#10b981] hover:bg-emerald-600 text-white rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                                                        >
-                                                            <Check className="w-3.5 h-3.5" /> Approve & Pay
-                                                        </button>
-                                                        <button
-                                                            disabled={isProcessing}
-                                                            onClick={() => {
-                                                                setSelectedWithdrawal(w);
-                                                            }}
-                                                            className="px-3 py-1.5 border border-rose-200 hover:bg-rose-50 text-rose-600 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                                                        >
-                                                            <X className="w-3.5 h-3.5" /> Reject
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-xs text-neutral-400 italic">Completed</span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
-            {/* TAB 4: Fraud & Security Alerts */}
-            {activeTab === "fraud" && (
-                <div className="bg-white rounded-3xl border border-neutral-200/80 shadow-xs overflow-hidden p-6 space-y-4">
-                    <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
-                        <div className="flex items-center gap-2">
-                            <ShieldAlert className="w-5 h-5 text-rose-500" />
-                            <div>
-                                <h3 className="font-bold text-neutral-900 text-sm">Anti-Fraud & Self-Referral Prevention</h3>
-                                <p className="text-xs text-neutral-500">Real-time heuristic evaluation on IP subnets, device fingerprint, and self-referrals</p>
+                {/* TAB 1: Partners & Applications */}
+                {activeTab === "applications" && (
+                    <div className="p-6 space-y-4">
+                        {/* Search & Filter Bar */}
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <form onSubmit={handleSearch} className="relative flex-1 max-w-md w-full">
+                                <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-2.5" />
+                                <input
+                                    type="text"
+                                    placeholder="Search by name, email, phone, referral code..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full pl-9 pr-3.5 py-2 text-xs rounded-xl border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-[#00B050]"
+                                />
+                            </form>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-neutral-500 font-semibold">Status:</span>
+                                <select
+                                    value={statusFilter}
+                                    onChange={(e) => setStatusFilter(e.target.value)}
+                                    className="px-3 py-1.5 rounded-xl border border-neutral-200 text-xs bg-white font-medium focus:outline-none"
+                                >
+                                    <option value="ALL">All Partners</option>
+                                    <option value="PENDING">Pending Review</option>
+                                    <option value="APPROVED">Approved</option>
+                                    <option value="REJECTED">Rejected</option>
+                                    <option value="SUSPENDED">Suspended</option>
+                                </select>
                             </div>
                         </div>
-                    </div>
 
-                    {fraudAlerts.length === 0 ? (
-                        <div className="py-12 text-center text-xs text-neutral-400">
-                            No fraud alerts detected. All referral links and signups comply with security policies.
-                        </div>
-                    ) : (
-                        <div className="divide-y divide-neutral-100 text-xs">
-                            {fraudAlerts.map((alert) => (
-                                <div key={alert.id} className="py-4 flex items-start justify-between">
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-2">
-                                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                                {alert.eventType}
-                                            </span>
-                                            <span className="font-bold text-neutral-900">{alert.affiliateName} ({alert.referralCode})</span>
-                                        </div>
-                                        <p className="text-neutral-600">{alert.details}</p>
-                                        <span className="text-[10px] text-neutral-400 font-mono">{alert.createdAt}</span>
-                                    </div>
-
-                                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
-                                        alert.severity === "CRITICAL" ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"
-                                    }`}>
-                                        Severity: {alert.severity}
-                                    </span>
+                        {/* Affiliates Table */}
+                        <div className="overflow-x-auto custom-scrollbar">
+                            {affiliates.length === 0 ? (
+                                <div className="p-12 text-center text-xs text-neutral-400 space-y-2">
+                                    <Users className="w-8 h-8 text-neutral-300 mx-auto" />
+                                    <p className="font-bold text-neutral-700">No partner records found</p>
+                                    <p>Applications submitted through the public portal will appear here.</p>
                                 </div>
-                            ))}
+                            ) : (
+                                <table className="w-full min-w-[850px] text-left text-xs">
+                                    <thead className="bg-neutral-50 text-neutral-500 font-bold border-b border-neutral-100">
+                                        <tr>
+                                            <th className="py-3 px-4">Partner Details</th>
+                                            <th className="py-3 px-4">NID / Verification</th>
+                                            <th className="py-3 px-4">Referral Code</th>
+                                            <th className="py-3 px-4">Disbursement Method</th>
+                                            <th className="py-3 px-4">Referrals & Rev</th>
+                                            <th className="py-3 px-4">Balance / Earned</th>
+                                            <th className="py-3 px-4">Status</th>
+                                            <th className="py-3 px-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-neutral-100 text-neutral-700">
+                                        {affiliates.map((aff) => (
+                                            <tr key={aff.id} className="hover:bg-neutral-50/60 transition-colors">
+                                                <td className="py-3.5 px-4">
+                                                    <div className="font-bold text-neutral-900">{aff.fullName}</div>
+                                                    <div className="text-[11px] text-neutral-500 font-mono">{aff.email}</div>
+                                                    <div className="text-[11px] text-neutral-400">{aff.phone}</div>
+                                                </td>
+                                                <td className="py-3.5 px-4">
+                                                    <div className="font-semibold text-neutral-800">{aff.nidNumber || "Not Provided"}</div>
+                                                    {aff.nidDocumentUrl ? (
+                                                        <a
+                                                            href={aff.nidDocumentUrl}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="text-[10px] text-blue-600 hover:underline flex items-center gap-1 mt-0.5"
+                                                        >
+                                                            <FileText className="w-3 h-3" /> View NID Document
+                                                        </a>
+                                                    ) : (
+                                                        <span className="text-[10px] text-neutral-400">No doc upload</span>
+                                                    )}
+                                                </td>
+                                                <td className="py-3.5 px-4">
+                                                    {aff.referralCode ? (
+                                                        <span className="font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md font-bold text-xs border border-emerald-200">
+                                                            {aff.referralCode}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-neutral-400 italic text-[11px]">Unassigned</span>
+                                                    )}
+                                                </td>
+                                                <td className="py-3.5 px-4">
+                                                    <span className="font-bold text-neutral-800">{aff.paymentMethod}</span>
+                                                    <p className="text-[11px] text-neutral-500 font-mono">{aff.paymentDetails}</p>
+                                                </td>
+                                                <td className="py-3.5 px-4">
+                                                    <div className="font-bold text-neutral-900">{aff.totalReferrals} referred</div>
+                                                    <div className="text-[10px] text-neutral-400">৳{aff.totalRevenueGenerated.toFixed(2)} invoiced</div>
+                                                </td>
+                                                <td className="py-3.5 px-4">
+                                                    <div className="font-bold text-emerald-700">৳{aff.balance.toFixed(2)}</div>
+                                                    <div className="text-[10px] text-neutral-400">৳{aff.totalEarned.toFixed(2)} lifetime</div>
+                                                </td>
+                                                <td className="py-3.5 px-4">
+                                                    {aff.status === "APPROVED" && (
+                                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800">
+                                                            APPROVED
+                                                        </span>
+                                                    )}
+                                                    {aff.status === "PENDING" && (
+                                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 animate-pulse">
+                                                            PENDING REVIEW
+                                                        </span>
+                                                    )}
+                                                    {aff.status === "REJECTED" && (
+                                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-800">
+                                                            REJECTED
+                                                        </span>
+                                                    )}
+                                                    {aff.status === "SUSPENDED" && (
+                                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-neutral-200 text-neutral-700">
+                                                            SUSPENDED
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="py-3.5 px-4 text-right">
+                                                    {aff.status === "PENDING" && (
+                                                        <div className="flex items-center justify-end gap-1.5">
+                                                            <button
+                                                                onClick={() => handleApproveAffiliate(aff.id)}
+                                                                disabled={actionLoading}
+                                                                className="px-2.5 py-1 bg-[#00B050] hover:bg-[#009b46] text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
+                                                            >
+                                                                Approve
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setSelectedAffiliate(aff);
+                                                                    setRejectModalOpen(true);
+                                                                }}
+                                                                className="px-2.5 py-1 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                                                            >
+                                                                Reject
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                    {aff.status === "APPROVED" && (
+                                                        <span className="text-[11px] text-neutral-400">Active</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
                         </div>
-                    )}
-                </div>
-            )}
+                    </div>
+                )}
 
-            {/* Reject Modal */}
-            {selectedWithdrawal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-3xl border border-neutral-200 shadow-2xl max-w-md w-full p-6 space-y-4 animate-in zoom-in-95 duration-200">
-                        <div className="flex items-center justify-between pb-2 border-b border-neutral-100">
-                            <h3 className="font-bold text-neutral-900 text-sm">Reject Payout Request</h3>
-                            <button onClick={() => setSelectedWithdrawal(null)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400">
-                                <X className="w-4 h-4" />
-                            </button>
+                {/* TAB 2: Payout Requests */}
+                {activeTab === "payouts" && (
+                    <div className="p-6 space-y-4">
+                        <div className="overflow-x-auto custom-scrollbar">
+                            {payouts.length === 0 ? (
+                                <div className="p-12 text-center text-xs text-neutral-400 space-y-2">
+                                    <Wallet className="w-8 h-8 text-neutral-300 mx-auto" />
+                                    <p className="font-bold text-neutral-700">No withdrawal requests</p>
+                                    <p>Affiliate withdrawal requests will appear here for processing.</p>
+                                </div>
+                            ) : (
+                                <table className="w-full min-w-[850px] text-left text-xs">
+                                    <thead className="bg-neutral-50 text-neutral-500 font-bold border-b border-neutral-100">
+                                        <tr>
+                                            <th className="py-3 px-4">Requested Date</th>
+                                            <th className="py-3 px-4">Partner Name</th>
+                                            <th className="py-3 px-4">Amount</th>
+                                            <th className="py-3 px-4">Disbursement Method</th>
+                                            <th className="py-3 px-4">Account Number</th>
+                                            <th className="py-3 px-4">Status</th>
+                                            <th className="py-3 px-4">TrxID / Reason</th>
+                                            <th className="py-3 px-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-neutral-100 text-neutral-700">
+                                        {payouts.map((p) => (
+                                            <tr key={p.id} className="hover:bg-neutral-50/60 transition-colors">
+                                                <td className="py-3.5 px-4 text-neutral-500">{p.requestedAt}</td>
+                                                <td className="py-3.5 px-4 font-bold text-neutral-900">{p.affiliateName}</td>
+                                                <td className="py-3.5 px-4 font-extrabold text-neutral-900 text-sm">৳{p.amount.toFixed(2)}</td>
+                                                <td className="py-3.5 px-4 font-bold text-neutral-800">{p.payoutMethod}</td>
+                                                <td className="py-3.5 px-4 font-mono text-neutral-600">{p.accountDetails}</td>
+                                                <td className="py-3.5 px-4">
+                                                    {p.status === "COMPLETED" && (
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                                            COMPLETED
+                                                        </span>
+                                                    )}
+                                                    {p.status === "REQUESTED" && (
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 animate-pulse">
+                                                            PENDING DISBURSEMENT
+                                                        </span>
+                                                    )}
+                                                    {p.status === "REJECTED" && (
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">
+                                                            REJECTED (Refunded)
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="py-3.5 px-4 font-mono text-[11px]">
+                                                    {p.transactionId ? (
+                                                        <span className="text-neutral-800 font-bold">{p.transactionId}</span>
+                                                    ) : p.rejectionReason ? (
+                                                        <span className="text-rose-600">{p.rejectionReason}</span>
+                                                    ) : (
+                                                        <span className="text-neutral-400">—</span>
+                                                    )}
+                                                </td>
+                                                <td className="py-3.5 px-4 text-right">
+                                                    {p.status === "REQUESTED" && (
+                                                        <button
+                                                            onClick={() => {
+                                                                setSelectedPayout(p);
+                                                                setPayoutDecision("COMPLETED");
+                                                                setTransactionId(`BKASH-${Date.now().toString().slice(-6)}`);
+                                                                setPayoutModalOpen(true);
+                                                            }}
+                                                            className="px-3 py-1.5 bg-[#00B050] hover:bg-[#009b46] text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
+                                                        >
+                                                            Process Payout
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
                         </div>
+                    </div>
+                )}
 
-                        <p className="text-xs text-neutral-600">
-                            Rejecting payout for <span className="font-bold text-neutral-900">{selectedWithdrawal.affiliateName}</span> (৳{Number(selectedWithdrawal.amount).toLocaleString()}) will refund funds back to their available wallet balance.
-                        </p>
-
+                {/* TAB 3: Settings */}
+                {activeTab === "settings" && (
+                    <div className="p-6 max-w-2xl space-y-6">
                         <div>
-                            <label className="block text-[11px] font-bold text-neutral-700 uppercase tracking-wider mb-1">Reason for Rejection</label>
+                            <h3 className="font-bold text-neutral-900 text-base">Global Affiliate Commission Policies</h3>
+                            <p className="text-xs text-neutral-500 mt-0.5">
+                                Configure system-wide fixed one-time onboarding bonuses, recurring percentage rev-shares, and minimum withdrawal thresholds.
+                            </p>
+                        </div>
+
+                        <form onSubmit={handleSaveSettings} className="space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-neutral-700 mb-1.5">
+                                        One-Time First Invoice Bonus (BDT)
+                                    </label>
+                                    <div className="relative">
+                                        <span className="absolute left-3.5 top-2.5 text-neutral-400 font-bold text-xs">৳</span>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="10"
+                                            value={settings.oneTimeBonus}
+                                            onChange={(e) => setSettings({ ...settings, oneTimeBonus: Number(e.target.value) })}
+                                            className="w-full pl-8 pr-3.5 py-2.5 rounded-xl border border-neutral-200 text-xs font-bold focus:ring-2 focus:ring-[#00B050] focus:outline-none"
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-neutral-400 mt-1">Instant bonus credited on client's first paid invoice.</p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-neutral-700 mb-1.5">
+                                        Recurring Monthly Commission (%)
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            step="0.5"
+                                            value={settings.recurringPercentage}
+                                            onChange={(e) => setSettings({ ...settings, recurringPercentage: Number(e.target.value) })}
+                                            className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-xs font-bold focus:ring-2 focus:ring-[#00B050] focus:outline-none"
+                                        />
+                                        <span className="absolute right-3.5 top-2.5 text-neutral-400 font-bold text-xs">%</span>
+                                    </div>
+                                    <p className="text-[10px] text-neutral-400 mt-1">Passive percentage share on every renewal invoice.</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-neutral-700 mb-1.5">
+                                        Minimum Withdrawal Threshold (BDT)
+                                    </label>
+                                    <div className="relative">
+                                        <span className="absolute left-3.5 top-2.5 text-neutral-400 font-bold text-xs">৳</span>
+                                        <input
+                                            type="number"
+                                            min="100"
+                                            step="50"
+                                            value={settings.minimumPayoutThreshold}
+                                            onChange={(e) => setSettings({ ...settings, minimumPayoutThreshold: Number(e.target.value) })}
+                                            className="w-full pl-8 pr-3.5 py-2.5 rounded-xl border border-neutral-200 text-xs font-bold focus:ring-2 focus:ring-[#00B050] focus:outline-none"
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-neutral-400 mt-1">Minimum balance required to request a payout.</p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-neutral-700 mb-1.5">
+                                        Tracking Cookie Duration (Days)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="365"
+                                        value={settings.cookieDays}
+                                        onChange={(e) => setSettings({ ...settings, cookieDays: Number(e.target.value) })}
+                                        className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-xs font-bold focus:ring-2 focus:ring-[#00B050] focus:outline-none"
+                                    />
+                                    <p className="text-[10px] text-neutral-400 mt-1">Days referral attribution persists before expiration.</p>
+                                </div>
+                            </div>
+
+                            {settingsSuccessMsg && (
+                                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs flex items-center gap-2">
+                                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                                    <span>{settingsSuccessMsg}</span>
+                                </div>
+                            )}
+
+                            <button
+                                type="submit"
+                                disabled={isSavingSettings}
+                                className="px-6 py-2.5 bg-[#00B050] hover:bg-[#009b46] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-[#00B050]/20 flex items-center gap-2 cursor-pointer disabled:opacity-60"
+                            >
+                                {isSavingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                Save Program Settings
+                            </button>
+                        </form>
+                    </div>
+                )}
+            </div>
+
+            {/* Rejection Modal */}
+            {rejectModalOpen && selectedAffiliate && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-900/60 backdrop-blur-xs">
+                    <div className="bg-white rounded-3xl border border-neutral-200 shadow-xl max-w-md w-full p-6 space-y-4">
+                        <h3 className="font-extrabold text-neutral-900 text-base">Reject Partner Application</h3>
+                        <p className="text-xs text-neutral-500">
+                            Rejecting application for <strong>{selectedAffiliate.fullName}</strong> ({selectedAffiliate.email}). Please provide a clear compliance reason.
+                        </p>
+                        <div>
+                            <label className="block text-xs font-bold text-neutral-700 mb-1.5">Rejection Reason</label>
                             <textarea
                                 rows={3}
+                                required
                                 value={rejectionReason}
                                 onChange={(e) => setRejectionReason(e.target.value)}
-                                placeholder="e.g. Invalid bKash number or incorrect payment account details..."
-                                className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
+                                placeholder="e.g. NID could not be verified or invalid contact information."
+                                className="w-full p-3 rounded-xl border border-neutral-200 text-xs focus:ring-2 focus:ring-rose-500 focus:outline-none"
                             />
                         </div>
-
-                        <div className="flex justify-end gap-2 pt-2">
+                        <div className="flex items-center gap-3 pt-2">
                             <button
-                                onClick={() => setSelectedWithdrawal(null)}
-                                className="px-4 py-2 rounded-xl border border-neutral-200 text-xs font-semibold text-neutral-600 hover:bg-neutral-50 cursor-pointer"
+                                type="button"
+                                onClick={() => setRejectModalOpen(false)}
+                                className="flex-1 py-2.5 border border-neutral-200 text-neutral-700 hover:bg-neutral-50 rounded-xl text-xs font-semibold cursor-pointer"
                             >
                                 Cancel
                             </button>
                             <button
-                                disabled={isProcessing}
-                                onClick={() => handlePayoutAction(selectedWithdrawal.id, "REJECTED")}
-                                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                                type="button"
+                                onClick={handleRejectAffiliate}
+                                disabled={actionLoading || !rejectionReason.trim()}
+                                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-60"
                             >
-                                {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                                Confirm Rejection
+                                {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirm Rejection"}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Program Rules Configuration Modal */}
-            {isConfigModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-3xl border border-neutral-200 shadow-2xl max-w-lg w-full p-6 md:p-8 space-y-4 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
-                        <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
-                            <h3 className="font-bold text-neutral-900 text-base flex items-center gap-2">
-                                <Sliders className="w-5 h-5 text-[#10b981]" />
-                                Referral Program Configuration
-                            </h3>
-                            <button onClick={() => setIsConfigModalOpen(false)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400">
-                                <X className="w-5 h-5" />
-                            </button>
+            {/* Process Payout Modal */}
+            {payoutModalOpen && selectedPayout && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-900/60 backdrop-blur-xs">
+                    <div className="bg-white rounded-3xl border border-neutral-200 shadow-xl max-w-md w-full p-6 space-y-4">
+                        <h3 className="font-extrabold text-neutral-900 text-base">Process Withdrawal Disbursement</h3>
+                        <div className="p-3 bg-neutral-50 rounded-2xl text-xs space-y-1.5 border border-neutral-100">
+                            <div className="flex justify-between">
+                                <span className="text-neutral-500">Partner:</span>
+                                <span className="font-bold text-neutral-800">{selectedPayout.affiliateName}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-neutral-500">Amount:</span>
+                                <span className="font-extrabold text-emerald-700 text-sm">৳{selectedPayout.amount.toFixed(2)} BDT</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-neutral-500">Disbursement Method:</span>
+                                <span className="font-bold text-neutral-800">{selectedPayout.payoutMethod} ({selectedPayout.accountDetails})</span>
+                            </div>
                         </div>
 
-                        <form onSubmit={handleSaveConfig} className="space-y-4 text-xs">
+                        <div className="space-y-3">
                             <div>
-                                <label className="block font-bold text-neutral-700 uppercase tracking-wider text-[11px] mb-1">
-                                    Default Commission Rate (%)
-                                </label>
-                                <input
-                                    type="number"
-                                    min={1}
-                                    max={100}
-                                    value={config.defaultCommissionRate}
-                                    onChange={(e) => setConfig({ ...config, defaultCommissionRate: parseFloat(e.target.value) || 0 })}
-                                    className="w-full px-3.5 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981]"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block font-bold text-neutral-700 uppercase tracking-wider text-[11px] mb-1">
-                                        Holding Period (Days)
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min={0}
-                                        value={config.holdingPeriodDays}
-                                        onChange={(e) => setConfig({ ...config, holdingPeriodDays: parseInt(e.target.value) || 0 })}
-                                        className="w-full px-3.5 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981]"
-                                    />
-                                    <p className="text-[10px] text-neutral-400 mt-0.5">Chargeback and verification safety window</p>
-                                </div>
-
-                                <div>
-                                    <label className="block font-bold text-neutral-700 uppercase tracking-wider text-[11px] mb-1">
-                                        Minimum Withdrawal (৳)
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min={10}
-                                        value={config.minimumWithdrawal}
-                                        onChange={(e) => setConfig({ ...config, minimumWithdrawal: parseFloat(e.target.value) || 0 })}
-                                        className="w-full px-3.5 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981]"
-                                    />
+                                <label className="block text-xs font-bold text-neutral-700 mb-1">Decision</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPayoutDecision("COMPLETED")}
+                                        className={`py-2 text-xs font-bold rounded-xl border cursor-pointer ${
+                                            payoutDecision === "COMPLETED"
+                                                ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                                                : "border-neutral-200 text-neutral-600 hover:bg-neutral-50"
+                                        }`}
+                                    >
+                                        ✓ Mark Paid (Complete)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPayoutDecision("REJECTED")}
+                                        className={`py-2 text-xs font-bold rounded-xl border cursor-pointer ${
+                                            payoutDecision === "REJECTED"
+                                                ? "bg-rose-50 border-rose-300 text-rose-800"
+                                                : "border-neutral-200 text-neutral-600 hover:bg-neutral-50"
+                                        }`}
+                                    >
+                                        ✕ Reject & Refund Balance
+                                    </button>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3">
+                            {payoutDecision === "COMPLETED" ? (
                                 <div>
-                                    <label className="block font-bold text-neutral-700 uppercase tracking-wider text-[11px] mb-1">
-                                        Tracking Cookie (Days)
-                                    </label>
+                                    <label className="block text-xs font-bold text-neutral-700 mb-1.5">bKash / Nagad / Bank Transaction ID *</label>
                                     <input
-                                        type="number"
-                                        min={1}
-                                        value={config.cookieDurationDays}
-                                        onChange={(e) => setConfig({ ...config, cookieDurationDays: parseInt(e.target.value) || 0 })}
-                                        className="w-full px-3.5 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981]"
+                                        type="text"
+                                        required
+                                        placeholder="e.g. BKASH8X99214 or Trx ID"
+                                        value={transactionId}
+                                        onChange={(e) => setTransactionId(e.target.value)}
+                                        className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-xs font-mono focus:ring-2 focus:ring-[#00B050] focus:outline-none"
                                     />
                                 </div>
-
+                            ) : (
                                 <div>
-                                    <label className="block font-bold text-neutral-700 uppercase tracking-wider text-[11px] mb-1">
-                                        Recurring Duration (Months)
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min={1}
-                                        value={config.recurringMonths}
-                                        onChange={(e) => setConfig({ ...config, recurringMonths: parseInt(e.target.value) || 0 })}
-                                        className="w-full px-3.5 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981]"
+                                    <label className="block text-xs font-bold text-neutral-700 mb-1.5">Rejection Reason *</label>
+                                    <textarea
+                                        rows={2}
+                                        required
+                                        placeholder="e.g. Invalid bKash wallet number. Balance has been refunded."
+                                        value={payoutRejectReason}
+                                        onChange={(e) => setPayoutRejectReason(e.target.value)}
+                                        className="w-full p-3 rounded-xl border border-neutral-200 text-xs focus:ring-2 focus:ring-rose-500 focus:outline-none"
                                     />
                                 </div>
-                            </div>
+                            )}
+                        </div>
 
-                            <div className="p-3.5 bg-neutral-50 rounded-2xl space-y-2.5 border border-neutral-200">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={config.selfReferralBlocked}
-                                        onChange={(e) => setConfig({ ...config, selfReferralBlocked: e.target.checked })}
-                                        className="w-4 h-4 text-[#10b981] rounded focus:ring-[#10b981]"
-                                    />
-                                    <span className="font-semibold text-neutral-800">Strictly block self-referrals (same email/domain)</span>
-                                </label>
-
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={config.refundProtection}
-                                        onChange={(e) => setConfig({ ...config, refundProtection: e.target.checked })}
-                                        className="w-4 h-4 text-[#10b981] rounded focus:ring-[#10b981]"
-                                    />
-                                    <span className="font-semibold text-neutral-800">Enable automated refund commission reversal</span>
-                                </label>
-                            </div>
-
-                            <div className="flex justify-end gap-2 pt-3 border-t border-neutral-100">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsConfigModalOpen(false)}
-                                    className="px-4 py-2 rounded-xl border border-neutral-200 text-xs font-semibold text-neutral-600 hover:bg-neutral-50 cursor-pointer"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={isProcessing}
-                                    className="px-5 py-2 bg-[#10b981] hover:bg-emerald-600 text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                                >
-                                    {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                                    Save Configuration
-                                </button>
-                            </div>
-                        </form>
+                        <div className="flex items-center gap-3 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => setPayoutModalOpen(false)}
+                                className="flex-1 py-2.5 border border-neutral-200 text-neutral-700 hover:bg-neutral-50 rounded-xl text-xs font-semibold cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleProcessPayout}
+                                disabled={actionLoading}
+                                className={`flex-1 py-2.5 text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-60 ${
+                                    payoutDecision === "COMPLETED"
+                                        ? "bg-[#00B050] hover:bg-[#009b46]"
+                                        : "bg-rose-600 hover:bg-rose-700"
+                                }`}
+                            >
+                                {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirm & Save"}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

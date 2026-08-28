@@ -54,18 +54,9 @@ export class EmployeeService {
     const limit = query.limit || 20;
     const skip = (page - 1) * limit;
 
-    let whereOrgId = organizationId;
-    if (whereOrgId && whereOrgId !== "all") {
-      const org = await prisma.organizations.findUnique({ where: { id: whereOrgId } });
-      if (!org) {
-        const firstOrg = await prisma.organizations.findFirst();
-        if (firstOrg) whereOrgId = firstOrg.id;
-      }
-    }
-
     const where: any = {};
-    if (whereOrgId && whereOrgId !== "all") {
-      where.organizationId = whereOrgId;
+    if (organizationId && organizationId !== "all") {
+      where.organizationId = organizationId;
     }
 
     if (query.search) {

@@ -10,6 +10,28 @@ export const fetchCache = "force-no-store";
 
 export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const forPayment = searchParams.get("for") === "payment" || searchParams.get("public") === "true";
+
+    if (forPayment) {
+      const allOrgs = await OrganizationService.getAllOrganizations();
+      const publicList = allOrgs.map((o) => ({
+        id: o.id,
+        name: o.name,
+        slug: o.slug,
+        email: o.email,
+        totalEmployees: o.totalEmployees,
+        totalBranches: o.totalBranches,
+        planTier: o.planTier,
+        subscriptionStatus: o.subscriptionStatus,
+      }));
+      return apiSuccess(publicList, "Payment organizations retrieved successfully", undefined, 200, {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+        Pragma: "no-cache",
+        Expires: "0",
+      });
+    }
+
     const session = requireAuth(request);
 
     if (session.role === "SUPER_ADMIN") {

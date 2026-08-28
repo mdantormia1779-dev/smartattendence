@@ -18,7 +18,8 @@ import {
     MapPin,
     Briefcase,
     TrendingUp,
-    Share2
+    Share2,
+    Menu
 } from "lucide-react";
 import NotificationDropdown from "@/components/NotificationDropdown";
 import { api } from "@/lib/api-client";
@@ -203,8 +204,17 @@ export default function ManagerHeader({ title = "Manager Dashboard" }: HeaderPro
 
     return (
         <header className="h-16 bg-white border-b border-neutral-200 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
-            {/* Left: Page Title & Assigned Context */}
+            {/* Left: Hamburger & Page Title & Assigned Context */}
             <div className="flex items-center gap-3">
+                <button
+                    type="button"
+                    onClick={() => window.dispatchEvent(new CustomEvent("toggle-manager-sidebar"))}
+                    className="p-2 rounded-xl border border-neutral-200 text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 transition-colors lg:hidden shrink-0 cursor-pointer"
+                    aria-label="Open Manager Navigation Menu"
+                >
+                    <Menu className="w-5 h-5 text-neutral-700" />
+                </button>
+
                 <div>
                     <h1 className="text-sm sm:text-base font-bold text-neutral-900 leading-tight flex items-center gap-2">
                         {title}

@@ -7,10 +7,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const { id } = await params;
     const session = requireRole(request, ["SUPER_ADMIN", "ORG_ADMIN", "MANAGER"]);
-    const orgId = session.organizationId || "org-1";
+    const orgId = session.role === "SUPER_ADMIN" ? "all" : (session.organizationId || "");
 
     const body = await request.json();
-    const { decision, comment } = body;
+    const decision = body.decision || "APPROVED";
+    const comment = body.comment || body.orgNote || body.managerNote;
 
     let result;
     if (session.role === "MANAGER") {

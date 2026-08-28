@@ -115,6 +115,13 @@ class ApiClient {
     });
   }
 
+  async put<T = any>(url: string, body?: any): Promise<ApiResponse<T>> {
+    return this.request<T>(url, {
+      method: "PUT",
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  }
+
   async patch<T = any>(url: string, body?: any): Promise<ApiResponse<T>> {
     return this.request<T>(url, {
       method: "PATCH",
@@ -258,6 +265,23 @@ class ApiClient {
     update: (id: string, body: any) => this.patch(`/api/coupons/${id}`, body),
     delete: (id: string) => this.delete(`/api/coupons/${id}`),
     validate: (code: string, amount?: number) => this.post("/api/coupons/validate", { code, amount }),
+  };
+
+  affiliate = {
+    apply: (body: any) => this.post("/api/affiliate/apply", body),
+    getPortalData: (identifier?: string) => this.get("/api/affiliate/portal", identifier ? { email: identifier } : undefined),
+    requestPayout: (body: any) => this.post("/api/affiliate/payout", body),
+  };
+
+  adminAffiliates = {
+    getAll: (params?: any) => this.get("/api/admin/affiliates", params),
+    approve: (id: string, referralCode?: string) => this.put(`/api/admin/affiliates/${id}/approve`, { referralCode }),
+    reject: (id: string, reason: string) => this.put(`/api/admin/affiliates/${id}/reject`, { reason }),
+    getPayouts: (params?: any) => this.get("/api/admin/affiliates/payouts", params),
+    processPayout: (id: string, decision: "COMPLETED" | "REJECTED", transactionId?: string, rejectionReason?: string) =>
+      this.put(`/api/admin/affiliates/payouts/${id}`, { decision, transactionId, rejectionReason }),
+    getSettings: () => this.get("/api/admin/affiliates/settings"),
+    updateSettings: (body: any) => this.put("/api/admin/affiliates/settings", body),
   };
 
   referrals = {

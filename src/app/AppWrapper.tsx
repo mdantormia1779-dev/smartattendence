@@ -7,16 +7,21 @@ import Footer from './Components/Shared/Fotter';
 export default function AppWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   
-  // চেক করা হচ্ছে রুটটি /admin অথবা /organizationadmin দিয়ে শুরু কিনা
-  const isAdminRoute = pathname?.startsWith('/admin') || pathname?.startsWith('/organizationadmin') || pathname?.startsWith('/manager') || pathname?.startsWith('/employee');
+  // চেক করা হচ্ছে রুটটি ড্যাশবোর্ড বা অ্যাফিলিয়েট পেজ কিনা
+  const isStandaloneRoute = 
+    pathname?.startsWith('/admin') || 
+    pathname?.startsWith('/organizationadmin') || 
+    pathname?.startsWith('/manager') || 
+    pathname?.startsWith('/employee') ||
+    pathname?.startsWith('/affiliate');
 
   return (
     <>
-      {!isAdminRoute && <Header />}
+      {!isStandaloneRoute && <Header />}
       <main className="flex-1 flex flex-col">
         {children}
       </main>
-      {!isAdminRoute && <Footer />}
+      {!isStandaloneRoute && <Footer />}
     </>
   );
 }

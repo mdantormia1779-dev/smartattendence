@@ -288,6 +288,7 @@ model organizations {
   org_admins      org_admins[]
   payments        payments[]
   subscriptions   subscriptions?
+  affiliate_referrals affiliate_referrals[]
 }
 
 model overtime {
@@ -318,6 +319,7 @@ model payments {
   createdAt      DateTime       @default(now())
   organizations  organizations  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   subscriptions  subscriptions? @relation(fields: [subscriptionId], references: [id])
+  affiliate_commissions affiliate_commissions[]
 }
 
 model payslips {
@@ -516,4 +518,130 @@ enum UserRole {
   ORG_ADMIN
   MANAGER
   EMPLOYEE
+}
+
+enum AffiliateStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum AffiliateCommissionType {
+  ONE_TIME
+  RECURRING_PERCENTAGE
+}
+
+enum AffiliateCommissionStatus {
+  CREDITED
+  PENDING
+  CANCELLED
+}
+
+enum AffiliatePayoutMethod {
+  BKASH
+  NAGAD
+  ROCKET
+  BANK
+}
+
+enum AffiliatePayoutStatus {
+  REQUESTED
+  PROCESSING
+  COMPLETED
+  REJECTED
+}
+
+model affiliate_profiles {
+  id              String                @id
+  userId          String?
+  fullName        String
+  email           String                @unique
+  phone           String
+  nidNumber       String?
+  nidDocumentUrl  String?
+  referralCode    String?               @unique
+  status          AffiliateStatus       @default(PENDING)
+  balance         Decimal               @default(0) @db.Decimal(12, 2)
+  totalEarned     Decimal               @default(0) @db.Decimal(12, 2)
+  paymentMethod   AffiliatePayoutMethod @default(BKASH)
+  paymentDetails  String?
+  rejectionReason String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  referrals       affiliate_referrals[]
+  commissions     affiliate_commissions[]
+  payouts         affiliate_payouts[]
+
+  @@index([status])
+  @@index([referralCode])
+  @@index([email])
+}
+
+model affiliate_referrals {
+  id                         String                @id
+  affiliateId                String
+  organizationId             String?
+  referredEmail              String?
+  status                     String                @default("ACTIVE")
+  firstPaymentCommissionPaid Boolean               @default(false)
+  totalRevenue               Decimal               @default(0) @db.Decimal(12, 2)
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
+
+  affiliate                  affiliate_profiles    @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  organization               organizations?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  commissions                affiliate_commissions[]
+
+  @@index([affiliateId])
+  @@index([organizationId])
+}
+
+model affiliate_commissions {
+  id              String                    @id
+  affiliateId     String
+  referralId      String?
+  amount          Decimal                   @db.Decimal(12, 2)
+  ratePercentage  Decimal?                  @db.Decimal(5, 2)
+  commissionType  AffiliateCommissionType
+  sourcePaymentId String?
+  status          AffiliateCommissionStatus @default(CREDITED)
+  notes           String?
+  createdAt       DateTime                  @default(now())
+
+  affiliate       affiliate_profiles        @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  referral        affiliate_referrals?      @relation(fields: [referralId], references: [id], onDelete: SetNull)
+  payment         payments?                 @relation(fields: [sourcePaymentId], references: [id], onDelete: SetNull)
+
+  @@index([affiliateId])
+  @@index([referralId])
+}
+
+model affiliate_payouts {
+  id              String                @id
+  affiliateId     String
+  amount          Decimal               @db.Decimal(12, 2)
+  payoutMethod    AffiliatePayoutMethod
+  accountDetails  String
+  status          AffiliatePayoutStatus @default(REQUESTED)
+  transactionId   String?
+  rejectionReason String?
+  requestedAt     DateTime              @default(now())
+  processedAt     DateTime?
+
+  affiliate       affiliate_profiles    @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+
+  @@index([affiliateId])
+  @@index([status])
+}
+
+model affiliate_settings {
+  id                     String   @id @default("global")
+  oneTimeBonus           Decimal  @default(500) @db.Decimal(10, 2)
+  recurringPercentage    Decimal  @default(10) @db.Decimal(5, 2)
+  minimumPayoutThreshold Decimal  @default(500) @db.Decimal(10, 2)
+  cookieDays             Int      @default(30)
+  autoApprovePayouts     Boolean  @default(false)
+  updatedAt              DateTime @updatedAt
 }
