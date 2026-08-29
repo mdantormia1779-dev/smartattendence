@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     
     // Strict Multi-Tenant Scoping:
     // If not SUPER_ADMIN, user is strictly locked to their own organizationId
-    let orgId = session.organizationId;
+    let orgId = request.headers.get("x-organization-id") || session.organizationId;
     if (session.role === "SUPER_ADMIN") {
       const { searchParams } = new URL(request.url);
       orgId = searchParams.get("organizationId") || request.headers.get("x-organization-id") || "all";

@@ -2,6 +2,7 @@ import { ConflictError, NotFoundError, UnauthorizedError, ValidationError } from
 import { logAuditEvent } from "@/lib/audit-logger";
 import { OrganizationService } from "./organization.service";
 import { prisma } from "@/lib/prisma";
+import { registerSessionToken } from "../authorization";
 
 export interface UserSessionData {
   id: string;
@@ -160,6 +161,16 @@ export class AuthService {
       userAgent,
     });
 
+    const sessionToken = `session_${user.id}_${Date.now()}`;
+    registerSessionToken(sessionToken, {
+      userId: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+      organizationId: user.organizationId,
+      employeeId: user.employeeId,
+    });
+
     return {
       user: {
         id: user.id,
@@ -169,7 +180,7 @@ export class AuthService {
         organizationId: user.organizationId,
         employeeId: user.employeeId,
       },
-      token: `session_${user.id}_${Date.now()}`,
+      token: sessionToken,
     };
   }
 
@@ -234,9 +245,16 @@ export class AuthService {
 
     const adminId = `org-admin-${Date.now()}`;
 
-    // 3. Persist Admin Account with Password in Database
-    const createdAdmin = await prisma.org_admins.create({
-      data: {
+    // 3. Persist / Upsert Admin Account with Password in Database
+    const createdAdmin = await prisma.org_admins.upsert({
+      where: { email: normalizedAdminEmail },
+      update: {
+        name: data.adminName.trim(),
+        password: data.password,
+        organizationId: org.id,
+        updatedAt: new Date(),
+      },
+      create: {
         id: adminId,
         name: data.adminName.trim(),
         email: normalizedAdminEmail,
@@ -246,17 +264,24 @@ export class AuthService {
       },
     });
 
-    const newUser = {
-      id: createdAdmin.id,
-      email: createdAdmin.email,
-      passwordHash: createdAdmin.password,
-      fullName: createdAdmin.name,
-      role: "ORG_ADMIN",
-      organizationId: org.id,
-      isActive: true,
-    };
-
-    usersStore.push(newUser);
+    const existingStoreUser = usersStore.find((u) => u.email.toLowerCase() === normalizedAdminEmail);
+    if (existingStoreUser) {
+      existingStoreUser.id = createdAdmin.id;
+      existingStoreUser.passwordHash = createdAdmin.password;
+      existingStoreUser.fullName = createdAdmin.name;
+      existingStoreUser.organizationId = org.id;
+      existingStoreUser.isActive = true;
+    } else {
+      usersStore.push({
+        id: createdAdmin.id,
+        email: createdAdmin.email,
+        passwordHash: createdAdmin.password,
+        fullName: createdAdmin.name,
+        role: "ORG_ADMIN",
+        organizationId: org.id,
+        isActive: true,
+      });
+    }
 
     // Track Referral conversion if applicable
     if (data.referralCode) {

@@ -190,18 +190,39 @@ const EmployeePage = () => {
   // Filter Logic
   const filteredEmployees = useMemo(() => {
     return employees.filter((emp) => {
+      const q = searchTerm.trim().toLowerCase();
       const matchesSearch =
-        !searchTerm.trim() ||
-        emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.designation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (emp.phone && emp.phone.includes(searchTerm));
+        !q ||
+        (emp.name && emp.name.toLowerCase().includes(q)) ||
+        (emp.fullName && emp.fullName.toLowerCase().includes(q)) ||
+        (emp.id && emp.id.toLowerCase().includes(q)) ||
+        (emp.employeeId && emp.employeeId.toLowerCase().includes(q)) ||
+        (emp.email && emp.email.toLowerCase().includes(q)) ||
+        (emp.designation && emp.designation.toLowerCase().includes(q)) ||
+        (emp.phone && emp.phone.toLowerCase().includes(q)) ||
+        (emp.phoneNumber && emp.phoneNumber.toLowerCase().includes(q));
 
-      const matchesType = selectedType === "All" || emp.type === selectedType;
-      const matchesBranch = selectedBranch === "All" || emp.branch === selectedBranch;
-      const matchesDept = selectedDepartment === "All" || emp.department === selectedDepartment;
-      const matchesStatus = selectedStatus === "All" || emp.status === selectedStatus;
+      const matchesType =
+        selectedType === "All" ||
+        (emp.type && emp.type.toLowerCase() === selectedType.toLowerCase()) ||
+        (emp.employmentType && emp.employmentType.toLowerCase() === selectedType.toLowerCase());
+
+      const matchesBranch =
+        selectedBranch === "All" ||
+        emp.branch === selectedBranch ||
+        (emp as any).branchId === selectedBranch ||
+        ((emp.branch || "").toLowerCase() === selectedBranch.toLowerCase());
+
+      const matchesDept =
+        selectedDepartment === "All" ||
+        emp.department === selectedDepartment ||
+        (emp as any).departmentId === selectedDepartment ||
+        ((emp.department || "").toLowerCase() === selectedDepartment.toLowerCase());
+
+      const matchesStatus =
+        selectedStatus === "All" ||
+        (emp.status && emp.status.toLowerCase() === selectedStatus.toLowerCase()) ||
+        (emp.employeeStatus && emp.employeeStatus.toLowerCase() === selectedStatus.toLowerCase());
 
       return matchesSearch && matchesType && matchesBranch && matchesDept && matchesStatus;
     });

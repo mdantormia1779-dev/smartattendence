@@ -68,53 +68,76 @@ export function registerSessionToken(token: string, session: AuthSession) {
  * Resolves current tenant context from Authorization Bearer token, cookies or request headers
  */
 export function getTenantContext(request: Request): AuthSession | null {
+  const headerUserId = request.headers.get("x-user-id");
+  const headerRole = request.headers.get("x-user-role") as RoleType | null;
+  const headerOrgId = request.headers.get("x-organization-id");
+  const headerEmail = request.headers.get("x-user-email");
+  const headerName = request.headers.get("x-user-name");
+  const headerEmpId = request.headers.get("x-employee-id");
+
   const authHeader = request.headers.get("authorization") || request.headers.get("Authorization");
   
   if (authHeader && authHeader.startsWith("Bearer ")) {
     const token = authHeader.substring(7).trim();
     
-    // Direct registry match
+    // 1. Direct registry match
     if (tokenRegistry[token]) {
-      return tokenRegistry[token];
+      const reg = tokenRegistry[token];
+      return {
+        ...reg,
+        ...(headerOrgId && reg.role !== "SUPER_ADMIN" ? { organizationId: headerOrgId } : {}),
+      };
     }
 
-    // Dynamic session token format: session_user-xxx_timestamp
+    // 2. Dynamic session token format: session_user-xxx_timestamp
     if (token.startsWith("session_")) {
       const parts = token.split("_");
-      const userId = parts[1];
-      if (userId === "user-super-1") return tokenRegistry["super-admin-token"];
-      if (userId === "user-org-1") return tokenRegistry["admin-token"];
-      if (userId === "user-mgr-1") return tokenRegistry["manager-token"];
-      if (userId === "user-emp-1") return tokenRegistry["employee-token"];
+      const userId = parts[1] || headerUserId || "user-org";
+      const isSuper = userId === "user-super-1" || (headerRole === "SUPER_ADMIN");
+      const resolvedRole: RoleType = headerRole || (isSuper ? "SUPER_ADMIN" : "ORG_ADMIN");
+
+      return {
+        userId,
+        email: headerEmail || (isSuper ? "superadmin@erp.com" : "admin@company.com"),
+        fullName: headerName || (isSuper ? "Super Admin" : "Organization Admin"),
+        role: resolvedRole,
+        organizationId: isSuper ? null : (headerOrgId || "org-1"),
+        employeeId: headerEmpId || null,
+      };
     }
 
     if (token.toLowerCase().includes("superadmin") || token.toLowerCase().includes("super_admin")) {
       return tokenRegistry["super-admin-token"];
     }
     if (token.toLowerCase().includes("orgadmin") || token.toLowerCase().includes("admin_a")) {
-      return tokenRegistry["admin-token"];
+      return {
+        ...tokenRegistry["admin-token"],
+        ...(headerOrgId ? { organizationId: headerOrgId } : {}),
+      };
     }
     if (token.toLowerCase().includes("manager")) {
-      return tokenRegistry["manager-token"];
+      return {
+        ...tokenRegistry["manager-token"],
+        ...(headerOrgId ? { organizationId: headerOrgId } : {}),
+      };
     }
     if (token.toLowerCase().includes("employee")) {
-      return tokenRegistry["employee-token"];
+      return {
+        ...tokenRegistry["employee-token"],
+        ...(headerOrgId ? { organizationId: headerOrgId } : {}),
+      };
     }
   }
 
   // Header overrides (for API calls or backend internal requests)
-  const headerUserId = request.headers.get("x-user-id");
-  const headerRole = request.headers.get("x-user-role") as RoleType;
-  const headerOrgId = request.headers.get("x-organization-id");
-
   if (headerUserId) {
     return {
       userId: headerUserId,
-      email: request.headers.get("x-user-email") || "user@erp.com",
-      fullName: request.headers.get("x-user-name") || "Authenticated User",
+      email: headerEmail || "user@erp.com",
+      fullName: headerName || "Authenticated User",
       role: headerRole || "ORG_ADMIN",
-      organizationId: headerOrgId || (headerRole === "SUPER_ADMIN" ? null : "org-1"),
-      employeeId: request.headers.get("x-employee-id") || "EMP-1042",
+      organizationId: headerRole === "SUPER_ADMIN" ? null : (headerOrgId || "org-1"),
+      employeeId: headerEmpId || "EMP-1042",
     };
   }
 
@@ -134,12 +157,15 @@ export function getTenantContext(request: Request): AuthSession | null {
     const roleValue = (roleCookie ? roleCookie.split("=")[1] : "ORG_ADMIN") as RoleType;
 
     if (roleValue === "SUPER_ADMIN") return tokenRegistry["super-admin-token"];
-    if (roleValue === "MANAGER") return tokenRegistry["manager-token"];
-    if (roleValue === "EMPLOYEE") return tokenRegistry["employee-token"];
-    return tokenRegistry["admin-token"];
+    if (roleValue === "MANAGER") return { ...tokenRegistry["manager-token"], ...(headerOrgId ? { organizationId: headerOrgId } : {}) };
+    if (roleValue === "EMPLOYEE") return { ...tokenRegistry["employee-token"], ...(headerOrgId ? { organizationId: headerOrgId } : {}) };
+    return { ...tokenRegistry["admin-token"], ...(headerOrgId ? { organizationId: headerOrgId } : {}) };
   }
 
-  return tokenRegistry["admin-token"];
+  return {
+    ...tokenRegistry["admin-token"],
+    ...(headerOrgId ? { organizationId: headerOrgId } : {}),
+  };
 }
 
 /**
