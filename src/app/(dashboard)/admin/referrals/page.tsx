@@ -23,7 +23,8 @@ import {
     Copy,
     Save,
     FileText,
-    CreditCard
+    CreditCard,
+    Trash2
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 
@@ -57,6 +58,11 @@ export default function AdminReferralsPage() {
     const [customRefCode, setCustomRefCode] = useState("");
     const [rejectModalOpen, setRejectModalOpen] = useState(false);
     const [rejectionReason, setRejectionReason] = useState("");
+    
+    // Delete Modal State
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [affiliateToDelete, setAffiliateToDelete] = useState<any>(null);
+    const [deleteSuccessMsg, setDeleteSuccessMsg] = useState("");
     
     const [selectedPayout, setSelectedPayout] = useState<any>(null);
     const [payoutModalOpen, setPayoutModalOpen] = useState(false);
@@ -139,6 +145,28 @@ export default function AdminReferralsPage() {
             }
         } catch (e: any) {
             alert(e.message || "Rejection failed");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // Delete Affiliate Partner
+    const handleDeleteAffiliate = async () => {
+        if (!affiliateToDelete) return;
+        try {
+            setActionLoading(true);
+            const res = await api.adminAffiliates.delete(affiliateToDelete.id);
+            if (res.success) {
+                setDeleteModalOpen(false);
+                setDeleteSuccessMsg(`Affiliate partner "${affiliateToDelete.fullName}" was successfully deleted.`);
+                setAffiliateToDelete(null);
+                setTimeout(() => setDeleteSuccessMsg(""), 4000);
+                fetchData();
+            } else {
+                alert(res.message || "Failed to delete affiliate partner");
+            }
+        } catch (e: any) {
+            alert(e.message || "Delete failed");
         } finally {
             setActionLoading(false);
         }
@@ -295,6 +323,22 @@ export default function AdminReferralsPage() {
                 </div>
             </div>
 
+            {/* Success Toast / Banner for Deletion */}
+            {deleteSuccessMsg && (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-5 py-3.5 rounded-2xl text-xs font-semibold flex items-center justify-between shadow-xs animate-fadeIn">
+                    <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-[#00B050] shrink-0" />
+                        <span>{deleteSuccessMsg}</span>
+                    </div>
+                    <button
+                        onClick={() => setDeleteSuccessMsg("")}
+                        className="text-emerald-600 hover:text-emerald-900 cursor-pointer text-xs p-1"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            )}
+
             {/* Navigation Tabs */}
             <div className="bg-white rounded-3xl border border-neutral-200 shadow-xs overflow-hidden">
                 <div className="flex items-center border-b border-neutral-200 px-6 pt-4 gap-6 bg-neutral-50/50">
@@ -450,29 +494,42 @@ export default function AdminReferralsPage() {
                                                     )}
                                                 </td>
                                                 <td className="py-3.5 px-4 text-right">
-                                                    {aff.status === "PENDING" && (
-                                                        <div className="flex items-center justify-end gap-1.5">
-                                                            <button
-                                                                onClick={() => handleApproveAffiliate(aff.id)}
-                                                                disabled={actionLoading}
-                                                                className="px-2.5 py-1 bg-[#00B050] hover:bg-[#009b46] text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
-                                                            >
-                                                                Approve
-                                                            </button>
-                                                            <button
-                                                                onClick={() => {
-                                                                    setSelectedAffiliate(aff);
-                                                                    setRejectModalOpen(true);
-                                                                }}
-                                                                className="px-2.5 py-1 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                                                            >
-                                                                Reject
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                    {aff.status === "APPROVED" && (
-                                                        <span className="text-[11px] text-neutral-400">Active</span>
-                                                    )}
+                                                    <div className="flex items-center justify-end gap-1.5">
+                                                        {aff.status === "PENDING" && (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => handleApproveAffiliate(aff.id)}
+                                                                    disabled={actionLoading}
+                                                                    className="px-2.5 py-1 bg-[#00B050] hover:bg-[#009b46] text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                                                                    title="Approve Application"
+                                                                >
+                                                                    Approve
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setSelectedAffiliate(aff);
+                                                                        setRejectModalOpen(true);
+                                                                    }}
+                                                                    disabled={actionLoading}
+                                                                    className="px-2.5 py-1 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                                                                    title="Reject Application"
+                                                                >
+                                                                    Reject
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                        <button
+                                                            onClick={() => {
+                                                                setAffiliateToDelete(aff);
+                                                                setDeleteModalOpen(true);
+                                                            }}
+                                                            disabled={actionLoading}
+                                                            className="p-1.5 rounded-lg border border-neutral-200 text-neutral-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition-colors cursor-pointer disabled:opacity-50"
+                                                            title="Delete Affiliate Partner"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -805,6 +862,71 @@ export default function AdminReferralsPage() {
                                 }`}
                             >
                                 {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirm & Save"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Partner Confirmation Modal */}
+            {deleteModalOpen && affiliateToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-900/60 backdrop-blur-xs animate-fadeIn">
+                    <div className="bg-white rounded-3xl border border-neutral-200 shadow-xl max-w-md w-full p-6 space-y-4">
+                        <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 mx-auto">
+                            <Trash2 className="w-6 h-6" />
+                        </div>
+
+                        <div className="text-center space-y-1">
+                            <h3 className="font-extrabold text-neutral-900 text-base">Delete Affiliate Partner?</h3>
+                            <p className="text-xs text-neutral-500">
+                                Are you sure you want to permanently delete <strong>{affiliateToDelete.fullName}</strong>?
+                            </p>
+                        </div>
+
+                        <div className="p-3.5 bg-neutral-50 rounded-2xl text-xs space-y-1.5 border border-neutral-100">
+                            <div className="flex justify-between">
+                                <span className="text-neutral-500">Email:</span>
+                                <span className="font-bold text-neutral-800">{affiliateToDelete.email}</span>
+                            </div>
+                            {affiliateToDelete.referralCode && (
+                                <div className="flex justify-between">
+                                    <span className="text-neutral-500">Referral Code:</span>
+                                    <span className="font-mono font-bold text-emerald-700">{affiliateToDelete.referralCode}</span>
+                                </div>
+                            )}
+                            <div className="flex justify-between">
+                                <span className="text-neutral-500">Current Balance:</span>
+                                <span className="font-bold text-neutral-800">৳{Number(affiliateToDelete.balance || 0).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-neutral-500">Status:</span>
+                                <span className="font-bold text-neutral-800">{affiliateToDelete.status}</span>
+                            </div>
+                        </div>
+
+                        <p className="text-[11px] text-rose-600 bg-rose-50 p-2.5 rounded-xl border border-rose-100 leading-relaxed">
+                            ⚠️ <strong>Warning:</strong> This will permanently delete this affiliate user account and any associated referral links and records.
+                        </p>
+
+                        <div className="flex items-center gap-3 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setDeleteModalOpen(false);
+                                    setAffiliateToDelete(null);
+                                }}
+                                disabled={actionLoading}
+                                className="flex-1 py-2.5 border border-neutral-200 text-neutral-700 hover:bg-neutral-50 rounded-xl text-xs font-semibold cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleDeleteAffiliate}
+                                disabled={actionLoading}
+                                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-sm cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
+                            >
+                                {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Delete Partner"}
                             </button>
                         </div>
                     </div>

@@ -282,6 +282,7 @@ class ApiClient {
       this.put(`/api/admin/affiliates/payouts/${id}`, { decision, transactionId, rejectionReason }),
     getSettings: () => this.get("/api/admin/affiliates/settings"),
     updateSettings: (body: any) => this.put("/api/admin/affiliates/settings", body),
+    delete: (id: string) => this.delete(`/api/admin/affiliates/${id}`),
   };
 
   referrals = {

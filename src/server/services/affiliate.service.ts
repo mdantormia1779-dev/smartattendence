@@ -744,4 +744,29 @@ export class AffiliateService {
       };
     }
   }
+
+  /**
+   * Super Admin - Delete an affiliate partner profile and all associated cascaded records
+   */
+  static async adminDeleteAffiliate(id: string) {
+    const profile = await prisma.affiliate_profiles.findUnique({
+      where: { id },
+    });
+
+    if (!profile) {
+      throw new NotFoundError("Affiliate Partner");
+    }
+
+    await prisma.affiliate_profiles.delete({
+      where: { id },
+    });
+
+    return {
+      success: true,
+      id: profile.id,
+      fullName: profile.fullName,
+      email: profile.email,
+      referralCode: profile.referralCode,
+    };
+  }
 }
