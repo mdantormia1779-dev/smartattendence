@@ -19,6 +19,7 @@ import {
     ShieldCheck,
     Sparkles,
     CheckCircle2,
+    MessageSquare,
     X
 } from "lucide-react";
 import { api } from "@/lib/api-client";
@@ -27,7 +28,7 @@ interface MenuItem {
     name: string;
     href: string;
     icon: React.ComponentType<{ className?: string }>;
-    badgeKey?: "pendingPayments" | "pendingWithdrawals" | "unreadNotifications" | "suspendedOrgs";
+    badgeKey?: "pendingPayments" | "pendingWithdrawals" | "unreadNotifications" | "suspendedOrgs" | "unreadInquiries";
 }
 
 const menuItems: MenuItem[] = [
@@ -37,6 +38,7 @@ const menuItems: MenuItem[] = [
     { name: "Approve Payments", href: "/admin/approve-payments", icon: DollarSign, badgeKey: "pendingPayments" },
     { name: "Manage Coupons", href: "/admin/coupons", icon: Ticket },
     { name: "View Revenue", href: "/admin/revenue", icon: DollarSign },
+    { name: "Client Inquiries", href: "/admin/contact-messages", icon: MessageSquare, badgeKey: "unreadInquiries" },
     { name: "Referrals & Affiliates", href: "/admin/referrals", icon: Share2, badgeKey: "pendingWithdrawals" },
     { name: "Notification Center", href: "/admin/notifications", icon: BellRing, badgeKey: "unreadNotifications" },
     { name: "Suspend Organizations", href: "/admin/suspend", icon: UserX, badgeKey: "suspendedOrgs" },
@@ -58,6 +60,7 @@ export default function Sidebar() {
         pendingWithdrawals: 0,
         unreadNotifications: 0,
         suspendedOrgs: 0,
+        unreadInquiries: 0,
     });
 
     // 1. Load Real Super Admin Session & Dynamic Badges
@@ -80,11 +83,12 @@ export default function Sidebar() {
 
         // Fetch live badge counts from real backend APIs
         try {
-            const [paymentsRes, withdrawalsRes, notifsRes, orgsRes] = await Promise.allSettled([
+            const [paymentsRes, withdrawalsRes, notifsRes, orgsRes, contactRes] = await Promise.allSettled([
                 api.payments.getAll(),
                 api.adminReferrals.getWithdrawals(),
                 api.notifications.getAll(),
                 api.organizations.getAll(),
+                api.adminContact.getAll({ limit: 100 }),
             ]);
 
             let pendingPayCount = 0;
@@ -113,11 +117,18 @@ export default function Sidebar() {
                 ).length;
             }
 
+            let unreadInquiriesCount = 0;
+            if (contactRes.status === "fulfilled" && contactRes.value?.success) {
+                const val = contactRes.value as any;
+                unreadInquiriesCount = val?.stats?.unread || val?.data?.stats?.unread || 0;
+            }
+
             setBadgeCounts({
                 pendingPayments: pendingPayCount,
                 pendingWithdrawals: pendingWithCount,
                 unreadNotifications: unreadNotifCount,
                 suspendedOrgs: suspendedOrgCount,
+                unreadInquiries: unreadInquiriesCount,
             });
         } catch (e) {
             console.warn("Super Admin badge metrics load fallback:", e);

@@ -7,13 +7,13 @@ import { handleApiError } from "@/server/errors";
 export async function GET(request: Request) {
   try {
     const session = requireAuth(request);
+    const { searchParams } = new URL(request.url);
+    const queryOrgId = searchParams.get("organizationId");
     
-    // Strict Multi-Tenant Scoping:
-    // If not SUPER_ADMIN, user is strictly locked to their own organizationId
-    let orgId = request.headers.get("x-organization-id") || session.organizationId;
+    // Multi-Tenant Scoping:
+    let orgId = request.headers.get("x-organization-id") || queryOrgId || session.organizationId;
     if (session.role === "SUPER_ADMIN") {
-      const { searchParams } = new URL(request.url);
-      orgId = searchParams.get("organizationId") || request.headers.get("x-organization-id") || "all";
+      orgId = queryOrgId || request.headers.get("x-organization-id") || "all";
     }
 
     if (!orgId) {
@@ -25,7 +25,6 @@ export async function GET(request: Request) {
       });
     }
 
-    const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "100");
     const search = searchParams.get("search") || undefined;
@@ -57,9 +56,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const session = requireRole(request, ["SUPER_ADMIN", "ORG_ADMIN"]);
-    const orgId = request.headers.get("x-organization-id") || session.organizationId || "org-1";
-
     const body = await request.json();
+    const orgId = body.organizationId || request.headers.get("x-organization-id") || session.organizationId || "org-1";
+
     const validated = CreateEmployeeSchema.parse(body);
 
     const newEmp = await EmployeeService.createEmployee({

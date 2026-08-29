@@ -72,7 +72,7 @@ const Footer = () => {
                             <li><a href="/affiliate" className="hover:text-[#00B050] font-medium text-emerald-700 transition-colors flex items-center gap-1.5">Affiliate Partner <span className="bg-emerald-100 text-emerald-800 text-[10px] px-1 py-0.2 rounded font-bold">20%</span></a></li>
                             <li><a href="#careers" className="hover:text-[#00B050] transition-colors">Careers</a></li>
                             <li><a href="#blog" className="hover:text-[#00B050] transition-colors">Blog</a></li>
-                            <li><a href="#contact" className="hover:text-[#00B050] transition-colors">Contact</a></li>
+                            <li><a href="/contact" className="hover:text-[#00B050] font-medium transition-colors">Contact</a></li>
                         </ul>
                     </div>
 

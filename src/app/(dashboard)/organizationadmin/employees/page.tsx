@@ -95,12 +95,29 @@ const EmployeePage = () => {
   const fetchAllData = async () => {
     try {
       setLoading(true);
+
+      let activeOrgId = "";
+      if (typeof window !== "undefined") {
+        const rawUser = localStorage.getItem("user") || localStorage.getItem("user_info") || localStorage.getItem("userData");
+        if (rawUser) {
+          try {
+            const parsed = JSON.parse(rawUser);
+            activeOrgId = parsed.organizationId || parsed.orgId || "";
+          } catch {}
+        }
+        if (!activeOrgId) {
+          activeOrgId = localStorage.getItem("organizationId") || localStorage.getItem("orgId") || "";
+        }
+      }
+
+      const queryParam = activeOrgId ? { organizationId: activeOrgId } : undefined;
+
       const [empRes, branchRes, deptRes, mgrRes, subRes] = await Promise.allSettled([
-        api.employees.getAll({ limit: 100 }),
-        api.branches.getAll(),
-        api.departments.getAll(),
-        api.managers.getAll(),
-        api.get("/api/subscription"),
+        api.employees.getAll({ limit: 100, ...(activeOrgId ? { organizationId: activeOrgId } : {}) }),
+        api.branches.getAll(queryParam),
+        api.departments.getAll(queryParam),
+        api.managers.getAll(queryParam),
+        api.get("/api/subscription", queryParam),
       ]);
 
       if (subRes.status === "fulfilled" && subRes.value.success && subRes.value.data) {
@@ -231,7 +248,22 @@ const EmployeePage = () => {
   // Create Employee Handler
   const handleCreateEmployee = async (newEmp: any) => {
     try {
+      let activeOrgId = "";
+      if (typeof window !== "undefined") {
+        const rawUser = localStorage.getItem("user") || localStorage.getItem("user_info") || localStorage.getItem("userData");
+        if (rawUser) {
+          try {
+            const parsed = JSON.parse(rawUser);
+            activeOrgId = parsed.organizationId || parsed.orgId || "";
+          } catch {}
+        }
+        if (!activeOrgId) {
+          activeOrgId = localStorage.getItem("organizationId") || localStorage.getItem("orgId") || "";
+        }
+      }
+
       const payload = {
+        organizationId: activeOrgId || undefined,
         fullName: newEmp.fullName.trim(),
         email: newEmp.email.trim().toLowerCase(),
         employeeId: newEmp.employeeId,

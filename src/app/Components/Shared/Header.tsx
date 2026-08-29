@@ -83,6 +83,7 @@ const Header = () => {
                     <span>Affiliate</span>
                     <span className="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0.5 rounded-full font-bold">20%</span>
                 </Link>
+                <Link href="/contact" className="nav-item hover:text-[#00B050] transition-colors cursor-pointer">Contact</Link>
                 <a href="#faq" onClick={(e) => handleScrollToSection(e, 'faq')} className="nav-item hover:text-[#00B050] transition-colors cursor-pointer">FAQ</a>
             </nav>
 
@@ -124,6 +125,7 @@ const Header = () => {
                         <span>Affiliate Program</span>
                         <span className="bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 rounded-full font-bold">Earn 20%</span>
                     </Link>
+                    <Link href="/contact" onClick={() => setIsMobileMenuOpen(false)} className="text-gray-700 hover:text-[#00B050] font-medium py-2 transition-colors">Contact</Link>
                     <a href="#faq" onClick={(e) => handleScrollToSection(e, 'faq')} className="text-gray-700 hover:text-[#00B050] font-medium py-2 transition-colors">FAQ</a>
                     
                     <div className="border-t border-gray-100 pt-4 flex flex-col gap-3">

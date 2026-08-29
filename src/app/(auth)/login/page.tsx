@@ -81,8 +81,21 @@ const LoginPage: React.FC = () => {
                 if (typeof window !== "undefined") {
                     if (res.data.token) {
                         localStorage.setItem("auth_token", res.data.token);
+                        localStorage.setItem("token", res.data.token);
                     }
-                    localStorage.setItem("user_info", JSON.stringify(res.data.user || {}));
+                    if (res.data.user) {
+                        localStorage.setItem("user", JSON.stringify(res.data.user));
+                        localStorage.setItem("user_info", JSON.stringify(res.data.user));
+                        localStorage.setItem("userData", JSON.stringify(res.data.user));
+                        if (res.data.user.organizationId) {
+                            localStorage.setItem("organizationId", res.data.user.organizationId);
+                            localStorage.setItem("orgId", res.data.user.organizationId);
+                            document.cookie = `organization_id=${res.data.user.organizationId}; path=/; max-age=86400; SameSite=Lax`;
+                        }
+                        if (res.data.user.role) {
+                            localStorage.setItem("userRole", res.data.user.role);
+                        }
+                    }
                     document.cookie = `user_role=${userRole}; path=/; max-age=86400; SameSite=Lax`;
                     document.cookie = `auth_session=${res.data.token || "active"}; path=/; max-age=86400; SameSite=Lax`;
                 }

@@ -645,3 +645,41 @@ model affiliate_settings {
   autoApprovePayouts     Boolean  @default(false)
   updatedAt              DateTime @updatedAt
 }
+
+enum ContactMessageStatus {
+  UNREAD
+  READ
+  IN_PROGRESS
+  RESOLVED
+  ARCHIVED
+}
+
+enum ContactCategory {
+  GENERAL
+  SALES
+  ENTERPRISE
+  SUPPORT
+  PARTNERSHIP
+  BILLING
+}
+
+model contact_messages {
+  id          String               @id
+  name        String
+  email       String
+  phone       String?
+  companyName String?
+  category    ContactCategory      @default(GENERAL)
+  subject     String
+  message     String
+  status      ContactMessageStatus @default(UNREAD)
+  adminNotes  String?
+  ipAddress   String?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([status])
+  @@index([category])
+  @@index([createdAt])
+}
+

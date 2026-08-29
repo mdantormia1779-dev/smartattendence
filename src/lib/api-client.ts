@@ -27,23 +27,24 @@ class ApiClient {
       const pathname = window.location.pathname || "";
       const isSuperAdminRoute = pathname.startsWith("/admin") && !pathname.startsWith("/organizationadmin");
 
-      let token = localStorage.getItem("auth_token") || localStorage.getItem("token") || "super-admin-token";
+      let token = localStorage.getItem("auth_token") || localStorage.getItem("token") || "";
       let userRole = isSuperAdminRoute ? "SUPER_ADMIN" : "ORG_ADMIN";
       let userId = isSuperAdminRoute ? "user-super-1" : "user-org-1";
-      let orgId = isSuperAdminRoute ? "" : (localStorage.getItem("organizationId") || "");
+      let orgId = isSuperAdminRoute ? "" : (localStorage.getItem("organizationId") || localStorage.getItem("orgId") || "");
 
       if (isSuperAdminRoute) {
-        token = "super-admin-token";
+        if (!token) token = "super-admin-token";
       } else {
-        const storedUser = localStorage.getItem("user");
-        if (storedUser) {
+        const rawUser = localStorage.getItem("user") || localStorage.getItem("user_info") || localStorage.getItem("userData");
+        if (rawUser) {
           try {
-            const parsed = JSON.parse(storedUser);
+            const parsed = JSON.parse(rawUser);
             if (parsed.role) userRole = parsed.role;
             if (parsed.id || parsed.userId) userId = parsed.id || parsed.userId;
             if (parsed.organizationId || parsed.orgId) orgId = parsed.organizationId || parsed.orgId;
           } catch {}
         }
+        if (!token) token = "admin-token";
       }
 
       return {
@@ -144,7 +145,7 @@ class ApiClient {
   };
 
   organizations = {
-    getAll: () => this.get("/api/organizations"),
+    getAll: (params?: any) => this.get("/api/organizations", params),
     getById: (id: string) => this.get(`/api/organizations/${id}`),
     create: (body: any) => this.post("/api/organizations", body),
     update: (id: string, body: any) => this.patch(`/api/organizations/${id}`, body),
@@ -155,7 +156,7 @@ class ApiClient {
   };
 
   branches = {
-    getAll: () => this.get("/api/branches"),
+    getAll: (params?: any) => this.get("/api/branches", params),
     getById: (id: string) => this.get(`/api/branches/${id}`),
     create: (body: any) => this.post("/api/branches", body),
     update: (id: string, body: any) => this.patch(`/api/branches/${id}`, body),
@@ -163,7 +164,7 @@ class ApiClient {
   };
 
   departments = {
-    getAll: () => this.get("/api/departments"),
+    getAll: (params?: any) => this.get("/api/departments", params),
     getById: (id: string) => this.get(`/api/departments/${id}`),
     create: (body: any) => this.post("/api/departments", body),
     update: (id: string, body: any) => this.patch(`/api/departments/${id}`, body),
@@ -171,7 +172,7 @@ class ApiClient {
   };
 
   managers = {
-    getAll: () => this.get("/api/managers"),
+    getAll: (params?: any) => this.get("/api/managers", params),
     getById: (id: string) => this.get(`/api/managers/${id}`),
     create: (body: any) => this.post("/api/managers", body),
     assign: (id: string, body: any) => this.patch(`/api/managers/${id}`, body),
@@ -283,6 +284,17 @@ class ApiClient {
     getSettings: () => this.get("/api/admin/affiliates/settings"),
     updateSettings: (body: any) => this.put("/api/admin/affiliates/settings", body),
     delete: (id: string) => this.delete(`/api/admin/affiliates/${id}`),
+  };
+
+  contact = {
+    submit: (body: any) => this.post("/api/contact", body),
+  };
+
+  adminContact = {
+    getAll: (params?: any) => this.get("/api/contact", params),
+    getById: (id: string) => this.get(`/api/contact/${id}`),
+    updateStatus: (id: string, body: { status: string; adminNotes?: string }) => this.patch(`/api/contact/${id}`, body),
+    delete: (id: string) => this.delete(`/api/contact/${id}`),
   };
 
   referrals = {
