@@ -14,7 +14,7 @@ export default function Home() {
       <HowItWorks />
       <SolutionsSection />
       <PricingSection />
-      <AffiliateSection />
+      {/* <AffiliateSection /> */}
       <FaqSection />
     </div>
   );
