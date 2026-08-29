@@ -354,6 +354,31 @@ export class OrganizationService {
       },
     });
 
+    if (data.adminEmail && data.adminPassword) {
+      try {
+        const normalizedEmail = data.adminEmail.trim().toLowerCase();
+        await prisma.org_admins.upsert({
+          where: { email: normalizedEmail },
+          update: {
+            name: data.adminName?.trim() || `${data.name} Admin`,
+            password: data.adminPassword,
+            organizationId: created.id,
+            updatedAt: new Date(),
+          },
+          create: {
+            id: `admin-${Date.now()}`,
+            name: data.adminName?.trim() || `${data.name} Admin`,
+            email: normalizedEmail,
+            password: data.adminPassword,
+            organizationId: created.id,
+            updatedAt: new Date(),
+          },
+        });
+      } catch (adminErr) {
+        console.warn("[OrganizationService] Failed to auto-provision admin in DB:", adminErr);
+      }
+    }
+
     return mapToOrganizationData(created);
   }
 

@@ -56,16 +56,23 @@ let usersStore: any[] = [
 
 export class AuthService {
   static async login(email: string, password: string, ip?: string, userAgent?: string) {
-    let user = usersStore.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    const normalizedEmail = email.trim().toLowerCase();
+    let user = usersStore.find((u) => u.email.toLowerCase() === normalizedEmail);
 
-    if (!user) {
-      try {
-        const orgAdmin = await prisma.org_admins.findUnique({
-          where: { email: email.toLowerCase() },
-          include: { organizations: true },
-        });
+    // Always check/sync from database for most up-to-date credentials
+    try {
+      const orgAdmin = await prisma.org_admins.findUnique({
+        where: { email: normalizedEmail },
+        include: { organizations: true },
+      });
 
-        if (orgAdmin) {
+      if (orgAdmin) {
+        if (user) {
+          user.passwordHash = orgAdmin.password;
+          user.fullName = orgAdmin.name;
+          user.organizationId = orgAdmin.organizationId;
+          user.isActive = orgAdmin.organizations?.status !== "SUSPENDED";
+        } else {
           user = {
             id: orgAdmin.id,
             email: orgAdmin.email,
@@ -76,13 +83,20 @@ export class AuthService {
             isActive: orgAdmin.organizations?.status !== "SUSPENDED",
           };
           usersStore.push(user);
-        } else {
-          const mgr = await prisma.managers.findFirst({
-            where: { email: email.toLowerCase() },
-            include: { organizations: true },
-          });
+        }
+      } else {
+        const mgr = await prisma.managers.findFirst({
+          where: { email: normalizedEmail },
+          include: { organizations: true },
+        });
 
-          if (mgr) {
+        if (mgr) {
+          if (user) {
+            user.passwordHash = mgr.password;
+            user.fullName = mgr.name;
+            user.organizationId = mgr.organizationId;
+            user.isActive = mgr.organizations?.status !== "SUSPENDED";
+          } else {
             user = {
               id: mgr.id,
               email: mgr.email,
@@ -93,13 +107,20 @@ export class AuthService {
               isActive: mgr.organizations?.status !== "SUSPENDED",
             };
             usersStore.push(user);
-          } else {
-            const emp = await prisma.employees.findFirst({
-              where: { email: email.toLowerCase() },
-              include: { organizations: true },
-            });
+          }
+        } else {
+          const emp = await prisma.employees.findFirst({
+            where: { email: normalizedEmail },
+            include: { organizations: true },
+          });
 
-            if (emp) {
+          if (emp) {
+            if (user) {
+              user.passwordHash = emp.password;
+              user.fullName = emp.fullName;
+              user.organizationId = emp.organizationId;
+              user.isActive = emp.status !== "SUSPENDED" && emp.organizations?.status !== "SUSPENDED";
+            } else {
               user = {
                 id: emp.id,
                 email: emp.email,
@@ -113,9 +134,9 @@ export class AuthService {
             }
           }
         }
-      } catch (e) {
-        // Fallback gracefully
       }
+    } catch (e) {
+      console.warn("[AuthService] Database check during login fallback:", e);
     }
 
     if (!user || user.passwordHash !== password) {
@@ -171,28 +192,65 @@ export class AuthService {
     endTime?: string;
     referralCode?: string | null;
   }) {
-    const existingUser = usersStore.find((u) => u.email.toLowerCase() === data.adminEmail.toLowerCase());
+    const normalizedAdminEmail = data.adminEmail.trim().toLowerCase();
+    const normalizedCompanyEmail = data.companyEmail.trim().toLowerCase();
+
+    // 1. Check if admin email already exists in DB
+    const existingAdmin = await prisma.org_admins.findUnique({
+      where: { email: normalizedAdminEmail },
+    });
+    if (existingAdmin) {
+      throw new ConflictError(`An administrator account with email '${data.adminEmail}' already exists`);
+    }
+
+    const existingUser = usersStore.find((u) => u.email.toLowerCase() === normalizedAdminEmail);
     if (existingUser) {
       throw new ConflictError(`User with email '${data.adminEmail}' already exists`);
     }
 
+    // 2. Create Organization record
     const slug = data.companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || "org";
     const org = await OrganizationService.createOrganization({
       name: data.companyName,
       slug: `${slug}-${Date.now().toString().slice(-4)}`,
-      email: data.companyEmail,
+      email: normalizedCompanyEmail,
       industry: data.industry || "General",
       phone: data.phone,
+      website: data.website,
+      address: data.address,
+      country: data.country,
+      language: data.language,
+      currency: data.currency,
+      timezone: data.timezone,
+      workingDays: data.workingDays,
+      defaultOfficeStart: data.startTime,
+      defaultOfficeEnd: data.endTime,
       planTier: "STARTER",
       defaultGeofenceM: 120,
+      adminName: data.adminName,
+      adminEmail: normalizedAdminEmail,
+      adminPassword: data.password,
     });
 
-    const userId = `user-org-${Date.now()}`;
+    const adminId = `org-admin-${Date.now()}`;
+
+    // 3. Persist Admin Account with Password in Database
+    const createdAdmin = await prisma.org_admins.create({
+      data: {
+        id: adminId,
+        name: data.adminName.trim(),
+        email: normalizedAdminEmail,
+        password: data.password,
+        organizationId: org.id,
+        updatedAt: new Date(),
+      },
+    });
+
     const newUser = {
-      id: userId,
-      email: data.adminEmail,
-      passwordHash: data.password,
-      fullName: data.adminName,
+      id: createdAdmin.id,
+      email: createdAdmin.email,
+      passwordHash: createdAdmin.password,
+      fullName: createdAdmin.name,
       role: "ORG_ADMIN",
       organizationId: org.id,
       isActive: true,
@@ -211,7 +269,7 @@ export class AuthService {
 
       logAuditEvent({
         organizationId: org.id,
-        userId: userId,
+        userId: createdAdmin.id,
         userName: data.adminName,
         userRole: "ORG_ADMIN",
         action: "REFERRAL_REGISTRATION",
@@ -223,10 +281,10 @@ export class AuthService {
     return {
       organizationId: org.id,
       user: {
-        id: newUser.id,
-        email: newUser.email,
-        fullName: newUser.fullName,
-        role: newUser.role,
+        id: createdAdmin.id,
+        email: createdAdmin.email,
+        fullName: createdAdmin.name,
+        role: "ORG_ADMIN",
         organizationId: org.id,
       },
       referralAttributed: data.referralCode || null,
@@ -239,24 +297,54 @@ export class AuthService {
     password: string;
     organizationId: string;
   }) {
-    const existingUser = usersStore.find((u) => u.email.toLowerCase() === data.email.toLowerCase());
-    if (existingUser) {
-      throw new ConflictError(`User with email '${data.email}' already exists`);
+    const normalizedEmail = data.email.trim().toLowerCase();
+
+    // Check & persist to database
+    let createdAdmin = await prisma.org_admins.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (createdAdmin) {
+      createdAdmin = await prisma.org_admins.update({
+        where: { id: createdAdmin.id },
+        data: {
+          name: data.fullName.trim(),
+          password: data.password,
+          organizationId: data.organizationId,
+          updatedAt: new Date(),
+        },
+      });
+    } else {
+      createdAdmin = await prisma.org_admins.create({
+        data: {
+          id: `org-admin-${Date.now()}`,
+          name: data.fullName.trim(),
+          email: normalizedEmail,
+          password: data.password,
+          organizationId: data.organizationId,
+          updatedAt: new Date(),
+        },
+      });
     }
 
-    const userId = `user-org-${Date.now()}`;
-    const newUser = {
-      id: userId,
-      email: data.email,
-      passwordHash: data.password,
-      fullName: data.fullName,
-      role: "ORG_ADMIN",
-      organizationId: data.organizationId,
-      isActive: true,
-    };
+    const existingStoreUser = usersStore.find((u) => u.email.toLowerCase() === normalizedEmail);
+    if (existingStoreUser) {
+      existingStoreUser.passwordHash = data.password;
+      existingStoreUser.fullName = data.fullName;
+      existingStoreUser.organizationId = data.organizationId;
+    } else {
+      usersStore.push({
+        id: createdAdmin.id,
+        email: normalizedEmail,
+        passwordHash: data.password,
+        fullName: data.fullName,
+        role: "ORG_ADMIN",
+        organizationId: data.organizationId,
+        isActive: true,
+      });
+    }
 
-    usersStore.push(newUser);
-    return newUser;
+    return createdAdmin;
   }
 
   static async getUserById(userId: string) {
