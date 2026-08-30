@@ -8,9 +8,10 @@ interface DeleteModalProps {
     isOpen: boolean;
     onClose: () => void;
     onConfirm: () => void;
+    error?: string | null;
 }
 
-export default function DeleteModal({ isOpen, onClose, onConfirm }: DeleteModalProps) {
+export default function DeleteModal({ isOpen, onClose, onConfirm, error }: DeleteModalProps) {
     const modalRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
 
@@ -38,6 +39,11 @@ export default function DeleteModal({ isOpen, onClose, onConfirm }: DeleteModalP
                         Are you sure you want to delete this branch? This action cannot be undone.
                     </p>
                 </div>
+                {error && (
+                    <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl px-3 py-2 text-left">
+                        {error}
+                    </div>
+                )}
                 <div className="flex items-center gap-3 pt-2">
                     <button 
                         onClick={onClose} 
@@ -55,4 +61,4 @@ export default function DeleteModal({ isOpen, onClose, onConfirm }: DeleteModalP
             </div>
         </div>
     );
-}
+}

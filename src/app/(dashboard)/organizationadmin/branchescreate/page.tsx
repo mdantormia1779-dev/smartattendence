@@ -7,6 +7,7 @@ import BranchCard from "../Components/Branches/BranchCard";
 import BranchModal from "../Components/Branches/BranchModal";
 import DeleteModal from "../Components/Branches/DeleteModal";
 import QuotaExceededModal from "../Components/QuotaExceededModal";
+import { api } from "@/lib/api-client";
 
 interface Branch {
   id: string;
@@ -44,6 +45,7 @@ export default function BranchesPage() {
 
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [branchToDelete, setBranchToDelete] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Quota Modal State
   const [isQuotaModalOpen, setIsQuotaModalOpen] = useState<boolean>(false);
@@ -53,46 +55,32 @@ export default function BranchesPage() {
     try {
       setLoading(true);
       const [branchRes, subRes] = await Promise.allSettled([
-        fetch(`/api/branches?_t=${Date.now()}`, {
-          cache: "no-store",
-          headers: {
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            Pragma: "no-cache",
-          },
-        }),
-        fetch(`/api/subscription?_t=${Date.now()}`, {
-          cache: "no-store",
-        }),
+        api.branches.getAll(),
+        api.get("/api/subscription"),
       ]);
 
-      if (subRes.status === "fulfilled") {
-        const subJson = await subRes.value.json();
-        if (subJson.success && subJson.data) {
-          setSubscription(subJson.data);
-        }
+      if (subRes.status === "fulfilled" && subRes.value.success && subRes.value.data) {
+        setSubscription((subRes.value as any).data);
       }
 
-      if (branchRes.status === "fulfilled") {
-        const json = await branchRes.value.json();
-        const data = json.data || json;
-
-        if (json.success || Array.isArray(data)) {
-          const rawList = Array.isArray(data) ? data : (data.data || []);
-          const mapped: Branch[] = rawList.map((b: any) => ({
-            id: b.id,
-            name: b.name,
-            code: b.code || "BR-001",
-            shortName: b.name?.substring(0, 3).toUpperCase() || "BRN",
-            address: b.address || "Dhaka, Bangladesh",
-            phone: b.phone || "+880 1712-345678",
-            employees: b.totalEmployees || b.employeesCount || 0,
-            geoFence: `${b.geofenceRadius || b.geoFenceRadius || 120}m`,
-            latitude: String(b.latitude || 23.7925),
-            longitude: String(b.longitude || 90.4078),
-            status: b.status === "INACTIVE" ? "Inactive" : "Active",
-          }));
-          setBranches(mapped);
-        }
+      if (branchRes.status === "fulfilled" && branchRes.value.success) {
+        const val = branchRes.value as any;
+        const rawList = val.data?.data || val.data || (Array.isArray(val.data) ? val.data : []);
+        const list = Array.isArray(rawList) ? rawList : [];
+        const mapped: Branch[] = list.map((b: any) => ({
+          id: b.id,
+          name: b.name,
+          code: b.code || "BR-001",
+          shortName: b.name?.substring(0, 3).toUpperCase() || "BRN",
+          address: b.address || "Dhaka, Bangladesh",
+          phone: b.phone || "+880 1712-345678",
+          employees: b.totalEmployees || b.employeesCount || 0,
+          geoFence: `${b.geofenceRadius || b.geoFenceRadius || 120}m`,
+          latitude: b.latitude != null ? String(b.latitude) : "23.7925",
+          longitude: b.longitude != null ? String(b.longitude) : "90.4078",
+          status: b.status === "INACTIVE" ? "Inactive" : "Active",
+        }));
+        setBranches(mapped);
       }
     } catch (e) {
       console.error("Failed to load branches:", e);
@@ -134,38 +122,22 @@ export default function BranchesPage() {
     }
 
     const branchCode = (data.code || `BR-${String(branches.length + 1).padStart(3, "0")}`).trim().toUpperCase();
+    const payload = {
+      name: data.name.trim(),
+      code: branchCode,
+      address: data.address.trim(),
+      phone: data.phone.trim(),
+      latitude: lat,
+      longitude: lng,
+      geofenceRadius: radius,
+      status: data.status.toUpperCase(),
+    };
 
     try {
       if (branchToEdit) {
-        await fetch(`/api/branches/${branchToEdit.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: data.name.trim(),
-            code: branchCode,
-            address: data.address.trim(),
-            phone: data.phone.trim(),
-            latitude: lat,
-            longitude: lng,
-            geofenceRadius: radius,
-            status: data.status.toUpperCase(),
-          }),
-        });
+        await api.branches.update(branchToEdit.id, payload);
       } else {
-        await fetch("/api/branches", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: data.name.trim(),
-            code: branchCode,
-            address: data.address.trim(),
-            phone: data.phone.trim(),
-            latitude: lat,
-            longitude: lng,
-            geofenceRadius: radius,
-            status: data.status.toUpperCase(),
-          }),
-        });
+        await api.branches.create(payload);
       }
       await fetchBranches();
       setIsModalOpen(false);
@@ -176,18 +148,20 @@ export default function BranchesPage() {
   };
 
   const confirmDelete = async () => {
-    if (branchToDelete) {
-      try {
-        await fetch(`/api/branches/${branchToDelete}`, {
-          method: "DELETE",
-        });
+    if (!branchToDelete) return;
+    setDeleteError(null);
+    try {
+      const res = await api.branches.delete(branchToDelete);
+      if (res.success) {
         await fetchBranches();
-      } catch (e) {
-        console.error("Failed to delete branch", e);
-      } finally {
         setIsDeleteOpen(false);
         setBranchToDelete(null);
+      } else {
+        setDeleteError((res as any).message || "Failed to delete branch. Please try again.");
       }
+    } catch (e: any) {
+      console.error("Failed to delete branch", e);
+      setDeleteError(e?.message || "An error occurred while deleting the branch.");
     }
   };
 
@@ -294,8 +268,9 @@ export default function BranchesPage() {
 
       <DeleteModal 
         isOpen={isDeleteOpen} 
-        onClose={() => setIsDeleteOpen(false)} 
-        onConfirm={confirmDelete} 
+        onClose={() => { setIsDeleteOpen(false); setDeleteError(null); }} 
+        onConfirm={confirmDelete}
+        error={deleteError}
       />
 
       {/* Quota Limit Exceeded Alert Modal */}

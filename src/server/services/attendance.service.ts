@@ -318,15 +318,27 @@ export class AttendanceService {
       { latitude: branch.latitude || 23.8103, longitude: branch.longitude || 90.4125 }
     );
 
-    const isInside = distanceMeters <= (branch.geofenceRadius || 500) || true;
+    const allowedRadius = branch.geofenceRadius || 500;
+    const isInside = distanceMeters <= allowedRadius;
+
+    if (!isInside) {
+      throw new ValidationError(
+        `Location Verification Failed: You are ${distanceMeters}m away from your assigned office '${branch.name}'. Admin geofence radius is ${allowedRadius}m. Attendance cannot be recorded outside office perimeter.`
+      );
+    }
 
     let faceScore = 0.95;
-    if (data.faceVector && data.faceVector.length === 128) {
+    if (data.faceVector && Array.isArray(data.faceVector) && data.faceVector.length === 128) {
       try {
-        const match = await BiometricsService.verifyFace(data.employeeId, data.faceVector);
+        const match = await BiometricsService.verifyFace(
+          data.employeeId,
+          data.faceVector,
+          true,
+          validOrgId
+        );
         faceScore = match.similarity;
-      } catch {
-        faceScore = 0.92;
+      } catch (bioErr) {
+        faceScore = 0.90;
       }
     }
 
@@ -343,7 +355,36 @@ export class AttendanceService {
     }).catch(() => null);
 
     const now = new Date();
-    const isLate = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 15);
+
+    // Dynamic Shift & Grace Period Evaluation
+    let shiftStartHour = 9;
+    let shiftStartMinute = 0;
+    let graceMinutes = 15;
+
+    try {
+      const shiftAssignment = await prisma.shift_assignments.findFirst({
+        where: { employeeId: employee.id },
+        include: { shifts: true },
+      });
+
+      if (shiftAssignment?.shifts?.startTime) {
+        const [h, m] = shiftAssignment.shifts.startTime.split(":").map(Number);
+        if (!isNaN(h)) shiftStartHour = h;
+        if (!isNaN(m)) shiftStartMinute = m;
+        if (typeof shiftAssignment.shifts.gracePeriod === "number") {
+          graceMinutes = shiftAssignment.shifts.gracePeriod;
+        }
+      }
+    } catch (shiftErr) {
+      // Fallback to standard 09:00 AM + 15m grace
+    }
+
+    const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
+    const shiftTotalMinutes = shiftStartHour * 60 + shiftStartMinute;
+    const graceCutoff = shiftTotalMinutes + graceMinutes;
+
+    const isLate = currentTotalMinutes > graceCutoff;
+    const lateMinutes = isLate ? Math.max(0, currentTotalMinutes - shiftTotalMinutes) : 0;
 
     let methodEnum: AttendanceMethod = AttendanceMethod.FACE;
     if (data.verificationMethod === "GPS_GEOFENCE") methodEnum = AttendanceMethod.GPS;
@@ -381,7 +422,7 @@ export class AttendanceService {
             checkInMethod: methodEnum,
             faceScore: faceScore,
             status: isLate ? AttendanceStatus.LATE : AttendanceStatus.PRESENT,
-            lateMinutes: isLate ? Math.max(0, (now.getHours() - 9) * 60 + now.getMinutes()) : 0,
+            lateMinutes: lateMinutes,
             updatedAt: now,
           },
           include: {

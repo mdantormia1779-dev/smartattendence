@@ -15,6 +15,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 }
 
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const session = requireRole(request, ["SUPER_ADMIN", "ORG_ADMIN"]);
+    const orgId = session.organizationId || "org-1";
+
+    const body = await request.json();
+    const updated = await BranchService.updateBranch(id, orgId, body);
+    return apiSuccess(updated, "Branch updated successfully");
+  } catch (error: any) {
+    return apiError(error);
+  }
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;

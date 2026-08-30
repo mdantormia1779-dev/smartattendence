@@ -282,13 +282,44 @@ export default function BranchModal({ isOpen, onClose, branchToEdit, existingBra
                         </div>
                     </div>
 
+                    <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-gray-700">Office GPS Coordinates (Latitude & Longitude) *</label>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (typeof window !== "undefined" && navigator.geolocation) {
+                                        navigator.geolocation.getCurrentPosition(
+                                            (pos) => {
+                                                setValue("latitude", pos.coords.latitude.toFixed(7), { shouldValidate: true });
+                                                setValue("longitude", pos.coords.longitude.toFixed(7), { shouldValidate: true });
+                                                alert(`Location detected successfully! Accuracy: ±${Math.round(pos.coords.accuracy)} meters.`);
+                                            },
+                                            (err) => {
+                                                alert(`GPS detection error: ${err.message}. Please ensure location permission is allowed.`);
+                                            },
+                                            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                                        );
+                                    } else {
+                                        alert("Geolocation is not supported by your browser.");
+                                    }
+                                }}
+                                className="text-[11px] text-[#00B050] hover:text-[#009b46] font-bold flex items-center gap-1 cursor-pointer transition-colors bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200/80 shadow-xs"
+                                title="Get exact GPS coordinates of current office location"
+                            >
+                                <MapPin className="w-3.5 h-3.5 text-[#00B050]" />
+                                📍 Use Current Location
+                            </button>
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                             <label className="text-xs font-bold text-gray-700">Latitude *</label>
                             <input 
                                 type="text" 
                                 {...register("latitude")}
-                                placeholder="23.7493" 
+                                placeholder="e.g. 23.7493000" 
                                 className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#00B050]"
                             />
                             {errors.latitude && <span className="text-[10px] font-medium text-rose-500">{errors.latitude.message}</span>}
@@ -298,7 +329,7 @@ export default function BranchModal({ isOpen, onClose, branchToEdit, existingBra
                             <input 
                                 type="text" 
                                 {...register("longitude")}
-                                placeholder="90.3929" 
+                                placeholder="e.g. 90.3929000" 
                                 className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#00B050]"
                             />
                             {errors.longitude && <span className="text-[10px] font-medium text-rose-500">{errors.longitude.message}</span>}
