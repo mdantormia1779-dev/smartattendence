@@ -112,7 +112,10 @@ export class AuthService {
         } else {
           const emp = await prisma.employees.findFirst({
             where: { email: normalizedEmail },
-            include: { organizations: true },
+            include: {
+              organizations: true,
+              branches: true,
+            },
           });
 
           if (emp) {
@@ -121,6 +124,11 @@ export class AuthService {
               user.fullName = emp.fullName;
               user.organizationId = emp.organizationId;
               user.isActive = emp.status !== "SUSPENDED" && emp.organizations?.status !== "SUSPENDED";
+              user.branchId = emp.branchId;
+              user.branchName = emp.branches?.name || undefined;
+              user.branchLatitude = emp.branches?.latitude ? Number(emp.branches.latitude) : undefined;
+              user.branchLongitude = emp.branches?.longitude ? Number(emp.branches.longitude) : undefined;
+              user.geofenceRadius = emp.branches?.geoFenceRadius || undefined;
             } else {
               user = {
                 id: emp.id,
@@ -130,6 +138,11 @@ export class AuthService {
                 role: "EMPLOYEE",
                 organizationId: emp.organizationId,
                 isActive: emp.status !== "SUSPENDED" && emp.organizations?.status !== "SUSPENDED",
+                branchId: emp.branchId,
+                branchName: emp.branches?.name || undefined,
+                branchLatitude: emp.branches?.latitude ? Number(emp.branches.latitude) : undefined,
+                branchLongitude: emp.branches?.longitude ? Number(emp.branches.longitude) : undefined,
+                geofenceRadius: emp.branches?.geoFenceRadius || undefined,
               };
               usersStore.push(user);
             }
@@ -179,6 +192,11 @@ export class AuthService {
         role: user.role,
         organizationId: user.organizationId,
         employeeId: user.employeeId,
+        branchId: user.branchId,
+        branchName: user.branchName,
+        branchLatitude: user.branchLatitude,
+        branchLongitude: user.branchLongitude,
+        geofenceRadius: user.geofenceRadius,
       },
       token: sessionToken,
     };

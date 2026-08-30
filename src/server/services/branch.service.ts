@@ -68,8 +68,8 @@ export class BranchService {
       code: b.code,
       address: b.address || "Main Address",
       phone: b.phone || "+880 1700-000000",
-      latitude: Number(b.latitude) || 23.8103,
-      longitude: Number(b.longitude) || 90.4125,
+      latitude: b.latitude != null ? Number(b.latitude) : 23.8103,
+      longitude: b.longitude != null ? Number(b.longitude) : 90.4125,
       geofenceRadius: b.geoFenceRadius || 120,
       status: b.status === OrgStatus.ACTIVE ? "Active" : "Inactive",
       assignedManager: b.managers[0]?.name || undefined,
@@ -116,8 +116,8 @@ export class BranchService {
           code: fallback.code,
           address: fallback.address || "Main Address",
           phone: fallback.phone || "+880 1700-000000",
-          latitude: Number(fallback.latitude) || 23.8103,
-          longitude: Number(fallback.longitude) || 90.4125,
+          latitude: fallback.latitude != null ? Number(fallback.latitude) : 23.8103,
+          longitude: fallback.longitude != null ? Number(fallback.longitude) : 90.4125,
           geofenceRadius: fallback.geoFenceRadius || 120,
           status: fallback.status === OrgStatus.ACTIVE ? "Active" : "Inactive",
           assignedManager: fallback.managers[0]?.name || undefined,
@@ -151,8 +151,8 @@ export class BranchService {
       code: branch.code,
       address: branch.address || "Main Address",
       phone: branch.phone || "+880 1700-000000",
-      latitude: Number(branch.latitude) || 23.8103,
-      longitude: Number(branch.longitude) || 90.4125,
+      latitude: branch.latitude != null ? Number(branch.latitude) : 23.8103,
+      longitude: branch.longitude != null ? Number(branch.longitude) : 90.4125,
       geofenceRadius: branch.geoFenceRadius || 120,
       status: branch.status === OrgStatus.ACTIVE ? "Active" : "Inactive",
       assignedManager: branch.managers[0]?.name || undefined,
@@ -225,8 +225,8 @@ export class BranchService {
       code: newBranch.code,
       address: newBranch.address || "Main Address",
       phone: newBranch.phone || "+880 1700-000000",
-      latitude: Number(newBranch.latitude) || 23.8103,
-      longitude: Number(newBranch.longitude) || 90.4125,
+      latitude: newBranch.latitude != null ? Number(newBranch.latitude) : 23.8103,
+      longitude: newBranch.longitude != null ? Number(newBranch.longitude) : 90.4125,
       geofenceRadius: newBranch.geoFenceRadius || 120,
       status: newBranch.status === OrgStatus.ACTIVE ? "Active" : "Inactive",
       totalEmployees: 0,
@@ -275,8 +275,8 @@ export class BranchService {
       code: updated.code,
       address: updated.address || "Main Address",
       phone: updated.phone || "+880 1700-000000",
-      latitude: Number(updated.latitude) || 23.8103,
-      longitude: Number(updated.longitude) || 90.4125,
+      latitude: updated.latitude != null ? Number(updated.latitude) : 23.8103,
+      longitude: updated.longitude != null ? Number(updated.longitude) : 90.4125,
       geofenceRadius: updated.geoFenceRadius || 120,
       status: updated.status === OrgStatus.ACTIVE ? "Active" : "Inactive",
       totalEmployees: updated._count.employees,
@@ -286,14 +286,26 @@ export class BranchService {
   }
 
   static async deleteBranch(id: string, organizationId: string) {
-    const branch = await prisma.branches.findUnique({
-      where: { id },
+    const branch = await prisma.branches.findFirst({
+      where: { id, ...(organizationId && organizationId !== "org-1" ? { organizationId } : {}) },
+      include: { _count: { select: { employees: true } } },
     });
+
     if (!branch) throw new NotFoundError("Branch");
 
-    await prisma.branches.delete({
-      where: { id },
+    if ((branch as any)._count?.employees > 0) {
+      throw new ValidationError(
+        `Cannot delete this branch — ${(branch as any)._count.employees} employee(s) are still assigned to it. Reassign or remove them first.`
+      );
+    }
+
+    // Unset branchId on any managers pointing to this branch
+    await prisma.managers.updateMany({
+      where: { branchId: id },
+      data: { branchId: null },
     });
+
+    await prisma.branches.delete({ where: { id } });
 
     return { success: true, deletedBranch: branch };
   }
