@@ -201,11 +201,14 @@ class ApiClient {
   };
 
   shifts = {
-    getAll: () => this.get("/api/shifts"),
+    getAll: (params?: any) => this.get("/api/shifts", params),
+    getById: (id: string) => this.get(`/api/shifts/${id}`),
+    getEmployees: (shiftId: string) => this.get(`/api/shifts/${shiftId}/assign`),
     create: (body: any) => this.post("/api/shifts", body),
     update: (id: string, body: any) => this.patch(`/api/shifts/${id}`, body),
     delete: (id: string) => this.delete(`/api/shifts/${id}`),
     assign: (shiftId: string, employeeIds: string[]) => this.post(`/api/shifts/${shiftId}/assign`, { employeeIds }),
+    unassign: (shiftId: string, employeeId: string) => this.delete(`/api/shifts/${shiftId}/assign/${employeeId}`),
   };
 
   overtime = {

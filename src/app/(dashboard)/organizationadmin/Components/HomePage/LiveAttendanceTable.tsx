@@ -4,12 +4,14 @@ import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import gsap from "gsap";
 import { MapPin, Loader2, ArrowUpRight, Clock, CheckCircle2, AlertTriangle, ScanFace } from "lucide-react";
+import { api } from "@/lib/api-client";
 
 interface AttendanceRow {
   id: string;
   name: string;
   dept: string;
-  time: string;
+  punchIn: string;
+  punchOut: string;
   method: string;
   status: string;
   color: string;
@@ -24,19 +26,10 @@ export default function LiveAttendanceTable() {
     async function fetchAttendance() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/attendance?limit=6&_t=${Date.now()}`, {
-          cache: "no-store",
-          headers: {
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            Pragma: "no-cache",
-          },
-        });
-        const json = await res.json();
-        const data = json.data || json;
-
-        if (json.success || Array.isArray(data)) {
-          const rawList = Array.isArray(data) ? data : (data.data || []);
-          const mapped: AttendanceRow[] = rawList.map((l: any) => {
+        const res = await api.attendance.getLogs({ limit: 6 });
+        
+        if (res.success && Array.isArray(res.data)) {
+          const mapped: AttendanceRow[] = res.data.slice(0, 6).map((l: any) => {
             const statusUpper = (l.status || "").toUpperCase();
             const isPresent = statusUpper === "PRESENT";
             const isLate = statusUpper === "LATE";
@@ -48,10 +41,11 @@ export default function LiveAttendanceTable() {
 
             return {
               id: l.id || Math.random().toString(),
-              name: l.employeeName || l.employee?.fullName || l.employeeId || "Staff Member",
-              dept: l.department || l.employee?.department?.name || "Operations",
-              time: l.checkInTime || "--",
-              method: l.verificationMethod === "FACE_RECOGNITION" ? "Face AI + GPS" : "GPS Geofence",
+              name: l.employeeName || l.employeeId || "Staff Member",
+              dept: l.department || "Operations",
+              punchIn: l.checkInTime || "--",
+              punchOut: l.checkOutTime || "—",
+              method: l.verificationMethod === "FACE_RECOGNITION" ? "Face AI + GPS" : (l.verificationMethod || "GPS Geofence"),
               status: (l.status || "PRESENT").toLowerCase(),
               color,
             };
@@ -87,7 +81,7 @@ export default function LiveAttendanceTable() {
         <div className="flex items-center justify-between pb-4 border-b border-neutral-100">
           <div>
             <h3 className="text-base font-bold text-neutral-900">Today's Live Punch Stream</h3>
-            <p className="text-xs text-neutral-500">Real-time GPS geofence and biometric verification feed</p>
+            <p className="text-xs text-neutral-500">Real-time Punch In & Punch Out stream across all branches</p>
           </div>
           <Link
             href="/organizationadmin/attendance"
@@ -106,16 +100,17 @@ export default function LiveAttendanceTable() {
           <div className="py-20 text-center text-xs text-neutral-400 space-y-2">
             <Clock className="w-8 h-8 text-neutral-300 mx-auto mb-1" />
             <p className="font-semibold text-neutral-700">No punches recorded for today yet</p>
-            <p className="text-[11px] text-neutral-400">When employees clock in via mobile or face punch, events will appear here in real time.</p>
+            <p className="text-[11px] text-neutral-400">When employees Punch In / Out, events will appear here in real time.</p>
           </div>
         ) : (
           <div className="overflow-x-auto custom-scrollbar mt-4">
-            <table className="w-full min-w-[580px] text-left border-collapse">
+            <table className="w-full min-w-[620px] text-left border-collapse">
               <thead>
                 <tr className="border-b border-neutral-100 text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
                   <th className="pb-3 px-3">Employee</th>
                   <th className="pb-3 px-3">Department</th>
-                  <th className="pb-3 px-3">Check-In</th>
+                  <th className="pb-3 px-3">Punch In</th>
+                  <th className="pb-3 px-3">Punch Out</th>
                   <th className="pb-3 px-3">Verification</th>
                   <th className="pb-3 px-3 text-right">Status</th>
                 </tr>
@@ -129,8 +124,11 @@ export default function LiveAttendanceTable() {
                     <td className="py-3.5 px-3 text-neutral-600 font-medium">
                       {row.dept}
                     </td>
-                    <td className="py-3.5 px-3 font-mono text-neutral-700 font-semibold">
-                      {row.time}
+                    <td className="py-3.5 px-3 font-mono font-bold text-emerald-700">
+                      {row.punchIn}
+                    </td>
+                    <td className="py-3.5 px-3 font-mono font-semibold text-neutral-600">
+                      {row.punchOut}
                     </td>
                     <td className="py-3.5 px-3 text-neutral-500">
                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-neutral-50 border border-neutral-200 rounded-md text-[11px] font-medium text-neutral-700">

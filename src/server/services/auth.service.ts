@@ -1,8 +1,11 @@
 import { ConflictError, NotFoundError, UnauthorizedError, ValidationError } from "../errors";
 import { logAuditEvent } from "@/lib/audit-logger";
-import { OrganizationService } from "./organization.service";
 import { prisma } from "@/lib/prisma";
-import { registerSessionToken } from "../authorization";
+import { OrganizationService } from "./organization.service";
+import { registerSessionToken, signSessionToken } from "../authorization";
+
+
+
 
 export interface UserSessionData {
   id: string;
@@ -120,6 +123,8 @@ export class AuthService {
 
           if (emp) {
             if (user) {
+              user.id = emp.id;
+              user.employeeId = emp.employeeCode || emp.id;
               user.passwordHash = emp.password;
               user.fullName = emp.fullName;
               user.organizationId = emp.organizationId;
@@ -132,6 +137,7 @@ export class AuthService {
             } else {
               user = {
                 id: emp.id,
+                employeeId: emp.employeeCode || emp.id,
                 email: emp.email,
                 passwordHash: emp.password,
                 fullName: emp.fullName,
@@ -147,6 +153,7 @@ export class AuthService {
               usersStore.push(user);
             }
           }
+
         }
       }
     } catch (e) {
@@ -174,15 +181,17 @@ export class AuthService {
       userAgent,
     });
 
-    const sessionToken = `session_${user.id}_${Date.now()}`;
-    registerSessionToken(sessionToken, {
+    const sessionData = {
       userId: user.id,
       email: user.email,
       fullName: user.fullName,
       role: user.role,
       organizationId: user.organizationId,
       employeeId: user.employeeId,
-    });
+    };
+
+    const sessionToken = signSessionToken(sessionData);
+    registerSessionToken(sessionToken, sessionData);
 
     return {
       user: {
@@ -201,6 +210,7 @@ export class AuthService {
       token: sessionToken,
     };
   }
+
 
   static async registerTenant(data: {
     adminName: string;

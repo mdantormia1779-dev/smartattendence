@@ -23,9 +23,11 @@ import {
     Loader2,
     RefreshCw,
     X,
-    AlertCircle
+    AlertCircle,
+    LogIn
 } from "lucide-react";
 import { api } from "@/lib/api-client";
+import WebPunchModal from "../Components/Attendance/WebPunchModal";
 
 interface AttendanceRecord {
     id: string;
@@ -70,6 +72,9 @@ export default function AttendancePage() {
     const [selectedDepartment, setSelectedDepartment] = useState("All");
     const [selectedStatus, setSelectedStatus] = useState("All");
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
+
+    // Modal state for web punch in/out
+    const [isPunchModalOpen, setIsPunchModalOpen] = useState(false);
 
     // Modal state for manual regularize
     const [isOverrideModalOpen, setIsOverrideModalOpen] = useState(false);
@@ -225,6 +230,7 @@ export default function AttendancePage() {
             return matchesSearch && matchesBranch && matchesDepartment && matchesStatus;
         });
     }, [attendanceList, searchQuery, selectedBranch, selectedDepartment, selectedStatus]);
+    console.log(filteredRecords)
 
     const presentCount = useMemo(() => attendanceList.filter((a) => a.status === "Present").length, [attendanceList]);
     const lateCount = useMemo(() => attendanceList.filter((a) => a.status === "Late").length, [attendanceList]);
@@ -284,7 +290,14 @@ export default function AttendancePage() {
                         Real-time AI Face Recognition scores, GPS Geo-fencing validations & employee attendance records
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                    <button
+                        onClick={() => setIsPunchModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold bg-[#00B050] hover:bg-[#009b46] text-white shadow-md shadow-[#00B050]/20 transition-all cursor-pointer active:scale-95"
+                    >
+                        <LogIn className="w-4 h-4" />
+                        Web Punch In / Out
+                    </button>
                     <button
                         onClick={fetchAllData}
                         className="p-2.5 rounded-xl border border-stone-200 hover:bg-stone-50 text-stone-600 transition-colors cursor-pointer"
@@ -560,6 +573,13 @@ export default function AttendancePage() {
                     </div>
                 </div>
             )}
+
+            {/* Web Punch Terminal Modal */}
+            <WebPunchModal
+                isOpen={isPunchModalOpen}
+                onClose={() => setIsPunchModalOpen(false)}
+                onPunchSuccess={fetchAllData}
+            />
         </div>
     );
 }

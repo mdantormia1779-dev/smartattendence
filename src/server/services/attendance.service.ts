@@ -65,18 +65,21 @@ export class AttendanceService {
   }): Promise<AttendanceEntry[]> {
     const validOrgId = await resolveOrganizationId(organizationId);
 
-    // 1. Target date bounds
+    // 1. Target date bounds with timezone buffer
     const targetDateStr = query.date || new Date().toISOString().split("T")[0];
-    const dStart = new Date(targetDateStr);
-    dStart.setHours(0, 0, 0, 0);
-    const dEnd = new Date(targetDateStr);
-    dEnd.setHours(23, 59, 59, 999);
+    const [y, m, d] = targetDateStr.split("-").map(Number);
+    const dStart = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+    const searchStart = new Date(dStart.getTime() - 24 * 60 * 60 * 1000);
+    const searchEnd = new Date(dStart.getTime() + 24 * 60 * 60 * 1000);
 
     // 2. Fetch all active employees for this organization
     const employees = await prisma.employees.findMany({
       where: {
         organizationId: validOrgId,
         status: { not: "TERMINATED" },
+        ...(query.branchId ? { branchId: query.branchId } : {}),
+        ...(query.departmentId ? { departmentId: query.departmentId } : {}),
+        ...(query.employeeId ? { OR: [{ id: query.employeeId }, { employeeCode: query.employeeId }] } : {}),
       },
       include: {
         branches: { select: { id: true, name: true } },
@@ -90,12 +93,13 @@ export class AttendanceService {
       orderBy: { fullName: "asc" },
     }).catch(() => []);
 
-    // 3. Fetch all attendance punches for target date
+    // 3. Fetch all attendance punches for target date range
     const attendanceRecords = await prisma.attendance.findMany({
       where: {
         employees: { organizationId: validOrgId },
-        date: { gte: dStart, lte: dEnd },
+        date: { gte: searchStart, lte: searchEnd },
       },
+      orderBy: { updatedAt: "desc" },
       include: {
         employees: {
           include: {
@@ -111,14 +115,16 @@ export class AttendanceService {
       where: {
         employees: { organizationId: validOrgId },
         status: "APPROVED",
-        startDate: { lte: dEnd },
-        endDate: { gte: dStart },
+        startDate: { lte: searchEnd },
+        endDate: { gte: searchStart },
       },
     }).catch(() => []);
 
     const attendanceByEmpId = new Map<string, typeof attendanceRecords[0]>();
     for (const att of attendanceRecords) {
-      attendanceByEmpId.set(att.employeeId, att);
+      if (!attendanceByEmpId.has(att.employeeId)) {
+        attendanceByEmpId.set(att.employeeId, att);
+      }
     }
 
     const leaveByEmpId = new Map<string, typeof approvedLeaves[0]>();

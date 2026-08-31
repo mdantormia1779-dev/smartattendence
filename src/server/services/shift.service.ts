@@ -40,9 +40,9 @@ async function resolveOrganizationId(inputOrgId?: string | null): Promise<string
 
 export class ShiftService {
   /**
-   * Get all shifts for an organization (with automatic default seed if table empty)
+   * Get all shifts for an organization (optionally filtered by branchId)
    */
-  static async getShifts(organizationId: string): Promise<ShiftData[]> {
+  static async getShifts(organizationId: string, branchId?: string): Promise<ShiftData[]> {
     const validOrgId = await resolveOrganizationId(organizationId);
 
     // 1. Find all branches for this organization
@@ -72,9 +72,19 @@ export class ShiftService {
       branchIds = [defaultBranch.id];
     }
 
+    // Determine target branches to query
+    let targetBranchIds = branchIds;
+    if (branchId && branchId !== "all" && branchId !== "All") {
+      targetBranchIds = branchIds.filter((id) => id === branchId);
+      if (targetBranchIds.length === 0) {
+        // If branchId is specified directly
+        targetBranchIds = [branchId];
+      }
+    }
+
     // 2. Query real shifts from database
     let dbShifts = await prisma.shifts.findMany({
-      where: { branchId: { in: branchIds } },
+      where: { branchId: { in: targetBranchIds } },
       include: {
         branches: { select: { id: true, name: true, organizationId: true } },
         _count: {
@@ -87,7 +97,7 @@ export class ShiftService {
     });
 
     // If no shifts exist yet for this organization, auto-create standard initial shifts
-    if (dbShifts.length === 0 && branchIds.length > 0) {
+    if (dbShifts.length === 0 && (!branchId || branchId === "all" || branchId === "All") && branchIds.length > 0) {
       const primaryBranchId = branchIds[0];
       const initialShifts = [
         {
@@ -140,7 +150,7 @@ export class ShiftService {
       });
     }
 
-    // 3. Count total active employees per shift
+    // 3. Map to ShiftData
     return dbShifts.map((s) => {
       const nameUpper = s.name.toUpperCase();
       let shiftType: ShiftData["type"] = "MORNING";
@@ -304,7 +314,7 @@ export class ShiftService {
   }
 
   /**
-   * Update an existing shift in the database
+   * Update an existing shift in the database (including branch change)
    */
   static async updateShift(
     id: string,
@@ -379,5 +389,91 @@ export class ShiftService {
     });
 
     return { deleted: true, id };
+  }
+
+  /**
+   * Get all employees assigned to a shift
+   */
+  static async getShiftEmployees(shiftId: string, organizationId: string) {
+    const assignments = await prisma.shift_assignments.findMany({
+      where: { shiftId },
+      include: {
+        employees: {
+          include: {
+            branches: true,
+            departments: true,
+          },
+        },
+      },
+      orderBy: { effectiveFrom: "desc" },
+    });
+
+    return assignments.map((a) => ({
+      assignmentId: a.id,
+      employeeId: a.employees.id,
+      employeeCode: a.employees.employeeCode,
+      fullName: a.employees.fullName,
+      email: a.employees.email,
+      designation: a.employees.designation,
+      branch: a.employees.branches?.name || "Main Branch",
+      department: a.employees.departments?.name || "General",
+      effectiveFrom: a.effectiveFrom,
+    }));
+  }
+
+  /**
+   * Assign or reassign employees to a shift
+   */
+  static async assignEmployeesToShift(shiftId: string, employeeIds: string[], organizationId: string) {
+    const shift = await prisma.shifts.findUnique({
+      where: { id: shiftId },
+    });
+    if (!shift) throw new NotFoundError("Shift");
+
+    if (!Array.isArray(employeeIds) || employeeIds.length === 0) {
+      return { success: true, count: 0 };
+    }
+
+    // 1. Remove previous shift assignments for these employees
+    await prisma.shift_assignments.deleteMany({
+      where: {
+        employeeId: { in: employeeIds },
+      },
+    }).catch(() => {});
+
+    // 2. Create new shift assignments
+    const created = await Promise.all(
+      employeeIds.map((empId, idx) =>
+        prisma.shift_assignments.create({
+          data: {
+            id: `sa-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+            employeeId: empId,
+            shiftId: shiftId,
+            effectiveFrom: new Date(),
+          },
+        })
+      )
+    );
+
+    return {
+      success: true,
+      shiftId,
+      assignedCount: created.length,
+      employeeIds,
+    };
+  }
+
+  /**
+   * Unassign an employee from a shift
+   */
+  static async unassignEmployeeFromShift(shiftId: string, employeeId: string, organizationId: string) {
+    await prisma.shift_assignments.deleteMany({
+      where: {
+        shiftId,
+        employeeId,
+      },
+    });
+
+    return { success: true, shiftId, employeeId };
   }
 }
