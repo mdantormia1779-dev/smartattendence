@@ -1,13 +1,13 @@
 import { requireAuth } from "@/server/authorization";
-import { getReferralAccount } from "@/lib/referral-engine";
+import { getReferralAccountAsync } from "@/lib/referral-engine";
 import { apiSuccess, apiError } from "@/server/errors";
 
 export async function GET(request: Request) {
   try {
     const session = requireAuth(request);
-    const account = getReferralAccount(session.userId);
+    const account = await getReferralAccountAsync(session.userId);
 
-    const txs = account.withdrawals.map((w) => ({
+    const txs = (account.withdrawals || []).map((w) => ({
       id: `tx-${w.id}`,
       type: "WITHDRAWAL",
       amount: w.amount,
@@ -21,3 +21,4 @@ export async function GET(request: Request) {
     return apiError(error);
   }
 }
+

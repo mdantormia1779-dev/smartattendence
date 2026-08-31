@@ -157,8 +157,8 @@ export async function runCompleteSystemAudit() {
   });
 
   // Phase 29: Withdrawals
-  await record("Phase 29 - Withdrawals", "Withdrawal Validation ($50 Min)", () => {
-    const res = requestReferralWithdrawal({
+  await record("Phase 29 - Withdrawals", "Withdrawal Validation ($50 Min)", async () => {
+    const res = await requestReferralWithdrawal({
       referralAccountId: "ref-acc-user-org-1",
       amount: 20.0, // Below $50 limit
       paymentMethod: "Bank Transfer",
@@ -166,6 +166,7 @@ export async function runCompleteSystemAudit() {
     });
     if (res.success) throw new Error("Expected withdrawal under $50 to fail");
   });
+
 
   console.log("\n==================================================");
   console.log("📊 AUDIT RESULTS SUMMARY");

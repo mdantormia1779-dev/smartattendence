@@ -1,16 +1,16 @@
 import { requireAuth } from "@/server/authorization";
-import { getAdminReferralOverview } from "@/lib/referral-engine";
+import { getAdminReferralOverviewAsync } from "@/lib/referral-engine";
 import { apiSuccess, apiError } from "@/server/errors";
 
 export async function GET(request: Request) {
   try {
     requireAuth(request);
-    const overview = getAdminReferralOverview();
+    const overview = await getAdminReferralOverviewAsync();
 
     return apiSuccess(
       {
         totalCommissionsCount: overview.recentCommissions.length,
-        totalCommissionsAmount: overview.recentCommissions.reduce((s, c) => s + c.commissionAmount, 0),
+        totalCommissionsAmount: overview.recentCommissions.reduce((s: number, c: any) => s + (c.commissionAmount || 0), 0),
         commissions: overview.recentCommissions,
       },
       "Commission ledger report generated successfully"
@@ -19,3 +19,4 @@ export async function GET(request: Request) {
     return apiError(error);
   }
 }
+

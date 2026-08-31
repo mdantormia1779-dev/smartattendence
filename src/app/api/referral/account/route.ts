@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
-import { getOrCreateReferralAccount, getCommissions, getWithdrawals } from "@/lib/referral-engine";
+import { getOrCreateReferralAccountAsync } from "@/lib/referral-engine";
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId") || "user-emp-1";
-    const userName = searchParams.get("name") || "Arif Chowdhury";
-    const userEmail = searchParams.get("email") || "arif.c@vertextech.io";
+    const userName = searchParams.get("name") || "Affiliate Partner";
+    const userEmail = searchParams.get("email") || `${userId}@erp.com`;
     const role = searchParams.get("role") || "EMPLOYEE";
-    const organizationId = searchParams.get("organizationId") || "org-1";
+    const organizationId = searchParams.get("organizationId") || undefined;
 
-    const account = getOrCreateReferralAccount({
+    const account = await getOrCreateReferralAccountAsync({
       id: userId,
       name: userName,
       email: userEmail,
@@ -18,16 +18,14 @@ export async function GET(request: Request) {
       organizationId,
     });
 
-    const commissions = getCommissions(account.id);
-    const withdrawals = getWithdrawals(account.id);
-
     return NextResponse.json({
       success: true,
       account,
-      commissions,
-      withdrawals,
+      commissions: account.commissions || [],
+      withdrawals: account.withdrawals || [],
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
+
