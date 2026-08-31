@@ -59,6 +59,7 @@ const Footer = () => {
                         <ul className="space-y-2 text-sm">
                             <li><a href="#features" className="hover:text-[#00B050] transition-colors">Features</a></li>
                             <li><a href="#pricing" className="hover:text-[#00B050] transition-colors">Pricing</a></li>
+                            <li><a href="/smartattendence.apk" download="smartattendence.apk" className="text-emerald-600 font-semibold hover:text-[#00B050] transition-colors flex items-center gap-1">Download APK <span className="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0.2 rounded font-bold">Android</span></a></li>
                             <li><a href="#integrations" className="hover:text-[#00B050] transition-colors">Integrations</a></li>
                             <li><a href="#changelog" className="hover:text-[#00B050] transition-colors">Changelog</a></li>
                         </ul>
