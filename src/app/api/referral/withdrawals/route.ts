@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { requestWithdrawal, getWithdrawals } from "@/lib/referral-engine";
+import { requestWithdrawalAsync, getReferralAccountAsync } from "@/lib/referral-engine";
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const referralAccountId = searchParams.get("referralAccountId") || undefined;
-    const list = getWithdrawals(referralAccountId);
-    return NextResponse.json({ success: true, withdrawals: list });
+    const referralAccountId = searchParams.get("referralAccountId") || "user-session";
+    const account = await getReferralAccountAsync(referralAccountId);
+    return NextResponse.json({ success: true, withdrawals: account.withdrawals || [] });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = requestWithdrawal({
+    const result = await requestWithdrawalAsync({
       referralAccountId,
       amount: Number(amount),
       paymentMethod,
@@ -32,11 +32,13 @@ export async function POST(request: Request) {
     });
 
     if (!result.success) {
-      return NextResponse.json({ success: false, error: result.message }, { status: 400 });
+      return NextResponse.json({ success: false, error: result.error || "Failed to process withdrawal" }, { status: 400 });
     }
+
 
     return NextResponse.json({ success: true, withdrawal: result.withdrawal });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
+

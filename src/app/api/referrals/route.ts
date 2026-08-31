@@ -1,11 +1,11 @@
 import { requireAuth } from "@/server/authorization";
-import { getReferralAccount } from "@/lib/referral-engine";
+import { getReferralAccountAsync } from "@/lib/referral-engine";
 import { apiSuccess, apiError } from "@/server/errors";
 
 export async function GET(request: Request) {
   try {
     const session = requireAuth(request);
-    const account = getReferralAccount(session.userId, {
+    const account = await getReferralAccountAsync(session.userId, {
       fullName: session.fullName,
       email: session.email,
       role: session.role,
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const session = requireAuth(request);
     const body = await request.json();
 
-    const account = getReferralAccount(session.userId, {
+    const account = await getReferralAccountAsync(session.userId, {
       fullName: session.fullName,
       email: session.email,
       role: session.role,
@@ -36,3 +36,4 @@ export async function POST(request: Request) {
     return apiError(error);
   }
 }
+

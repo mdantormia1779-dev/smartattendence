@@ -1,5 +1,5 @@
 import { requireRole } from "@/server/authorization";
-import { processPayoutDecision } from "@/lib/referral-engine";
+import { processPayoutDecisionAsync } from "@/lib/referral-engine";
 import { apiSuccess, apiError } from "@/server/errors";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -7,7 +7,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     requireRole(request, ["SUPER_ADMIN"]);
 
-    const result = processPayoutDecision({
+    const result = await processPayoutDecisionAsync({
       withdrawalId: id,
       decision: "PAID",
     });
@@ -21,3 +21,4 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return apiError(error);
   }
 }
+

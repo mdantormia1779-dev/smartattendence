@@ -1,5 +1,5 @@
 import { requireRole } from "@/server/authorization";
-import { processPayoutDecision } from "@/lib/referral-engine";
+import { processPayoutDecisionAsync } from "@/lib/referral-engine";
 import { apiSuccess, apiError } from "@/server/errors";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -8,7 +8,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     requireRole(request, ["SUPER_ADMIN"]);
 
     const body = await request.json();
-    const result = processPayoutDecision({
+    const result = await processPayoutDecisionAsync({
       withdrawalId: id,
       decision: "REJECTED",
       rejectionReason: body.rejectionReason || "Declined by administrator",
@@ -23,3 +23,4 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return apiError(error);
   }
 }
+
