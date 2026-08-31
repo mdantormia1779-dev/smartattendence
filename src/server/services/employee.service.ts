@@ -91,6 +91,11 @@ export class EmployeeService {
           branches: true,
           departments: true,
           managers: true,
+          shift_assignments: {
+            include: { shifts: true },
+            take: 1,
+            orderBy: { effectiveFrom: "desc" },
+          },
           attendance: {
             take: 1,
             orderBy: { date: "desc" },
@@ -117,6 +122,8 @@ export class EmployeeService {
         }
       }
 
+      const assignedShift = (emp as any).shift_assignments?.[0];
+
       return {
         id: emp.id,
         userId: emp.id,
@@ -131,6 +138,8 @@ export class EmployeeService {
         branchId: emp.branchId,
         manager: emp.managers?.name || undefined,
         managerId: emp.managerId || null,
+        shiftId: assignedShift?.shiftId || null,
+        shiftName: assignedShift?.shifts?.name || undefined,
         type: emp.employmentType === EmploymentType.FULL_TIME ? "Full-time" : "Part-time",
         status: emp.status === EmployeeStatus.ACTIVE ? "Active" : "Suspended",
         today,
@@ -487,6 +496,17 @@ export class EmployeeService {
       },
     });
 
+    if (data.shiftId) {
+      await prisma.shift_assignments.create({
+        data: {
+          id: `sa-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          employeeId: newEmp.id,
+          shiftId: data.shiftId,
+          effectiveFrom: new Date(),
+        },
+      }).catch(() => {});
+    }
+
     return {
       id: newEmp.id,
       userId: newEmp.id,
@@ -603,6 +623,23 @@ export class EmployeeService {
         managers: true,
       },
     });
+
+    if (updates.shiftId !== undefined) {
+      await prisma.shift_assignments.deleteMany({
+        where: { employeeId: id },
+      }).catch(() => {});
+
+      if (updates.shiftId) {
+        await prisma.shift_assignments.create({
+          data: {
+            id: `sa-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            employeeId: id,
+            shiftId: updates.shiftId,
+            effectiveFrom: new Date(),
+          },
+        }).catch(() => {});
+      }
+    }
 
     return {
       id: updated.id,

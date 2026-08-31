@@ -1,4 +1,5 @@
 import { UnauthorizedError, ForbiddenError, TenantSecurityError } from "../errors";
+import crypto from "crypto";
 
 export type RoleType = "SUPER_ADMIN" | "ORG_ADMIN" | "MANAGER" | "EMPLOYEE";
 
@@ -11,54 +12,54 @@ export interface AuthSession {
   employeeId?: string | null;
 }
 
-// User session directory for token lookup
-const tokenRegistry: Record<string, AuthSession> = {
-  "super-admin-token": {
-    userId: "user-super-1",
-    email: "superadmin@erp.com",
-    fullName: "Super Admin",
-    role: "SUPER_ADMIN",
-    organizationId: null,
-  },
-  "admin-token": {
-    userId: "user-org-1",
-    email: "sarah.admin@vertextech.io",
-    fullName: "Sarah Rahman",
-    role: "ORG_ADMIN",
-    organizationId: "org-1",
-  },
-  "admin-b-token": {
-    userId: "user-org-2",
-    email: "admin@bengaltextiles.com",
-    fullName: "Kamal Hossain",
-    role: "ORG_ADMIN",
-    organizationId: "org-2",
-  },
-  "manager-token": {
-    userId: "user-mgr-1",
-    email: "tanvir.mgr@vertextech.io",
-    fullName: "Tanvir Ahmed",
-    role: "MANAGER",
-    organizationId: "org-1",
-    employeeId: "EMP-MGR01",
-  },
-  "employee-token": {
-    userId: "user-emp-1",
-    email: "arif.c@vertextech.io",
-    fullName: "Arif Chowdhury",
-    role: "EMPLOYEE",
-    organizationId: "org-1",
-    employeeId: "EMP-1042",
-  },
-  "employee-b-token": {
-    userId: "user-emp-b1",
-    email: "rahim.b@bengaltextiles.com",
-    fullName: "Abdur Rahim",
-    role: "EMPLOYEE",
-    organizationId: "org-2",
-    employeeId: "EMP-B01",
-  },
-};
+const JWT_SECRET = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || "smart-attendance-production-secret-key-2026";
+
+/**
+ * Creates a cryptographically signed, stateless session token
+ * that survives server restarts and multi-instance scaling.
+ */
+export function signSessionToken(session: AuthSession): string {
+  const payload = JSON.stringify({
+    ...session,
+    exp: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days validity
+  });
+  const encodedPayload = Buffer.from(payload, "utf8").toString("base64url");
+  const signature = crypto.createHmac("sha256", JWT_SECRET).update(encodedPayload).digest("base64url");
+  return `sat_${encodedPayload}.${signature}`;
+}
+
+/**
+ * Cryptographically verifies and extracts session payload from signed token
+ */
+export function verifySessionToken(token: string): AuthSession | null {
+  if (!token || typeof token !== "string" || !token.startsWith("sat_")) return null;
+  const raw = token.substring(4);
+  const dotIdx = raw.lastIndexOf(".");
+  if (dotIdx === -1) return null;
+  const encodedPayload = raw.substring(0, dotIdx);
+  const signature = raw.substring(dotIdx + 1);
+
+  const expectedSignature = crypto.createHmac("sha256", JWT_SECRET).update(encodedPayload).digest("base64url");
+  if (signature !== expectedSignature) return null;
+
+  try {
+    const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return {
+      userId: payload.userId,
+      email: payload.email,
+      fullName: payload.fullName,
+      role: payload.role,
+      organizationId: payload.organizationId || null,
+      employeeId: payload.employeeId || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// In-Memory Fast Lookup Registry for active processes
+const tokenRegistry: Record<string, AuthSession> = {};
 
 export function registerSessionToken(token: string, session: AuthSession) {
   tokenRegistry[token] = session;
@@ -76,20 +77,45 @@ export function getTenantContext(request: Request): AuthSession | null {
   const headerEmpId = request.headers.get("x-employee-id");
 
   const authHeader = request.headers.get("authorization") || request.headers.get("Authorization");
+  const cookieHeader = request.headers.get("cookie") || "";
   
+  // Extract token from Authorization header or Cookie
+  let token: string | null = null;
   if (authHeader && authHeader.startsWith("Bearer ")) {
-    const token = authHeader.substring(7).trim();
-    
-    // 1. Direct registry match
+    token = authHeader.substring(7).trim();
+  } else {
+    const authCookie = cookieHeader
+      .split(";")
+      .map((c) => c.trim())
+      .find((c) => c.startsWith("auth_session="));
+    if (authCookie) {
+      token = authCookie.split("=")[1]?.trim() || null;
+    }
+  }
+
+  // 1. Verify Signed Stateless Token first (Production-Grade)
+  if (token) {
+    const signedSession = verifySessionToken(token);
+    if (signedSession) {
+      return {
+        ...signedSession,
+        ...(headerOrgId && signedSession.role !== "SUPER_ADMIN" ? { organizationId: headerOrgId } : {}),
+        ...(headerEmpId ? { employeeId: headerEmpId } : {}),
+        ...(headerEmail ? { email: headerEmail } : {}),
+      };
+    }
+
+    // 2. Direct in-memory registry match
     if (tokenRegistry[token]) {
       const reg = tokenRegistry[token];
       return {
         ...reg,
         ...(headerOrgId && reg.role !== "SUPER_ADMIN" ? { organizationId: headerOrgId } : {}),
+        ...(headerEmpId ? { employeeId: headerEmpId } : {}),
       };
     }
 
-    // 2. Dynamic session token format: session_user-xxx_timestamp
+    // 3. Dynamic session token format: session_user-xxx_timestamp
     if (token.startsWith("session_")) {
       const parts = token.split("_");
       const userId = parts[1] || headerUserId || "user-org";
@@ -101,72 +127,51 @@ export function getTenantContext(request: Request): AuthSession | null {
         email: headerEmail || (isSuper ? "superadmin@erp.com" : "admin@company.com"),
         fullName: headerName || (isSuper ? "Super Admin" : "Organization Admin"),
         role: resolvedRole,
-        organizationId: isSuper ? null : (headerOrgId || "org-1"),
+        organizationId: isSuper ? null : (headerOrgId || null),
         employeeId: headerEmpId || null,
       };
     }
-
-    if (token.toLowerCase().includes("superadmin") || token.toLowerCase().includes("super_admin")) {
-      return tokenRegistry["super-admin-token"];
-    }
-    if (token.toLowerCase().includes("orgadmin") || token.toLowerCase().includes("admin_a")) {
-      return {
-        ...tokenRegistry["admin-token"],
-        ...(headerOrgId ? { organizationId: headerOrgId } : {}),
-      };
-    }
-    if (token.toLowerCase().includes("manager")) {
-      return {
-        ...tokenRegistry["manager-token"],
-        ...(headerOrgId ? { organizationId: headerOrgId } : {}),
-      };
-    }
-    if (token.toLowerCase().includes("employee")) {
-      return {
-        ...tokenRegistry["employee-token"],
-        ...(headerOrgId ? { organizationId: headerOrgId } : {}),
-      };
-    }
   }
 
-  // Header overrides (for API calls or backend internal requests)
-  if (headerUserId) {
+  // 4. Header overrides (for API calls or mobile app requests)
+  if (headerUserId || headerEmail || headerEmpId) {
+    const isSuper = headerRole === "SUPER_ADMIN";
     return {
-      userId: headerUserId,
+      userId: headerUserId || "user-emp",
       email: headerEmail || "user@erp.com",
       fullName: headerName || "Authenticated User",
-      role: headerRole || "ORG_ADMIN",
-      organizationId: headerRole === "SUPER_ADMIN" ? null : (headerOrgId || "org-1"),
-      employeeId: headerEmpId || "EMP-1042",
+      role: headerRole || "EMPLOYEE",
+      organizationId: isSuper ? null : (headerOrgId || null),
+      employeeId: headerEmpId || null,
     };
   }
 
-  // Cookie evaluation
-  const cookieHeader = request.headers.get("cookie") || "";
-  const authCookie = cookieHeader
-    .split(";")
-    .map((c) => c.trim())
-    .find((c) => c.startsWith("auth_session="));
-  
+  // 5. Cookie evaluation fallback
   const roleCookie = cookieHeader
     .split(";")
     .map((c) => c.trim())
     .find((c) => c.startsWith("user_role="));
 
-  if (authCookie || roleCookie) {
-    const roleValue = (roleCookie ? roleCookie.split("=")[1] : "ORG_ADMIN") as RoleType;
-
-    if (roleValue === "SUPER_ADMIN") return tokenRegistry["super-admin-token"];
-    if (roleValue === "MANAGER") return { ...tokenRegistry["manager-token"], ...(headerOrgId ? { organizationId: headerOrgId } : {}) };
-    if (roleValue === "EMPLOYEE") return { ...tokenRegistry["employee-token"], ...(headerOrgId ? { organizationId: headerOrgId } : {}) };
-    return { ...tokenRegistry["admin-token"], ...(headerOrgId ? { organizationId: headerOrgId } : {}) };
+  if (roleCookie) {
+    const roleValue = (roleCookie.split("=")[1] || "ORG_ADMIN") as RoleType;
+    return {
+      userId: "user-session",
+      email: "admin@company.com",
+      fullName: "Admin",
+      role: roleValue,
+      organizationId: headerOrgId || null,
+    };
   }
 
   return {
-    ...tokenRegistry["admin-token"],
-    ...(headerOrgId ? { organizationId: headerOrgId } : {}),
+    userId: "user-default",
+    email: "admin@company.com",
+    fullName: "Admin",
+    role: "ORG_ADMIN",
+    organizationId: headerOrgId || null,
   };
 }
+
 
 /**
  * Enforces authenticated session

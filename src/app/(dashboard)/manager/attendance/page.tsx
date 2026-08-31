@@ -20,9 +20,11 @@ import {
     RefreshCw,
     AlertCircle,
     UserCheck,
-    Sparkles
+    Sparkles,
+    LogIn
 } from "lucide-react";
 import { api } from "@/lib/api-client";
+import WebPunchModal from "../../organizationadmin/Components/Attendance/WebPunchModal";
 
 interface TeamAttendance {
     id: string;
@@ -46,6 +48,7 @@ export default function ManagerAttendancePage() {
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedStatus, setSelectedStatus] = useState("All");
+    const [isPunchModalOpen, setIsPunchModalOpen] = useState(false);
 
     // Regularize modal
     const [selectedRecord, setSelectedRecord] = useState<TeamAttendance | null>(null);
@@ -294,6 +297,14 @@ export default function ManagerAttendancePage() {
 
                 <div className="flex items-center gap-3 flex-wrap">
                     <button
+                        onClick={() => setIsPunchModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-[#00B050] hover:bg-[#009b46] text-white rounded-xl text-xs font-extrabold shadow-md shadow-[#00B050]/20 transition-all cursor-pointer active:scale-95"
+                    >
+                        <LogIn className="w-4 h-4" />
+                        <span>Web Punch In / Out</span>
+                    </button>
+
+                    <button
                         onClick={() => fetchAttendance(true)}
                         disabled={refreshing}
                         className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 text-neutral-700 transition-all cursor-pointer disabled:opacity-50"
@@ -307,7 +318,7 @@ export default function ManagerAttendancePage() {
                         onClick={() => {
                             if (attendance.length === 0) return;
                             const csvContent = "data:text/csv;charset=utf-8," + 
-                                ["Date,Employee,ID,Designation,CheckIn,CheckOut,Status,AI Confidence,Location", 
+                                ["Date,Employee,ID,Designation,PunchIn,PunchOut,Status,AI Confidence,Location", 
                                  ...attendance.map(a => `"${a.date}","${a.employeeName}","${a.employeeId}","${a.designation}","${a.checkInTime}","${a.checkOutTime || ""}","${a.status}","${a.faceConfidence}%","${a.gpsStatus}"`)
                                 ].join("\n");
                             const encodedUri = encodeURI(csvContent);
@@ -349,7 +360,7 @@ export default function ManagerAttendancePage() {
                 <div className="bg-white p-5 rounded-2xl border border-neutral-200/80 shadow-xs">
                     <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Not Punched / Absent</p>
                     <h3 className="text-2xl font-black text-rose-600 mt-1">{absentCount} Staff</h3>
-                    <p className="text-[11px] text-neutral-400 mt-0.5">No punch log recorded</p>
+                    <p className="text-[11px] text-neutral-400 mt-0.5">Unrecorded workforce</p>
                 </div>
             </div>
 
@@ -402,8 +413,8 @@ export default function ManagerAttendancePage() {
                             <thead className="bg-neutral-50/80 border-b border-neutral-200 text-neutral-500 font-bold uppercase tracking-wider">
                                 <tr>
                                     <th className="px-6 py-4">Employee</th>
-                                    <th className="px-6 py-4">Check-In</th>
-                                    <th className="px-6 py-4">Check-Out</th>
+                                    <th className="px-6 py-4">Punch In</th>
+                                    <th className="px-6 py-4">Punch Out</th>
                                     <th className="px-6 py-4">AI Face Match</th>
                                     <th className="px-6 py-4">GPS Geofence Status</th>
                                     <th className="px-6 py-4">Status</th>
@@ -575,6 +586,13 @@ export default function ManagerAttendancePage() {
                     </div>
                 </div>
             )}
+
+            {/* Web Punch Terminal Modal */}
+            <WebPunchModal
+                isOpen={isPunchModalOpen}
+                onClose={() => setIsPunchModalOpen(false)}
+                onPunchSuccess={() => fetchAttendance(true)}
+            />
         </div>
     );
 }

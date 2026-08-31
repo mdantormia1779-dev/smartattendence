@@ -3,12 +3,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import gsap from "gsap";
-import { Plus, CheckCircle2, RefreshCw } from "lucide-react";
+import { Plus, CheckCircle2, RefreshCw, LogIn } from "lucide-react";
 import StatCards from "./Components/HomePage/StatCards";
 import BarChartSection from "./Components/HomePage/BarChartSection";
 import PieChartSection from "./Components/HomePage/PieChartSection";
 import LiveAttendanceTable from "./Components/HomePage/LiveAttendanceTable";
 import SideWidgets from "./Components/HomePage/SideWidgets";
+import WebPunchModal from "./Components/Attendance/WebPunchModal";
 import { api } from "@/lib/api-client";
 
 export default function OrganizationDashboardPage() {
@@ -18,6 +19,7 @@ export default function OrganizationDashboardPage() {
     const [companyName, setCompanyName] = useState("Organization");
     const [currentDateStr, setCurrentDateStr] = useState("");
     const [refreshKey, setRefreshKey] = useState(0);
+    const [isPunchModalOpen, setIsPunchModalOpen] = useState(false);
 
     const loadProfileAndOrg = async () => {
         let foundName = "";
@@ -126,7 +128,14 @@ export default function OrganizationDashboardPage() {
                         Live operations & attendance overview for <strong className="text-neutral-700">{companyName}</strong> — {currentDateStr || "Today"}
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                    <button 
+                        onClick={() => setIsPunchModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold bg-[#00B050] hover:bg-[#009b46] text-white shadow-md shadow-[#00B050]/20 transition-all cursor-pointer active:scale-95"
+                    >
+                        <LogIn className="w-4 h-4" />
+                        Web Punch In / Out
+                    </button>
                     <button 
                         onClick={handleRefresh}
                         className="p-2.5 rounded-xl border border-neutral-200 hover:bg-neutral-50 text-neutral-600 transition-colors cursor-pointer"
@@ -143,9 +152,9 @@ export default function OrganizationDashboardPage() {
                     </button>
                     <button 
                         onClick={() => router.push("/organizationadmin/attendance")}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-[#10b981] text-white shadow-xs hover:bg-emerald-600 transition-colors cursor-pointer active:scale-95"
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-neutral-900 text-white shadow-xs hover:bg-neutral-800 transition-colors cursor-pointer active:scale-95"
                     >
-                        <CheckCircle2 className="w-4 h-4" />
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                         Attendance Console
                     </button>
                 </div>
@@ -165,6 +174,13 @@ export default function OrganizationDashboardPage() {
                 <LiveAttendanceTable key={`logs-${refreshKey}`} />
                 <SideWidgets key={`widgets-${refreshKey}`} />
             </div>
+
+            {/* Web Punch Terminal Modal */}
+            <WebPunchModal
+                isOpen={isPunchModalOpen}
+                onClose={() => setIsPunchModalOpen(false)}
+                onPunchSuccess={handleRefresh}
+            />
         </div>
     );
 }

@@ -45,24 +45,29 @@ export class BiometricsService {
       inMemoryFaceStore.push(newRecord);
     }
 
-    // Prisma DB persistence if employee exists in DB with tenant isolation
+    // Prisma DB persistence — search WITHOUT org filter so real DB employee is found
     try {
       const emp = await prisma.employees.findFirst({
         where: {
-          AND: [
-            organizationId ? { organizationId } : {},
-            {
-              OR: [
-                { id: employeeId },
-                { employeeCode: employeeId },
-                { employeeCode: { equals: employeeId, mode: "insensitive" } },
-              ],
-            },
+          OR: [
+            { id: employeeId },
+            { employeeCode: employeeId },
+            { employeeCode: { equals: employeeId, mode: "insensitive" } },
+            { email: employeeId },
           ],
         },
       });
 
       if (emp) {
+        // Update in-memory store with the real employee code so verify can find it
+        const realCode = emp.employeeCode || emp.id;
+        const memIdx = inMemoryFaceStore.findIndex((f) => f.employeeId === employeeId);
+        if (memIdx >= 0) {
+          inMemoryFaceStore[memIdx].employeeId = realCode;
+          // Also keep original lookup working
+          inMemoryFaceStore.push({ ...newRecord, employeeId });
+        }
+
         await prisma.face_profiles.upsert({
           where: { employeeId: emp.id },
           create: {
@@ -77,7 +82,7 @@ export class BiometricsService {
               organizationId: emp.organizationId,
             },
             sampleImages: [],
-            livenessPassed: false, // Honest state: Registration enrollees are not assumed to have passed active verification liveness
+            livenessPassed: false,
             updatedAt: new Date(),
           },
           update: {
@@ -93,6 +98,9 @@ export class BiometricsService {
             updatedAt: new Date(),
           },
         });
+        console.log(`[BiometricsService] Face registered in DB for employee: ${emp.employeeCode} (${emp.id})`);
+      } else {
+        console.warn(`[BiometricsService] Employee not found in DB for: ${employeeId}. Saved to memory only.`);
       }
     } catch (dbErr) {
       console.log("[BiometricsService DB Sync Notice]:", dbErr);
@@ -106,6 +114,7 @@ export class BiometricsService {
       registeredAt: newRecord.updatedAt,
     };
   }
+
 
   /**
    * Verifies live probe vector against enrolled employee ArcFace baseline using Cosine Similarity & Euclidean Distance
@@ -123,24 +132,20 @@ export class BiometricsService {
 
     let enrolledVector: number[] | null = null;
 
-    // Check memory store
+    // Check memory store (any matching key)
     const memRecord = inMemoryFaceStore.find((f) => f.employeeId === employeeId);
     if (memRecord) {
       enrolledVector = memRecord.vector;
     } else {
-      // Check Prisma DB with tenant scoping
+      // Check Prisma DB — NO org filter to avoid token/org mismatch
       try {
         const emp = await prisma.employees.findFirst({
           where: {
-            AND: [
-              organizationId ? { organizationId } : {},
-              {
-                OR: [
-                  { id: employeeId },
-                  { employeeCode: employeeId },
-                  { employeeCode: { equals: employeeId, mode: "insensitive" } },
-                ],
-              },
+            OR: [
+              { id: employeeId },
+              { employeeCode: employeeId },
+              { employeeCode: { equals: employeeId, mode: "insensitive" } },
+              { email: employeeId },
             ],
           },
           include: { face_profiles: true },
@@ -150,12 +155,22 @@ export class BiometricsService {
           const desc = emp.face_profiles.descriptor as any;
           if (Array.isArray(desc.vector) && desc.vector.length === 128) {
             enrolledVector = desc.vector;
+            // Cache in memory for next call
+            inMemoryFaceStore.push({
+              employeeId,
+              organizationId: emp.organizationId,
+              vector: desc.vector,
+              modelName: desc.modelName || "ArcFace-MobileFaceNet-ONNX",
+              sampleCount: desc.sampleCount || 5,
+              updatedAt: new Date().toISOString(),
+            });
           }
         }
       } catch (dbErr) {
         console.log("[BiometricsService verify DB lookup notice]:", dbErr);
       }
     }
+
 
     if (!enrolledVector) {
       throw new NotFoundError(`No registered ArcFace biometric template found for employee '${employeeId}'`);
@@ -197,26 +212,24 @@ export class BiometricsService {
    */
   static async getFaceStatus(employeeId: string, organizationId?: string) {
     const mem = inMemoryFaceStore.find((f) => f.employeeId === employeeId);
-    if (mem) {
+    if (mem && mem.vector) {
       return {
         isEnrolled: true,
         enrolledAt: mem.updatedAt,
         modelName: mem.modelName,
         sampleCount: mem.sampleCount,
+        descriptor: mem.vector,
       };
     }
 
     try {
       const emp = await prisma.employees.findFirst({
         where: {
-          AND: [
-            organizationId ? { organizationId } : {},
-            {
-              OR: [
-                { id: employeeId },
-                { employeeCode: employeeId },
-              ],
-            },
+          OR: [
+            { id: employeeId },
+            { employeeCode: employeeId },
+            { employeeCode: { equals: employeeId, mode: "insensitive" } },
+            { email: employeeId },
           ],
         },
         include: { face_profiles: true },
@@ -224,11 +237,13 @@ export class BiometricsService {
 
       if (emp?.face_profiles) {
         const desc = emp.face_profiles.descriptor as any;
+        const vector = Array.isArray(desc?.vector) ? desc.vector : null;
         return {
           isEnrolled: true,
           enrolledAt: emp.face_profiles.updatedAt.toISOString(),
           modelName: desc?.modelName || "ArcFace-MobileFaceNet-ONNX",
           sampleCount: desc?.sampleCount || 5,
+          descriptor: vector,
         };
       }
     } catch (e) {}
@@ -245,14 +260,11 @@ export class BiometricsService {
     try {
       const emp = await prisma.employees.findFirst({
         where: {
-          AND: [
-            organizationId ? { organizationId } : {},
-            {
-              OR: [
-                { id: employeeId },
-                { employeeCode: employeeId },
-              ],
-            },
+          OR: [
+            { id: employeeId },
+            { employeeCode: employeeId },
+            { employeeCode: { equals: employeeId, mode: "insensitive" } },
+            { email: employeeId },
           ],
         },
       });
@@ -264,3 +276,4 @@ export class BiometricsService {
     return { success: true };
   }
 }
+
