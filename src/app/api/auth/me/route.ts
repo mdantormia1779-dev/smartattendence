@@ -3,6 +3,17 @@ import { requireAuth } from "@/server/authorization";
 import { handleApiError } from "@/server/errors";
 import { prisma } from "@/lib/prisma";
 
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, x-user-email, x-user-id, x-employee-id, x-organization-id",
+    },
+  });
+}
+
 export async function GET(request: Request) {
   try {
     const session = requireAuth(request);

@@ -28,6 +28,17 @@ function parseTimeToMinutes(timeStr: string): number {
   return hours * 60 + minutes;
 }
 
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, x-user-email, x-user-id, x-employee-id, x-organization-id",
+    },
+  });
+}
+
 export async function POST(request: Request) {
   try {
     const session = requireAuth(request);

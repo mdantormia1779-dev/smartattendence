@@ -25,7 +25,7 @@ const poolConfig: PoolConfig = {
   connectionString,
   max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 15000,
+  connectionTimeoutMillis: 8000,
   keepAlive: true,
   ...(isSslNeeded ? { ssl: { rejectUnauthorized: false } } : {}),
 };
@@ -40,9 +40,7 @@ export const prisma =
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.pool = pool;
-  globalForPrisma.prisma = prisma;
-}
+globalForPrisma.pool = pool;
+globalForPrisma.prisma = prisma;
 
 export default prisma;

@@ -5,6 +5,17 @@ import { prisma } from "@/lib/prisma";
 import { formatTimeInTimezone, getLocalDateString, getLocalDateObject } from "@/lib/datetime";
 import { AttendanceMethod } from "@prisma/client";
 
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, x-user-email, x-user-id, x-employee-id, x-organization-id",
+    },
+  });
+}
+
 export async function POST(request: Request) {
   try {
     const session = requireAuth(request);

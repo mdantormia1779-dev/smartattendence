@@ -63,12 +63,25 @@ export class AuthService {
     const normalizedEmail = email.trim().toLowerCase();
     let user = usersStore.find((u) => u.email.toLowerCase() === normalizedEmail);
 
-    // Always check/sync from database for most up-to-date credentials
+    // Always check/sync from database for most up-to-date credentials in parallel
     try {
-      const orgAdmin = await prisma.org_admins.findUnique({
-        where: { email: normalizedEmail },
-        include: { organizations: true },
-      });
+      const [orgAdmin, mgr, emp] = await Promise.all([
+        prisma.org_admins.findUnique({
+          where: { email: normalizedEmail },
+          include: { organizations: true },
+        }).catch(() => null),
+        prisma.managers.findFirst({
+          where: { email: normalizedEmail },
+          include: { organizations: true },
+        }).catch(() => null),
+        prisma.employees.findFirst({
+          where: { email: normalizedEmail },
+          include: {
+            organizations: true,
+            branches: true,
+          },
+        }).catch(() => null),
+      ]);
 
       if (orgAdmin) {
         if (user) {
@@ -88,72 +101,54 @@ export class AuthService {
           };
           usersStore.push(user);
         }
-      } else {
-        const mgr = await prisma.managers.findFirst({
-          where: { email: normalizedEmail },
-          include: { organizations: true },
-        });
-
-        if (mgr) {
-          if (user) {
-            user.passwordHash = mgr.password;
-            user.fullName = mgr.name;
-            user.organizationId = mgr.organizationId;
-            user.isActive = mgr.organizations?.status !== "SUSPENDED";
-          } else {
-            user = {
-              id: mgr.id,
-              email: mgr.email,
-              passwordHash: mgr.password,
-              fullName: mgr.name,
-              role: "MANAGER",
-              organizationId: mgr.organizationId,
-              isActive: mgr.organizations?.status !== "SUSPENDED",
-            };
-            usersStore.push(user);
-          }
+      } else if (mgr) {
+        if (user) {
+          user.passwordHash = mgr.password;
+          user.fullName = mgr.name;
+          user.organizationId = mgr.organizationId;
+          user.isActive = mgr.organizations?.status !== "SUSPENDED";
         } else {
-          const emp = await prisma.employees.findFirst({
-            where: { email: normalizedEmail },
-            include: {
-              organizations: true,
-              branches: true,
-            },
-          });
-
-          if (emp) {
-            if (user) {
-              user.id = emp.id;
-              user.employeeId = emp.employeeCode || emp.id;
-              user.passwordHash = emp.password;
-              user.fullName = emp.fullName;
-              user.organizationId = emp.organizationId;
-              user.isActive = emp.status !== "SUSPENDED" && emp.organizations?.status !== "SUSPENDED";
-              user.branchId = emp.branchId;
-              user.branchName = emp.branches?.name || undefined;
-              user.branchLatitude = emp.branches?.latitude ? Number(emp.branches.latitude) : undefined;
-              user.branchLongitude = emp.branches?.longitude ? Number(emp.branches.longitude) : undefined;
-              user.geofenceRadius = emp.branches?.geoFenceRadius || undefined;
-            } else {
-              user = {
-                id: emp.id,
-                employeeId: emp.employeeCode || emp.id,
-                email: emp.email,
-                passwordHash: emp.password,
-                fullName: emp.fullName,
-                role: "EMPLOYEE",
-                organizationId: emp.organizationId,
-                isActive: emp.status !== "SUSPENDED" && emp.organizations?.status !== "SUSPENDED",
-                branchId: emp.branchId,
-                branchName: emp.branches?.name || undefined,
-                branchLatitude: emp.branches?.latitude ? Number(emp.branches.latitude) : undefined,
-                branchLongitude: emp.branches?.longitude ? Number(emp.branches.longitude) : undefined,
-                geofenceRadius: emp.branches?.geoFenceRadius || undefined,
-              };
-              usersStore.push(user);
-            }
-          }
-
+          user = {
+            id: mgr.id,
+            email: mgr.email,
+            passwordHash: mgr.password,
+            fullName: mgr.name,
+            role: "MANAGER",
+            organizationId: mgr.organizationId,
+            isActive: mgr.organizations?.status !== "SUSPENDED",
+          };
+          usersStore.push(user);
+        }
+      } else if (emp) {
+        if (user) {
+          user.id = emp.id;
+          user.employeeId = emp.employeeCode || emp.id;
+          user.passwordHash = emp.password;
+          user.fullName = emp.fullName;
+          user.organizationId = emp.organizationId;
+          user.isActive = emp.status !== "SUSPENDED" && emp.organizations?.status !== "SUSPENDED";
+          user.branchId = emp.branchId;
+          user.branchName = emp.branches?.name || undefined;
+          user.branchLatitude = emp.branches?.latitude ? Number(emp.branches.latitude) : undefined;
+          user.branchLongitude = emp.branches?.longitude ? Number(emp.branches.longitude) : undefined;
+          user.geofenceRadius = emp.branches?.geoFenceRadius || undefined;
+        } else {
+          user = {
+            id: emp.id,
+            employeeId: emp.employeeCode || emp.id,
+            email: emp.email,
+            passwordHash: emp.password,
+            fullName: emp.fullName,
+            role: "EMPLOYEE",
+            organizationId: emp.organizationId,
+            isActive: emp.status !== "SUSPENDED" && emp.organizations?.status !== "SUSPENDED",
+            branchId: emp.branchId,
+            branchName: emp.branches?.name || undefined,
+            branchLatitude: emp.branches?.latitude ? Number(emp.branches.latitude) : undefined,
+            branchLongitude: emp.branches?.longitude ? Number(emp.branches.longitude) : undefined,
+            geofenceRadius: emp.branches?.geoFenceRadius || undefined,
+          };
+          usersStore.push(user);
         }
       }
     } catch (e) {
