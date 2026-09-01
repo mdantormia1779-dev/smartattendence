@@ -9,6 +9,17 @@ import { prisma } from "@/lib/prisma";
  * Returns the employee's assigned branch with admin-configured
  * latitude, longitude, geofenceRadius, and branch name from the database.
  */
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, x-user-email, x-user-id, x-employee-id, x-organization-id",
+    },
+  });
+}
+
 export async function GET(request: Request) {
   try {
     const session = requireAuth(request);

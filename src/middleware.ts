@@ -11,7 +11,28 @@ const ROLE_ROUTE_PERMISSIONS: Record<string, string> = {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Handle CORS Preflight for Mobile App & External Clients
+  if (request.method === "OPTIONS") {
+    return new NextResponse(null, {
+      status: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,OPTIONS,PATCH,DELETE,POST,PUT",
+        "Access-Control-Allow-Headers": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, x-user-email, x-user-id, x-employee-id, x-organization-id",
+        "Access-Control-Allow-Credentials": "true",
+      },
+    });
+  }
+
   const response = NextResponse.next();
+
+  // CORS headers for APIs
+  if (pathname.startsWith("/api")) {
+    response.headers.set("Access-Control-Allow-Origin", "*");
+    response.headers.set("Access-Control-Allow-Methods", "GET,OPTIONS,PATCH,DELETE,POST,PUT");
+    response.headers.set("Access-Control-Allow-Headers", "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, x-user-email, x-user-id, x-employee-id, x-organization-id");
+  }
 
   // 1. Set Enterprise Security Headers
   response.headers.set("X-Frame-Options", "DENY");
@@ -22,7 +43,7 @@ export function middleware(request: NextRequest) {
   // Skip static assets, APIs, and public pages
   if (
     pathname.startsWith("/_next") ||
-    pathname.startsWith("/api/public") ||
+    pathname.startsWith("/api") ||
     pathname === "/" ||
     pathname === "/login" ||
     pathname === "/signup" ||
