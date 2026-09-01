@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/server/authorization";
 import { handleApiError } from "@/server/errors";
 import { prisma } from "@/lib/prisma";
+import { formatTimeInTimezone, getLocalDateObject } from "@/lib/datetime";
 
 export async function GET(request: Request) {
   try {
@@ -36,8 +37,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, data: null });
     }
 
+    const orgRecord = employee?.organizationId
+      ? await prisma.organizations.findUnique({
+          where: { id: employee.organizationId },
+          select: { timezone: true },
+        }).catch(() => null)
+      : null;
+    const orgTimezone = orgRecord?.timezone || "Asia/Dhaka";
+
     const now = new Date();
-    const todayDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+    const todayDate = getLocalDateObject(now, orgTimezone);
     const searchStart = new Date(todayDate.getTime() - 24 * 60 * 60 * 1000);
     const searchEnd = new Date(todayDate.getTime() + 24 * 60 * 60 * 1000);
 
@@ -66,11 +75,11 @@ export async function GET(request: Request) {
         hasPunchedIn: Boolean(punch.checkInTime),
         hasPunchedOut: Boolean(punch.checkOutTime),
         checkInTime: punch.checkInTime
-          ? new Date(punch.checkInTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+          ? formatTimeInTimezone(punch.checkInTime, orgTimezone)
           : null,
         checkInTimestamp: punch.checkInTime ? new Date(punch.checkInTime).getTime() : null,
         checkOutTime: punch.checkOutTime
-          ? new Date(punch.checkOutTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+          ? formatTimeInTimezone(punch.checkOutTime, orgTimezone)
           : null,
         checkOutTimestamp: punch.checkOutTime ? new Date(punch.checkOutTime).getTime() : null,
         status: punch.status,

@@ -1,10 +1,12 @@
 import { calculateHaversineDistance } from "@/lib/geo-verification";
+import { formatTimeInTimezone, getTimeInTimezone, cleanTimezone, getLocalDateString, getLocalDateObject } from "@/lib/datetime";
 import { ValidationError, NotFoundError } from "../errors";
 import { BranchService } from "./branch.service";
 import { EmployeeService } from "./employee.service";
 import { BiometricsService } from "./biometrics.service";
 import { prisma } from "@/lib/prisma";
 import { AttendanceMethod, AttendanceStatus } from "@prisma/client";
+
 
 export interface AttendanceEntry {
   id: string;
@@ -64,9 +66,14 @@ export class AttendanceService {
     limit?: number;
   }): Promise<AttendanceEntry[]> {
     const validOrgId = await resolveOrganizationId(organizationId);
+    const orgRecord = await prisma.organizations.findUnique({
+      where: { id: validOrgId },
+      select: { timezone: true },
+    }).catch(() => null);
+    const orgTimezone = orgRecord?.timezone || "Asia/Dhaka";
 
     // 1. Target date bounds with timezone buffer
-    const targetDateStr = query.date || new Date().toISOString().split("T")[0];
+    const targetDateStr = query.date || getLocalDateString(new Date(), orgTimezone);
     const [y, m, d] = targetDateStr.split("-").map(Number);
     const dStart = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
     const searchStart = new Date(dStart.getTime() - 24 * 60 * 60 * 1000);
@@ -147,7 +154,8 @@ export class AttendanceService {
         // Employee punched attendance
         let statusStr: AttendanceEntry["status"] = "PRESENT";
         const checkInDate = att.checkInTime ? new Date(att.checkInTime) : null;
-        const isLateByHour = checkInDate ? (checkInDate.getHours() > 9 || (checkInDate.getHours() === 9 && checkInDate.getMinutes() > 15)) : false;
+        const localTimeInfo = checkInDate ? getTimeInTimezone(checkInDate, orgTimezone) : null;
+        const isLateByHour = localTimeInfo ? (localTimeInfo.hour > 9 || (localTimeInfo.hour === 9 && localTimeInfo.minute > 15)) : false;
 
         if (att.status === AttendanceStatus.LATE || att.lateMinutes > 0 || isLateByHour) statusStr = "LATE";
         else if (att.status === AttendanceStatus.HALF_DAY) statusStr = "HALF_DAY";
@@ -160,11 +168,13 @@ export class AttendanceService {
         else if (att.checkInMethod === AttendanceMethod.MANUAL) methodStr = "MANUAL_OVERRIDE";
 
         const timeFormatted = att.checkInTime
-          ? new Date(att.checkInTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+          ? formatTimeInTimezone(att.checkInTime, orgTimezone)
           : "--";
         const outFormatted = att.checkOutTime
-          ? new Date(att.checkOutTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+          ? formatTimeInTimezone(att.checkOutTime, orgTimezone)
           : null;
+
+        const recordDateStr = att.date instanceof Date ? getLocalDateString(att.date, orgTimezone) : targetDateStr;
 
         results.push({
           id: att.id,
@@ -177,7 +187,7 @@ export class AttendanceService {
           branchId: emp.branchId || undefined,
           departmentId: emp.departmentId || undefined,
           shift: shiftInfo,
-          date: targetDateStr,
+          date: recordDateStr,
           checkInTime: timeFormatted,
           checkOutTime: outFormatted,
           status: statusStr,
@@ -265,10 +275,15 @@ export class AttendanceService {
    */
   static async getTodayStatus(organizationId: string, employeeId: string) {
     const validOrgId = await resolveOrganizationId(organizationId);
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
+    const orgRecord = await prisma.organizations.findUnique({
+      where: { id: validOrgId },
+      select: { timezone: true },
+    }).catch(() => null);
+    const orgTimezone = orgRecord?.timezone || "Asia/Dhaka";
+
+    const todayDate = getLocalDateObject(new Date(), orgTimezone);
+    const searchStart = new Date(todayDate.getTime() - 24 * 60 * 60 * 1000);
+    const searchEnd = new Date(todayDate.getTime() + 24 * 60 * 60 * 1000);
 
     const punch = await prisma.attendance.findFirst({
       where: {
@@ -276,13 +291,14 @@ export class AttendanceService {
           organizationId: validOrgId,
           OR: [{ id: employeeId }, { employeeCode: employeeId }],
         },
-        date: { gte: todayStart, lte: todayEnd },
+        date: { gte: searchStart, lte: searchEnd },
       },
       include: {
         employees: {
           include: { branches: true, departments: true },
         },
       },
+      orderBy: { updatedAt: "desc" },
     });
 
     if (!punch) return null;
@@ -294,9 +310,9 @@ export class AttendanceService {
       employeeName: punch.employees.fullName,
       department: punch.employees.departments?.name || "General",
       branch: punch.employees.branches?.name || "Main Branch",
-      date: punch.date.toISOString().split("T")[0],
+      date: getLocalDateString(punch.date, orgTimezone),
       checkInTime: punch.checkInTime
-        ? new Date(punch.checkInTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+        ? formatTimeInTimezone(punch.checkInTime, orgTimezone)
         : "--",
       status: punch.status,
       verificationMethod: punch.checkInMethod,
@@ -316,6 +332,12 @@ export class AttendanceService {
     faceVector?: number[];
   }) {
     const validOrgId = await resolveOrganizationId(data.organizationId);
+    const orgRecord = await prisma.organizations.findUnique({
+      where: { id: validOrgId },
+      select: { timezone: true },
+    }).catch(() => null);
+    const orgTimezone = orgRecord?.timezone || "Asia/Dhaka";
+
     const employee = await EmployeeService.getEmployeeById(data.employeeId, validOrgId);
     const branch = await BranchService.getBranchById(employee.branchId, validOrgId);
 
@@ -348,21 +370,19 @@ export class AttendanceService {
       }
     }
 
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
+    const now = new Date();
+    const todayDate = getLocalDateObject(now, orgTimezone);
+    const todayDateStr = getLocalDateString(now, orgTimezone);
 
     const existing = await prisma.attendance.findFirst({
       where: {
         employeeId: employee.id,
-        date: { gte: todayStart, lte: todayEnd },
+        date: todayDate,
       },
+      orderBy: { updatedAt: "desc" },
     }).catch(() => null);
 
-    const now = new Date();
-
-    // Dynamic Shift & Grace Period Evaluation
+    // Dynamic Shift & Grace Period Evaluation with Org Timezone
     let shiftStartHour = 9;
     let shiftStartMinute = 0;
     let graceMinutes = 15;
@@ -385,7 +405,8 @@ export class AttendanceService {
       // Fallback to standard 09:00 AM + 15m grace
     }
 
-    const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
+    const localNow = getTimeInTimezone(now, orgTimezone);
+    const currentTotalMinutes = localNow.totalMinutes;
     const shiftTotalMinutes = shiftStartHour * 60 + shiftStartMinute;
     const graceCutoff = shiftTotalMinutes + graceMinutes;
 
@@ -421,7 +442,7 @@ export class AttendanceService {
           data: {
             id: `att-${Date.now()}`,
             employeeId: employee.id,
-            date: now,
+            date: todayDate,
             checkInTime: now,
             checkInLat: data.latitude,
             checkInLng: data.longitude,
@@ -446,8 +467,8 @@ export class AttendanceService {
         employeeName: record.employees.fullName,
         department: record.employees.departments?.name || "General",
         branch: record.employees.branches?.name || "Main Branch",
-        date: record.date.toISOString().split("T")[0],
-        checkInTime: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+        date: todayDateStr,
+        checkInTime: formatTimeInTimezone(now, orgTimezone),
         status: isLate ? "LATE" : "PRESENT",
         verificationMethod: data.verificationMethod || "FACE_RECOGNITION",
         faceConfidence: faceScore,
@@ -464,8 +485,8 @@ export class AttendanceService {
         employeeName: employee.name || "Arif Chowdhury",
         department: employee.department || "Engineering & IT",
         branch: employee.branch || "Head Office – Dhaka",
-        date: now.toISOString().split("T")[0],
-        checkInTime: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+        date: todayDateStr,
+        checkInTime: formatTimeInTimezone(now, orgTimezone),
         status: isLate ? "LATE" : "PRESENT",
         verificationMethod: data.verificationMethod || "FACE_RECOGNITION",
         faceConfidence: faceScore,
@@ -487,20 +508,23 @@ export class AttendanceService {
     longitude: number;
   }) {
     const validOrgId = await resolveOrganizationId(data.organizationId);
+    const orgRecord = await prisma.organizations.findUnique({
+      where: { id: validOrgId },
+      select: { timezone: true },
+    }).catch(() => null);
+    const orgTimezone = orgRecord?.timezone || "Asia/Dhaka";
+
     const employee = await EmployeeService.getEmployeeById(data.employeeId, validOrgId);
     const now = new Date();
+    const todayDate = getLocalDateObject(now, orgTimezone);
 
     try {
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date();
-      todayEnd.setHours(23, 59, 59, 999);
-
       const record = await prisma.attendance.findFirst({
         where: {
           employeeId: employee.id,
-          date: { gte: todayStart, lte: todayEnd },
+          date: todayDate,
         },
+        orderBy: { updatedAt: "desc" },
       });
 
       if (record) {
@@ -516,7 +540,7 @@ export class AttendanceService {
         return {
           id: updated.id,
           employeeId: employee.employeeId,
-          checkOutTime: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+          checkOutTime: formatTimeInTimezone(now, orgTimezone),
         };
       }
     } catch (dbErr) {}
@@ -524,7 +548,7 @@ export class AttendanceService {
     return {
       id: `att-out-${Date.now()}`,
       employeeId: employee.employeeId || "EMP-1042",
-      checkOutTime: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+      checkOutTime: formatTimeInTimezone(now, orgTimezone),
     };
   }
 

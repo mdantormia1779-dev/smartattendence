@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/server/authorization";
 import { handleApiError } from "@/server/errors";
 import { prisma } from "@/lib/prisma";
+import { formatTimeInTimezone, getLocalDateString, getLocalDateObject } from "@/lib/datetime";
 import { AttendanceMethod } from "@prisma/client";
 
 export async function POST(request: Request) {
@@ -88,12 +89,23 @@ export async function POST(request: Request) {
       MANUAL_OVERRIDE:  AttendanceMethod.MANUAL,
     };
     const methodEnum = methodMap[verificationMethod] ?? AttendanceMethod.GPS;
+    const orgRecord = employee?.organizationId
+      ? await prisma.organizations.findUnique({
+          where: { id: employee.organizationId },
+          select: { timezone: true },
+        }).catch(() => null)
+      : null;
+    const orgTimezone = orgRecord?.timezone || "Asia/Dhaka";
 
-    const todayDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+    const todayDate = getLocalDateObject(now, orgTimezone);
+    const todayDateStr = getLocalDateString(now, orgTimezone);
 
     try {
       const existing = await prisma.attendance.findFirst({
-        where: { employeeId: employee.id },
+        where: { 
+          employeeId: employee.id,
+          date: todayDate,
+        },
         orderBy: { updatedAt: "desc" },
       });
 
@@ -135,7 +147,10 @@ export async function POST(request: Request) {
     } catch (dbErr: any) {
       console.warn("[check-out] Upsert failed, trying direct update:", dbErr?.message);
       const existing = await prisma.attendance.findFirst({
-        where: { employeeId: employee.id },
+        where: { 
+          employeeId: employee.id,
+          date: todayDate,
+        },
         orderBy: { createdAt: "desc" },
       });
       if (existing) {
@@ -156,8 +171,8 @@ export async function POST(request: Request) {
         id: record?.id ?? `att-out-${Date.now()}`,
         employeeId: employee?.employeeCode ?? employeeCode ?? "EMP-0001",
         employeeName: employee?.fullName ?? "Employee",
-        date: now.toISOString().split("T")[0],
-        checkOutTime: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+        date: todayDateStr,
+        checkOutTime: formatTimeInTimezone(now, orgTimezone),
         workedHours,
         status: record?.status || "PRESENT",
       },

@@ -25,6 +25,7 @@ import {
     CheckCircle
 } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { formatAttendanceTime } from "@/lib/datetime";
 
 interface ActivityLog {
     id: string;
@@ -135,12 +136,7 @@ export default function ManagerDashboardPage() {
                 const activePunches = allLogs.filter((log: any) => log.checkInTime || log.status === "PRESENT" || log.status === "LATE");
 
                 const formatted: ActivityLog[] = activePunches.slice(0, 10).map((log: any) => {
-                    let formattedTime = "—";
-                    if (log.checkInTime) {
-                        formattedTime = log.checkInTime.includes("T")
-                            ? new Date(log.checkInTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                            : log.checkInTime;
-                    }
+                    const formattedTime = log.checkInTime ? formatAttendanceTime(log.checkInTime) : "—";
 
                     let methodText = "Verified";
                     if (log.verificationMethod === "FACE_RECOGNITION") methodText = "Face AI Biometric";

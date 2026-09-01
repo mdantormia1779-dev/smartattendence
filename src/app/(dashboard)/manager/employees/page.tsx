@@ -22,6 +22,7 @@ import {
     MapPin
 } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { formatAttendanceTime } from "@/lib/datetime";
 
 interface TeamMember {
     id: string;
@@ -162,8 +163,8 @@ function ManagerTeamContent() {
                         status = "On Leave";
                     } else if (log) {
                         const rawStatus = (log.status || "").toUpperCase();
-                        checkIn = log.checkInTime && log.checkInTime !== "-" && log.checkInTime !== "--" ? log.checkInTime : null;
-                        checkOut = log.checkOutTime && log.checkOutTime !== "-" ? log.checkOutTime : null;
+                        checkIn = log.checkInTime && log.checkInTime !== "-" && log.checkInTime !== "--" ? formatAttendanceTime(log.checkInTime) : null;
+                        checkOut = log.checkOutTime && log.checkOutTime !== "-" && log.checkOutTime !== "--" ? formatAttendanceTime(log.checkOutTime) : null;
 
                         if (rawStatus === "LATE") {
                             status = "Late";
