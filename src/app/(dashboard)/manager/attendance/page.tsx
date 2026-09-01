@@ -24,6 +24,7 @@ import {
     LogIn
 } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { formatAttendanceTime, formatReadableDate, formatLongDate } from "@/lib/datetime";
 import WebPunchModal from "../../organizationadmin/Components/Attendance/WebPunchModal";
 
 interface TeamAttendance {
@@ -154,8 +155,8 @@ export default function ManagerAttendancePage() {
                         designation: emp.designation || emp.role || item.department || "Team Staff",
                         department: emp.department?.name || emp.departmentName || emp.department || "Operations",
                         branch: emp.branch?.name || emp.branchName || emp.branch || "Main Branch",
-                        checkInTime: item.checkInTime || item.punchIn || "—",
-                        checkOutTime: item.checkOutTime || item.punchOut || null,
+                        checkInTime: formatAttendanceTime(item.checkInTime || item.punchIn),
+                        checkOutTime: formatAttendanceTime(item.checkOutTime || item.punchOut) === "--" ? null : formatAttendanceTime(item.checkOutTime || item.punchOut),
                         status: formattedStatus,
                         faceConfidence: rawConfidence,
                         gpsStatus: item.isGeofenceVerified 
@@ -290,9 +291,12 @@ export default function ManagerAttendancePage() {
                         <ScanFace className="w-6 h-6 text-[#00B050]" />
                         Team Live Attendance Feed
                     </h1>
-                    <p className="text-xs text-neutral-500 mt-1">
-                        Live real-time check-in logs, AI facial verification scores, GPS geofencing & attendance regularization
-                    </p>
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 text-emerald-800 text-xs font-bold border border-emerald-200/70">
+                            <Calendar className="w-3.5 h-3.5 text-[#00B050]" />
+                            <span>Today's Date: <strong className="text-emerald-950 font-extrabold">{formatLongDate(new Date())}</strong></span>
+                        </span>
+                    </div>
                 </div>
 
                 <div className="flex items-center gap-3 flex-wrap">
@@ -413,6 +417,7 @@ export default function ManagerAttendancePage() {
                             <thead className="bg-neutral-50/80 border-b border-neutral-200 text-neutral-500 font-bold uppercase tracking-wider">
                                 <tr>
                                     <th className="px-6 py-4">Employee</th>
+                                    <th className="px-6 py-4">Date</th>
                                     <th className="px-6 py-4">Punch In</th>
                                     <th className="px-6 py-4">Punch Out</th>
                                     <th className="px-6 py-4">AI Face Match</th>
@@ -424,7 +429,7 @@ export default function ManagerAttendancePage() {
                             <tbody className="divide-y divide-neutral-100 font-medium">
                                 {filteredRecords.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7} className="text-center py-12 text-neutral-400">
+                                        <td colSpan={8} className="text-center py-12 text-neutral-400">
                                             {searchQuery 
                                                 ? `No attendance records matching "${searchQuery}".` 
                                                 : "No team attendance records logged for today yet."}
@@ -437,7 +442,7 @@ export default function ManagerAttendancePage() {
                                                 <div className="flex items-center gap-3">
                                                     {record.avatar ? (
                                                         <img
-                                                            src={record.avatar}
+                                                             src={record.avatar}
                                                             alt={record.employeeName}
                                                             className="w-9 h-9 rounded-xl object-cover ring-1 ring-neutral-200"
                                                             onError={(e: any) => {
@@ -454,6 +459,9 @@ export default function ManagerAttendancePage() {
                                                         <p className="text-[11px] text-neutral-400 font-mono mt-0.5">{record.employeeId} · {record.designation}</p>
                                                     </div>
                                                 </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="font-bold text-neutral-900 text-[11px] font-mono">{formatReadableDate(record.date || new Date())}</span>
                                             </td>
                                             <td className="px-6 py-4 font-bold text-neutral-900">{record.checkInTime}</td>
                                             <td className="px-6 py-4 text-neutral-500">{record.checkOutTime || "—"}</td>

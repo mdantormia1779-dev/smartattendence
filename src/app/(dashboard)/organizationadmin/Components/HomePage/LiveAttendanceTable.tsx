@@ -5,6 +5,7 @@ import Link from "next/link";
 import gsap from "gsap";
 import { MapPin, Loader2, ArrowUpRight, Clock, CheckCircle2, AlertTriangle, ScanFace } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { formatAttendanceTime, formatReadableDate, formatLongDate } from "@/lib/datetime";
 
 interface AttendanceRow {
   id: string;
@@ -43,8 +44,8 @@ export default function LiveAttendanceTable() {
               id: l.id || Math.random().toString(),
               name: l.employeeName || l.employeeId || "Staff Member",
               dept: l.department || "Operations",
-              punchIn: l.checkInTime || "--",
-              punchOut: l.checkOutTime || "—",
+              punchIn: formatAttendanceTime(l.checkInTime),
+              punchOut: formatAttendanceTime(l.checkOutTime),
               method: l.verificationMethod === "FACE_RECOGNITION" ? "Face AI + GPS" : (l.verificationMethod || "GPS Geofence"),
               status: (l.status || "PRESENT").toLowerCase(),
               color,
@@ -78,10 +79,16 @@ export default function LiveAttendanceTable() {
   return (
     <div className="bg-white p-6 md:p-8 rounded-3xl border border-neutral-200/80 shadow-xs lg:col-span-2 flex flex-col justify-between space-y-4">
       <div>
-        <div className="flex items-center justify-between pb-4 border-b border-neutral-100">
+        <div className="flex items-center justify-between pb-4 border-b border-neutral-100 flex-wrap gap-2">
           <div>
-            <h3 className="text-base font-bold text-neutral-900">Today's Live Punch Stream</h3>
-            <p className="text-xs text-neutral-500">Real-time Punch In & Punch Out stream across all branches</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-base font-bold text-neutral-900">Today's Live Punch Stream</h3>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-200/80">
+                <Clock className="w-3.5 h-3.5 text-[#10b981]" />
+                <span>{formatLongDate(new Date())}</span>
+              </span>
+            </div>
+            <p className="text-xs text-neutral-500 mt-0.5">Real-time attendance stream for {formatReadableDate(new Date())}</p>
           </div>
           <Link
             href="/organizationadmin/attendance"

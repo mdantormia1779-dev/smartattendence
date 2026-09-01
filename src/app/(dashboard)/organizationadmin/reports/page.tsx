@@ -29,6 +29,7 @@ import {
     FileCheck
 } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { formatAttendanceTime } from "@/lib/datetime";
 
 export default function OrganizationReportsPage() {
     const [reportTab, setReportTab] = useState<"attendance" | "employees" | "payroll" | "leaves">("attendance");
@@ -851,8 +852,8 @@ export default function OrganizationReportsPage() {
                                                 <td className="border border-stone-200 p-1.5 font-mono">{r.date || "Today"}</td>
                                                 <td className="border border-stone-200 p-1.5 font-bold">{r.employeeName || "Employee"} ({r.employeeId})</td>
                                                 <td className="border border-stone-200 p-1.5">{r.department || "General"}</td>
-                                                <td className="border border-stone-200 p-1.5 font-mono">{r.checkInTime || "--"}</td>
-                                                <td className="border border-stone-200 p-1.5 font-mono">{r.checkOutTime || "--"}</td>
+                                                <td className="border border-stone-200 p-1.5 font-mono">{formatAttendanceTime(r.checkInTime)}</td>
+                                                <td className="border border-stone-200 p-1.5 font-mono">{formatAttendanceTime(r.checkOutTime)}</td>
                                                 <td className="border border-stone-200 p-1.5 text-center font-bold">
                                                     <span className={r.status === "PRESENT" ? "text-emerald-700" : r.status === "LATE" ? "text-amber-700" : "text-rose-700"}>
                                                         {r.status}

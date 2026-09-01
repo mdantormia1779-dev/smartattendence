@@ -27,6 +27,7 @@ import {
     LogIn
 } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { formatAttendanceTime, formatReadableDate, formatLongDate } from "@/lib/datetime";
 import WebPunchModal from "../Components/Attendance/WebPunchModal";
 
 interface AttendanceRecord {
@@ -128,8 +129,8 @@ export default function AttendancePage() {
                         branchId: item.branchId,
                         departmentId: item.departmentId,
                         shift: item.shift || "Regular Morning (09:00 AM - 05:00 PM)",
-                        checkInTime: item.checkInTime || "-",
-                        checkOutTime: item.checkOutTime || null,
+                        checkInTime: formatAttendanceTime(item.checkInTime),
+                        checkOutTime: formatAttendanceTime(item.checkOutTime) === "--" ? null : formatAttendanceTime(item.checkOutTime),
                         status: formattedStatus,
                         verificationMethod: method,
                         faceConfidence: item.faceConfidence ? Number(item.faceConfidence) : 98.5,
@@ -286,9 +287,24 @@ export default function AttendancePage() {
                         <ScanFace className="w-6 h-6 text-[#00B050]" />
                         Live Attendance Monitoring
                     </h1>
-                    <p className="text-xs text-stone-500 mt-1">
-                        Real-time AI Face Recognition scores, GPS Geo-fencing validations & employee attendance records
-                    </p>
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 text-emerald-800 text-xs font-bold border border-emerald-200/70">
+                            <Calendar className="w-3.5 h-3.5 text-[#00B050]" />
+                            <span>Viewing Attendance for: <strong className="text-emerald-950 font-extrabold">{formatLongDate(selectedDate)}</strong></span>
+                        </span>
+                        {selectedDate !== new Date().toISOString().split("T")[0] ? (
+                            <button
+                                onClick={() => setSelectedDate(new Date().toISOString().split("T")[0])}
+                                className="px-2.5 py-1 rounded-lg bg-[#00B050] text-white text-[11px] font-extrabold hover:bg-[#009b46] transition-all cursor-pointer shadow-xs active:scale-95 flex items-center gap-1"
+                            >
+                                Jump to Today
+                            </button>
+                        ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100/70 text-[#00B050] text-[10px] font-extrabold tracking-wide uppercase">
+                                ● Today's Live Records
+                            </span>
+                        )}
+                    </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                     <button
@@ -305,12 +321,15 @@ export default function AttendancePage() {
                     >
                         <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-[#00B050]" : ""}`} />
                     </button>
-                    <input
-                        type="date"
-                        value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                        className="px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs font-bold text-stone-700 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20"
-                    />
+                    <div className="flex items-center gap-1.5 bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-[#00B050]/20">
+                        <Calendar className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                        <input
+                            type="date"
+                            value={selectedDate}
+                            onChange={(e) => setSelectedDate(e.target.value)}
+                            className="bg-transparent text-xs font-bold text-stone-700 focus:outline-none cursor-pointer"
+                        />
+                    </div>
                     <button 
                         onClick={handleExportCSV}
                         className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border border-stone-200 text-stone-700 hover:bg-stone-50 transition-colors cursor-pointer shadow-2xs"
@@ -415,6 +434,7 @@ export default function AttendancePage() {
                                 <tr>
                                     <th className="px-6 py-4">Employee</th>
                                     <th className="px-6 py-4">Branch & Shift</th>
+                                    <th className="px-6 py-4">Date</th>
                                     <th className="px-6 py-4">Punch In</th>
                                     <th className="px-6 py-4">Punch Out</th>
                                     <th className="px-6 py-4">Verification Evidence</th>
@@ -425,8 +445,8 @@ export default function AttendancePage() {
                             <tbody className="divide-y divide-stone-100 font-medium">
                                 {filteredRecords.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7} className="text-center py-16 text-stone-400">
-                                            No attendance records found matching this filter on {selectedDate}.
+                                        <td colSpan={8} className="text-center py-16 text-stone-400">
+                                            No attendance records found matching this filter on {formatReadableDate(selectedDate)}.
                                         </td>
                                     </tr>
                                 ) : (
@@ -448,6 +468,16 @@ export default function AttendancePage() {
                                             <td className="px-6 py-4">
                                                 <p className="text-stone-900 font-semibold">{record.branch}</p>
                                                 <p className="text-[11px] text-stone-400">{record.shift}</p>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-stone-900 text-[11px]">{formatReadableDate(record.date)}</span>
+                                                    {record.date === new Date().toISOString().split("T")[0] && (
+                                                        <span className="text-[9px] font-extrabold text-[#00B050] uppercase tracking-wide">
+                                                            Today
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 font-bold text-stone-900">{record.checkInTime}</td>
                                             <td className="px-6 py-4 text-stone-500">{record.checkOutTime || "—"}</td>

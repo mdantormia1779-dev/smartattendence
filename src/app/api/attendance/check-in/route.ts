@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/server/authorization";
 import { handleApiError } from "@/server/errors";
 import { prisma } from "@/lib/prisma";
+import { formatTimeInTimezone, getTimeInTimezone, getLocalDateString, getLocalDateObject } from "@/lib/datetime";
 import { AttendanceMethod, AttendanceStatus } from "@prisma/client";
 
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -152,11 +153,18 @@ export async function POST(request: Request) {
       }).catch(() => null) || undefined;
     }
 
+    const orgRecord = await prisma.organizations.findUnique({
+      where: { id: employee.organizationId },
+      select: { timezone: true },
+    }).catch(() => null);
+    const orgTimezone = orgRecord?.timezone || "Asia/Dhaka";
+
     const shiftStartMinutes = assignedShift ? parseTimeToMinutes(assignedShift.startTime) : 9 * 60;
     const graceMinutes = assignedShift?.gracePeriod ?? 15;
     const graceCutoff = shiftStartMinutes + graceMinutes;
 
-    const totalMinutes = now.getHours() * 60 + now.getMinutes();
+    const nowLocal = getTimeInTimezone(now, orgTimezone);
+    const totalMinutes = nowLocal.totalMinutes;
     const isLate = totalMinutes > graceCutoff;
     const lateMinutes = isLate ? Math.max(0, totalMinutes - shiftStartMinutes) : 0;
 
@@ -170,7 +178,8 @@ export async function POST(request: Request) {
     const methodEnum = methodMap[verificationMethod] ?? AttendanceMethod.GPS;
 
     // ── 6. Upsert attendance record ────────────────────────────────────────────
-    const todayDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+    const todayDate = getLocalDateObject(now, orgTimezone);
+    const todayDateStr = getLocalDateString(now, orgTimezone);
 
     let record: any = null;
 
@@ -209,7 +218,10 @@ export async function POST(request: Request) {
     } catch (dbErr: any) {
       console.warn("[check-in] Upsert failed, trying direct find-and-save:", dbErr?.message);
       const existing = await prisma.attendance.findFirst({
-        where: { employeeId: employee.id },
+        where: { 
+          employeeId: employee.id,
+          date: todayDate,
+        },
         orderBy: { createdAt: "desc" },
       });
       if (existing) {
@@ -221,6 +233,22 @@ export async function POST(request: Request) {
             status: isLate ? AttendanceStatus.LATE : AttendanceStatus.PRESENT,
             updatedAt: now,
           },
+        });
+      } else {
+        record = await prisma.attendance.create({
+          data: {
+            id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            employeeId: employee.id,
+            date: todayDate,
+            checkInTime: now,
+            checkInLat: latitude !== 0 ? latitude : undefined,
+            checkInLng: longitude !== 0 ? longitude : undefined,
+            checkInMethod: methodEnum,
+            faceScore: 0.95,
+            status: isLate ? AttendanceStatus.LATE : AttendanceStatus.PRESENT,
+            lateMinutes,
+            updatedAt: now,
+          }
         });
       }
     }
@@ -235,8 +263,8 @@ export async function POST(request: Request) {
           employeeId: employee?.employeeCode ?? employee?.id ?? employeeCode ?? "EMP-0001",
           employeeName: employee?.fullName ?? "Employee",
           branch: branch?.name ?? "Main Branch",
-          date: now.toISOString().split("T")[0],
-          checkInTime: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+          date: todayDateStr,
+          checkInTime: formatTimeInTimezone(now, orgTimezone),
           status: isLate ? "LATE" : "PRESENT",
           verificationMethod,
           faceConfidence: 0.95,
