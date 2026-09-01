@@ -689,7 +689,7 @@ export async function getAdminReferralOverviewAsync() {
       userName: p.fullName,
       userEmail: p.email,
       referralCode: p.referralCode || "N/A",
-      referralLink: `http://localhost:3000/signup?ref=${p.referralCode}`,
+      referralLink: `https://antorsmartattendencesystem.vercel.app/signup?ref=${p.referralCode}`,
       referralType: "AFFILIATE" as const,
       commissionRate: 20.0,
       totalClicks: p.referrals.length * 3,
