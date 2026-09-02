@@ -1,7 +1,8 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Building2, Plus, Loader2, ShieldCheck, Globe, Clock, MapPin, DollarSign, Image as ImageIcon } from 'lucide-react';
+import { api } from '@/lib/api-client';
 
 interface OrganizationCreateModalProps {
     isOpen: boolean;
@@ -42,6 +43,17 @@ export const OrganizationCreateModal: React.FC<OrganizationCreateModalProps> = (
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [availablePlans, setAvailablePlans] = useState<any[]>([]);
+
+    useEffect(() => {
+        let isMounted = true;
+        api.subscriptions.getPlans().then((res) => {
+            if (isMounted && res?.success && Array.isArray(res.data) && res.data.length > 0) {
+                setAvailablePlans(res.data);
+            }
+        }).catch(() => {});
+        return () => { isMounted = false; };
+    }, []);
 
     if (!isOpen) return null;
 
@@ -351,10 +363,27 @@ export const OrganizationCreateModal: React.FC<OrganizationCreateModalProps> = (
                                         onChange={(e) => setPlanTier(e.target.value as any)}
                                         className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050]"
                                     >
-                                        <option value="FREE">30-Day Free Trial (30 Employees, 2 Branches)</option>
-                                        <option value="STARTER">Starter Plan (100 Employees, 5 Branches)</option>
-                                        <option value="BUSINESS">Business Plan (500 Employees, 20 Branches)</option>
-                                        <option value="ENTERPRISE">Enterprise Plan (Unlimited Quotas)</option>
+                                        {availablePlans.length > 0 ? (
+                                            availablePlans.map((p) => {
+                                                const tier = (p.type || p.tier || "STARTER").toUpperCase();
+                                                const isEnterprise = tier === "ENTERPRISE";
+                                                const limitsStr = isEnterprise
+                                                    ? "Unlimited Branch Managers, Branches & Staff"
+                                                    : `${p.maxEmployees ?? 30} Staff, ${p.maxBranches ?? 2} Branches, ${p.maxManagers ?? 3} Managers`;
+                                                return (
+                                                    <option key={p.id || tier} value={tier}>
+                                                        {p.name || `${tier} Plan`} ({limitsStr}) - ৳{Number(p.price || 0).toLocaleString()}/mo
+                                                    </option>
+                                                );
+                                            })
+                                        ) : (
+                                            <>
+                                                <option value="FREE">30-Day Free Trial (30 Employees, 2 Branches, 3 Managers)</option>
+                                                <option value="STARTER">Starter Plan (100 Employees, 5 Branches, 5 Managers)</option>
+                                                <option value="BUSINESS">Business Plan (500 Employees, 20 Branches, 20 Managers)</option>
+                                                <option value="ENTERPRISE">Enterprise Plan (Unlimited Branch Managers, Branches & Staff)</option>
+                                            </>
+                                        )}
                                     </select>
                                 </div>
 

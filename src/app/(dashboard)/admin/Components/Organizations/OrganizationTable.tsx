@@ -19,6 +19,8 @@ export interface Organization {
     workingDays: string;
     officeHours: string;
     plan: string;
+    planName?: string;
+    planTier?: string;
     employees: number;
     branches: number;
     revenue: string;
@@ -118,9 +120,11 @@ export const OrganizationTable: React.FC<OrganizationTableProps> = ({
                             {organizations.length > 0 ? (
                                 organizations.map((org, index) => {
                                     let planBadge = "bg-gray-50 text-gray-600 border-gray-200/60";
-                                    if (org.plan === 'Enterprise') planBadge = "bg-amber-50 text-amber-700 border-amber-200/60";
-                                    else if (org.plan === 'Business') planBadge = "bg-emerald-50 text-[#00B050] border-emerald-200/60";
-                                    else if (org.plan === 'Starter') planBadge = "bg-blue-50 text-blue-600 border-blue-200/60";
+                                    const planLower = (org.planName || org.plan || '').toLowerCase();
+                                    if (planLower.includes('enterprise')) planBadge = "bg-amber-50 text-amber-700 border-amber-200/60";
+                                    else if (planLower.includes('business')) planBadge = "bg-emerald-50 text-[#00B050] border-emerald-200/60";
+                                    else if (planLower.includes('starter')) planBadge = "bg-blue-50 text-blue-600 border-blue-200/60";
+                                    else if (planLower.includes('free') || planLower.includes('trial')) planBadge = "bg-purple-50 text-purple-700 border-purple-200/60";
 
                                     let statusBadge = "bg-emerald-50 text-[#00B050] border-emerald-200/60";
                                     if (org.status === 'Trial') statusBadge = "bg-amber-50 text-amber-600 border-amber-200/60";
@@ -152,7 +156,7 @@ export const OrganizationTable: React.FC<OrganizationTableProps> = ({
                                             <td className="px-6 py-4 text-gray-600 font-medium">{org.category || 'General'}</td>
                                             <td className="px-6 py-4">
                                                 <span className={`px-2.5 py-1 rounded-full font-semibold text-[11px] border ${planBadge}`}>
-                                                    {org.plan}
+                                                    {org.planName || org.plan}
                                                 </span>
                                             </td>
                                             {/* Fix: Safely display 0 without converting to empty or breaking */}

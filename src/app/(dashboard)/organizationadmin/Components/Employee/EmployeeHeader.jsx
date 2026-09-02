@@ -7,7 +7,7 @@ const EmployeeHeader = ({
   totalCount = 0, 
   activeCount = 0, 
   fullTimeCount = 0, 
-  maxLimit = null,
+  maxLimit,
   planName = "Free Tier",
   isQuotaExceeded = false,
   onAddClick, 
@@ -43,7 +43,7 @@ const EmployeeHeader = ({
           </span>
 
           {/* Quota Indicator */}
-          {maxLimit !== null && (
+          {maxLimit !== null ? (
             <span className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 border ${
               isQuotaExceeded 
                 ? "bg-rose-50 text-rose-700 border-rose-200 animate-pulse" 
@@ -52,6 +52,11 @@ const EmployeeHeader = ({
               {isQuotaExceeded ? <Lock className="w-3 h-3 text-rose-600" /> : <Zap className="w-3 h-3 text-amber-600" />}
               {planName} Quota: <strong>{totalCount}/{maxLimit}</strong>
               {isQuotaExceeded && <span className="text-[10px] uppercase tracking-wider font-extrabold ml-0.5">(Full)</span>}
+            </span>
+          ) : (
+            <span className="px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 border bg-emerald-50 text-emerald-800 border-emerald-200">
+              <Zap className="w-3 h-3 text-emerald-600" />
+              {planName} Quota: <strong>{totalCount} / Unlimited</strong>
             </span>
           )}
         </div>

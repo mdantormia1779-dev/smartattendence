@@ -491,6 +491,17 @@ export class SubscriptionService {
       ? sub.endDate.toISOString()
       : new Date(now.getTime() + daysRemaining * 24 * 60 * 60 * 1000).toISOString();
 
+    const isEnterprise =
+      activePlan.type === SubscriptionPlanType.ENTERPRISE ||
+      (activePlan as any).tier === "ENTERPRISE" ||
+      activePlan.name?.toUpperCase().includes("ENTERPRISE");
+
+    if (isEnterprise) {
+      activePlan.maxManagers = null;
+      activePlan.maxBranches = null;
+      activePlan.maxEmployees = null;
+    }
+
     return {
       plan: activePlan,
       status: isExpired ? "EXPIRED" : (sub?.status || (isTrial ? "TRIAL" : "ACTIVE")),
@@ -507,9 +518,9 @@ export class SubscriptionService {
         branches: branchesCount,
       },
       limits: {
-        maxEmployees: activePlan.maxEmployees,
-        maxManagers: activePlan.maxManagers,
-        maxBranches: activePlan.maxBranches,
+        maxEmployees: isEnterprise ? null : activePlan.maxEmployees,
+        maxManagers: isEnterprise ? null : activePlan.maxManagers,
+        maxBranches: isEnterprise ? null : activePlan.maxBranches,
         faceRecognition: activePlan.faceRecognition,
         gpsVerification: activePlan.gpsVerification,
         fingerprint: activePlan.fingerprint,
@@ -529,10 +540,17 @@ export class SubscriptionService {
   static async assertCanAddEmployee(organizationId: string) {
     if (!organizationId) return;
     const planInfo = await this.getOrganizationPlan(organizationId);
+    const isEnterprise =
+      planInfo.plan.type === SubscriptionPlanType.ENTERPRISE ||
+      (planInfo.plan as any).tier === "ENTERPRISE" ||
+      planInfo.plan.name?.toUpperCase().includes("ENTERPRISE");
+
+    if (isEnterprise) return; // Unlimited staff on Enterprise
+
     const { maxEmployees } = planInfo.limits;
     const currentCount = planInfo.usage.employees;
 
-    if (maxEmployees !== null && maxEmployees !== undefined && currentCount >= maxEmployees) {
+    if (maxEmployees !== null && maxEmployees !== undefined && maxEmployees !== -1 && currentCount >= maxEmployees) {
       throw new PlanLimitExceededError(
         `Employee limit reached (${currentCount}/${maxEmployees}). Your current ${planInfo.plan.name} allows up to ${maxEmployees} employees. Please upgrade your subscription plan in billing settings.`
       );
@@ -545,10 +563,17 @@ export class SubscriptionService {
   static async assertCanAddManager(organizationId: string) {
     if (!organizationId) return;
     const planInfo = await this.getOrganizationPlan(organizationId);
+    const isEnterprise =
+      planInfo.plan.type === SubscriptionPlanType.ENTERPRISE ||
+      (planInfo.plan as any).tier === "ENTERPRISE" ||
+      planInfo.plan.name?.toUpperCase().includes("ENTERPRISE");
+
+    if (isEnterprise) return; // Unlimited branch managers on Enterprise
+
     const { maxManagers } = planInfo.limits;
     const currentCount = planInfo.usage.managers;
 
-    if (maxManagers !== null && maxManagers !== undefined && currentCount >= maxManagers) {
+    if (maxManagers !== null && maxManagers !== undefined && maxManagers !== -1 && currentCount >= maxManagers) {
       throw new PlanLimitExceededError(
         `Manager limit reached (${currentCount}/${maxManagers}). Your current ${planInfo.plan.name} allows up to ${maxManagers} manager(s). Please upgrade your subscription plan to assign additional managers.`
       );
@@ -561,10 +586,17 @@ export class SubscriptionService {
   static async assertCanAddBranch(organizationId: string) {
     if (!organizationId) return;
     const planInfo = await this.getOrganizationPlan(organizationId);
+    const isEnterprise =
+      planInfo.plan.type === SubscriptionPlanType.ENTERPRISE ||
+      (planInfo.plan as any).tier === "ENTERPRISE" ||
+      planInfo.plan.name?.toUpperCase().includes("ENTERPRISE");
+
+    if (isEnterprise) return; // Unlimited branches on Enterprise
+
     const { maxBranches } = planInfo.limits;
     const currentCount = planInfo.usage.branches;
 
-    if (maxBranches !== null && maxBranches !== undefined && currentCount >= maxBranches) {
+    if (maxBranches !== null && maxBranches !== undefined && maxBranches !== -1 && currentCount >= maxBranches) {
       throw new PlanLimitExceededError(
         `Branch location limit reached (${currentCount}/${maxBranches}). Your current ${planInfo.plan.name} allows up to ${maxBranches} branch location(s). Please upgrade your subscription plan to add more branches.`
       );

@@ -214,8 +214,13 @@ export default function ManagersPage() {
   }, [managers]);
 
   // Quota Computations
-  const maxManagers = subscription?.limits?.maxManagers ?? 1;
   const planName = subscription?.planName || "Free Tier";
+  const planTier = (subscription?.planTier || subscription?.plan?.type || planName).toUpperCase();
+  const isEnterprise = planTier.includes("ENTERPRISE");
+  const rawMaxManagers = subscription?.limits?.maxManagers;
+  // If enterprise, or limit is null/undefined/-1, managers are unlimited
+  const isUnlimited = isEnterprise || rawMaxManagers === null || rawMaxManagers === undefined || rawMaxManagers === -1;
+  const maxManagers: number | null = isUnlimited ? null : Number(rawMaxManagers);
   const isQuotaExceeded = maxManagers !== null && managers.length >= maxManagers;
 
   const handleOpenAssignManager = () => {
@@ -264,7 +269,7 @@ export default function ManagersPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {maxManagers !== null && (
+          {maxManagers !== null ? (
             <span className={`px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border text-xs ${
               isQuotaExceeded 
                 ? "bg-rose-50 text-rose-700 border-rose-200 animate-pulse" 
@@ -273,6 +278,11 @@ export default function ManagersPage() {
               {isQuotaExceeded ? <Lock className="w-3.5 h-3.5 text-rose-600" /> : <Zap className="w-3.5 h-3.5 text-amber-600" />}
               {planName} Quota: <strong>{managers.length}/{maxManagers}</strong>
               {isQuotaExceeded && <span className="text-[10px] uppercase tracking-wider font-extrabold ml-0.5">(Full)</span>}
+            </span>
+          ) : (
+            <span className="px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border text-xs bg-emerald-50 text-emerald-800 border-emerald-200">
+              <Zap className="w-3.5 h-3.5 text-emerald-600" />
+              {planName} Quota: <strong>{managers.length} / Unlimited</strong>
             </span>
           )}
           <button
@@ -515,7 +525,7 @@ export default function ManagersPage() {
         onClose={() => setIsQuotaModalOpen(false)}
         resourceName="Managers"
         currentCount={managers.length}
-        maxLimit={maxManagers}
+        maxLimit={maxManagers ?? 999}
         planName={planName}
       />
 

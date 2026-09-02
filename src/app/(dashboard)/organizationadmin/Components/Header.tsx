@@ -113,12 +113,12 @@ export default function Header({ title = "Dashboard" }: HeaderProps) {
                         }
 
                         if (org.subscriptionStatus === "EXPIRED" || (isFreeOrTrial && remaining === 0)) {
-                            setPlanTier(`⚠️ ${tier} Expired`);
+                            setPlanTier(`⚠️ ${org.planName || tier} Expired`);
                         } else if (isFreeOrTrial) {
-                            setPlanTier(`30-Day Free Trial (${remaining} days left)`);
+                            setPlanTier(`${org.planName || "30-Day Free Trial"} (${remaining} days left)`);
                         } else {
-                            const formattedTier = tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase();
-                            setPlanTier(`${formattedTier} Plan (${remaining} days left)`);
+                            const formattedPlan = org.planName || `${tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase()} Plan`;
+                            setPlanTier(`${formattedPlan} (${remaining} days left)`);
                         }
                     }
                     if (org.id) setOrganizationId(org.id);

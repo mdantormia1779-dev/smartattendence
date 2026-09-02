@@ -429,8 +429,12 @@ const EmployeePage = () => {
   }
 
   // Quota Computations
-  const maxEmployees = subscription?.limits?.maxEmployees ?? 20;
   const planName = subscription?.planName || "Free Tier";
+  const planTier = (subscription?.planTier || subscription?.plan?.type || planName).toUpperCase();
+  const isEnterprise = planTier.includes("ENTERPRISE");
+  const rawMaxEmployees = subscription?.limits?.maxEmployees;
+  const isUnlimited = isEnterprise || rawMaxEmployees === null || rawMaxEmployees === undefined || rawMaxEmployees === -1;
+  const maxEmployees: number | null = isUnlimited ? null : Number(rawMaxEmployees);
   const isQuotaExceeded = maxEmployees !== null && employees.length >= maxEmployees;
 
   const handleOpenAddEmployee = () => {
@@ -452,7 +456,7 @@ const EmployeePage = () => {
           totalCount={employees.length} 
           activeCount={activeStaffCount}
           fullTimeCount={fullTimeStaffCount}
-          maxLimit={maxEmployees}
+          maxLimit={maxEmployees as any}
           planName={planName}
           isQuotaExceeded={isQuotaExceeded}
           onAddClick={handleOpenAddEmployee} 
@@ -537,7 +541,7 @@ const EmployeePage = () => {
           onClose={() => setIsQuotaModalOpen(false)}
           resourceName="Employees"
           currentCount={employees.length}
-          maxLimit={maxEmployees}
+          maxLimit={maxEmployees ?? 999}
           planName={planName}
         />
       </div>

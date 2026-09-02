@@ -61,7 +61,9 @@ export const OrganizationsPage = () => {
                         timeZone: o.timezone || 'GMT +6:00',
                         workingDays: Array.isArray(o.workingDays) ? o.workingDays.join(', ') : (o.workingDays || 'Sun - Thu'),
                         officeHours: `${o.defaultOfficeStart || '09:00 AM'} - ${o.defaultOfficeEnd || '05:00 PM'}`,
-                        plan: o.planTier ? o.planTier.charAt(0) + o.planTier.slice(1).toLowerCase() : (o.planName || 'Starter'),
+                        plan: o.planName || (o.planTier ? (o.planTier === 'FREE' ? '30-Day Free Trial' : o.planTier.charAt(0) + o.planTier.slice(1).toLowerCase() + ' Plan') : 'Starter Plan'),
+                        planName: o.planName || undefined,
+                        planTier: o.planTier || undefined,
                         // Fix: Preserve 0 count using nullish coalescing instead of treating 0 as falsy
                         employees: o.totalEmployees ?? 0,
                         branches: o.totalBranches ?? 0,
@@ -176,7 +178,12 @@ export const OrganizationsPage = () => {
             org.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
             org.id.toLowerCase().includes(searchTerm.toLowerCase());
 
-        const matchesPlan = selectedPlan === 'All' || org.plan.toLowerCase() === selectedPlan.toLowerCase();
+        const matchesPlan = 
+            selectedPlan === 'All' || 
+            org.plan.toLowerCase().includes(selectedPlan.toLowerCase()) || 
+            selectedPlan.toLowerCase().includes(org.plan.toLowerCase()) ||
+            (org.planTier && org.planTier.toLowerCase() === selectedPlan.toLowerCase()) ||
+            (org.planName && org.planName.toLowerCase().includes(selectedPlan.toLowerCase()));
 
         return matchesSearch && matchesPlan;
     });

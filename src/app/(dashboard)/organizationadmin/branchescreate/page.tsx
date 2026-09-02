@@ -166,8 +166,12 @@ export default function BranchesPage() {
   };
 
   // Quota Computations
-  const maxBranches = subscription?.limits?.maxBranches ?? 1;
   const planName = subscription?.planName || "Free Tier";
+  const planTier = (subscription?.planTier || subscription?.plan?.type || planName).toUpperCase();
+  const isEnterprise = planTier.includes("ENTERPRISE");
+  const rawMaxBranches = subscription?.limits?.maxBranches;
+  const isUnlimited = isEnterprise || rawMaxBranches === null || rawMaxBranches === undefined || rawMaxBranches === -1;
+  const maxBranches: number | null = isUnlimited ? null : Number(rawMaxBranches);
   const isQuotaExceeded = maxBranches !== null && branches.length >= maxBranches;
 
   const handleOpenAddBranch = () => {
@@ -193,7 +197,7 @@ export default function BranchesPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {maxBranches !== null && (
+          {maxBranches !== null ? (
             <span className={`px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border text-xs ${
               isQuotaExceeded 
                 ? "bg-rose-50 text-rose-700 border-rose-200 animate-pulse" 
@@ -202,6 +206,11 @@ export default function BranchesPage() {
               {isQuotaExceeded ? <Lock className="w-3.5 h-3.5 text-rose-600" /> : <Zap className="w-3.5 h-3.5 text-amber-600" />}
               {planName} Quota: <strong>{branches.length}/{maxBranches}</strong>
               {isQuotaExceeded && <span className="text-[10px] uppercase tracking-wider font-extrabold ml-0.5">(Full)</span>}
+            </span>
+          ) : (
+            <span className="px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border text-xs bg-emerald-50 text-emerald-800 border-emerald-200">
+              <Zap className="w-3.5 h-3.5 text-emerald-600" />
+              {planName} Quota: <strong>{branches.length} / Unlimited</strong>
             </span>
           )}
           <button
@@ -279,7 +288,7 @@ export default function BranchesPage() {
         onClose={() => setIsQuotaModalOpen(false)}
         resourceName="Branch Locations"
         currentCount={branches.length}
-        maxLimit={maxBranches}
+        maxLimit={maxBranches ?? 999}
         planName={planName}
       />
     </div>

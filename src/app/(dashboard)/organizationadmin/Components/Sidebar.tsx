@@ -121,10 +121,10 @@ export default function Sidebar() {
                         let remaining = 30;
                         if (isFreeOrTrial) {
                             remaining = Math.max(0, 30 - diffDays);
-                            setPlanName("30-Day Free Trial");
+                            setPlanName(org.planName || "30-Day Free Trial");
                         } else {
                             remaining = Math.max(0, 30 - (diffDays % 30));
-                            setPlanName(`${tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase()} Plan`);
+                            setPlanName(org.planName || `${tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase()} Plan`);
                         }
                         setDaysRemaining(remaining);
                     }
