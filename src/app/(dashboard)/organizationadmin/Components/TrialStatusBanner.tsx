@@ -39,16 +39,23 @@ export default function TrialStatusBanner() {
         try {
             setLoadingPlans(true);
             const res = await api.subscriptions.getPlans();
-            if (res?.success && Array.isArray(res.data)) {
-                // Filter out free plan to show paid upgrade tiers
-                const paidPlans = res.data.filter((p: any) => {
-                    const tier = (p.type || p.tier || "").toUpperCase();
-                    return tier !== "FREE" && Number(p.price || p.monthlyPrice || 0) > 0;
+            if (res?.success && Array.isArray(res.data) && res.data.length > 0) {
+                const mapped = res.data.map((p: any) => {
+                    const typeTier = (p.type || p.tier || "STARTER").toUpperCase();
+                    const isEnterprise = typeTier === "ENTERPRISE";
+                    return {
+                        ...p,
+                        type: typeTier,
+                        name: p.name || `${typeTier.charAt(0) + typeTier.slice(1).toLowerCase()} Plan`,
+                        price: Number(p.price || p.monthlyPrice || 0),
+                        maxManagers: isEnterprise ? null : (p.maxManagers ?? null),
+                        maxBranches: isEnterprise ? null : (p.maxBranches ?? null),
+                        maxEmployees: isEnterprise ? null : (p.maxEmployees ?? null),
+                        popular: p.popular || typeTier === "BUSINESS",
+                    };
                 });
-                if (paidPlans.length > 0) {
-                    setAvailablePlans(paidPlans);
-                    return;
-                }
+                setAvailablePlans(mapped);
+                return;
             }
         } catch (e) {
             console.warn("Failed to fetch dynamic plans for trial banner:", e);

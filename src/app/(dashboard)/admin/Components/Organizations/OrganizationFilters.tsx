@@ -1,7 +1,8 @@
 "use client";
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Search, ChevronDown } from 'lucide-react';
+import { api } from '@/lib/api-client';
 
 interface OrganizationFiltersProps {
     searchTerm: string;
@@ -16,6 +17,18 @@ export const OrganizationFilters: React.FC<OrganizationFiltersProps> = ({
     selectedPlan,
     setSelectedPlan,
 }) => {
+    const [plans, setPlans] = useState<any[]>([]);
+
+    useEffect(() => {
+        let isMounted = true;
+        api.subscriptions.getPlans().then((res) => {
+            if (isMounted && res?.success && Array.isArray(res.data) && res.data.length > 0) {
+                setPlans(res.data);
+            }
+        }).catch(() => {});
+        return () => { isMounted = false; };
+    }, []);
+
     return (
         <motion.div 
             initial={{ opacity: 0, y: 10 }}
@@ -40,10 +53,23 @@ export const OrganizationFilters: React.FC<OrganizationFiltersProps> = ({
                     className="w-full appearance-none bg-gray-50/50 border border-gray-200 rounded-xl px-4 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-[#00B050] cursor-pointer"
                 >
                     <option value="All">All Plans</option>
-                    <option value="Enterprise">Enterprise</option>
-                    <option value="Business">Business</option>
-                    <option value="Starter">Starter</option>
-                    <option value="Free">30-Day Free Trial</option>
+                    {plans.length > 0 ? (
+                        plans.map((p) => {
+                            const name = p.name || `${p.type || p.tier} Plan`;
+                            return (
+                                <option key={p.id || name} value={name}>
+                                    {name}
+                                </option>
+                            );
+                        })
+                    ) : (
+                        <>
+                            <option value="Enterprise">Enterprise</option>
+                            <option value="Business">Business</option>
+                            <option value="Starter">Starter</option>
+                            <option value="Free">30-Day Free Trial</option>
+                        </>
+                    )}
                 </select>
                 <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             </div>

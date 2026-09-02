@@ -58,6 +58,7 @@ export default function OrganizationSettingsPage() {
     const [brandThemeColor, setBrandThemeColor] = useState("#00B050");
     const [customSubdomain, setCustomSubdomain] = useState("");
     const [subscriptionPlan, setSubscriptionPlan] = useState("BUSINESS");
+    const [subscriptionData, setSubscriptionData] = useState<any>(null);
 
     // 5. Password Change System States
     const [currentPassword, setCurrentPassword] = useState("");
@@ -102,9 +103,20 @@ export default function OrganizationSettingsPage() {
             const targetOrgId = getResolvedOrgId();
             setOrgId(targetOrgId);
 
-            const res = await api.organizations.getById(targetOrgId).catch(() => null);
-            if (res?.success && res.data) {
-                const d = res.data;
+            const [orgRes, subRes] = await Promise.allSettled([
+                api.organizations.getById(targetOrgId),
+                api.get("/api/subscription"),
+            ]);
+
+            if (subRes.status === "fulfilled" && subRes.value?.success && subRes.value.data) {
+                const s = subRes.value.data;
+                setSubscriptionData(s);
+                if (s.planName) setSubscriptionPlan(s.planName);
+                else if (s.planTier) setSubscriptionPlan(s.planTier);
+            }
+
+            if (orgRes.status === "fulfilled" && orgRes.value?.success && orgRes.value.data) {
+                const d = orgRes.value.data;
                 setCompanyName(d.name || "");
                 setCompanyEmail(d.email || "");
                 setPhone(d.phone || "");
@@ -121,7 +133,7 @@ export default function OrganizationSettingsPage() {
                 if (d.brandColor) setBrandThemeColor(d.brandColor);
                 if (d.antiSpoofingMode) setAntiSpoofingStrictness(d.antiSpoofingMode);
                 if (d.customDomain || d.slug) setCustomSubdomain(d.customDomain || `${d.slug}.attendanceerp.com`);
-                if (d.planName || d.planTier) setSubscriptionPlan(d.planName || d.planTier);
+                if (!subscriptionData && (d.planName || d.planTier)) setSubscriptionPlan(d.planName || d.planTier);
 
                 if (Array.isArray(d.workingDays) && d.workingDays.length > 0) {
                     setWorkingDays(d.workingDays);
@@ -569,12 +581,27 @@ export default function OrganizationSettingsPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-bold text-stone-700 mb-1">Active Enterprise Plan</label>
-                                    <div className="px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl flex items-center justify-between">
-                                        <span className="text-xs font-bold text-stone-800">{subscriptionPlan} Plan</span>
-                                        <span className="text-[10px] font-extrabold bg-emerald-50 text-[#00B050] px-2.5 py-1 rounded-md border border-emerald-200">
-                                            ACTIVE
-                                        </span>
+                                    <label className="block text-xs font-bold text-stone-700 mb-1">Active SaaS Subscription</label>
+                                    <div className="px-4 py-2 bg-stone-50 border border-stone-200 rounded-xl flex items-center justify-between">
+                                        <div className="min-w-0">
+                                            <span className="text-xs font-bold text-stone-800 block truncate">
+                                                {subscriptionData?.planName || (subscriptionPlan.includes("Plan") ? subscriptionPlan : `${subscriptionPlan} Plan`)}
+                                            </span>
+                                            <span className="text-[10px] text-stone-400 font-medium">
+                                                {subscriptionData?.limits?.maxManagers === null ? "Unlimited Managers" : `${subscriptionData?.limits?.maxManagers ?? 5} Managers`} · {subscriptionData?.limits?.maxBranches === null ? "Unlimited Branches" : `${subscriptionData?.limits?.maxBranches ?? 5} Branches`}
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (typeof window !== "undefined") {
+                                                    window.dispatchEvent(new CustomEvent("open-subscription-modal"));
+                                                }
+                                            }}
+                                            className="text-[10px] font-extrabold bg-[#00B050] text-white px-2.5 py-1 rounded-md hover:bg-[#009644] transition-colors cursor-pointer shrink-0 ml-2 shadow-xs"
+                                        >
+                                            Change Plan
+                                        </button>
                                     </div>
                                 </div>
                             </div>

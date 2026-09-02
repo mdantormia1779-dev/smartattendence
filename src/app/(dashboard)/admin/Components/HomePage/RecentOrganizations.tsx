@@ -90,7 +90,7 @@ export const RecentOrganizations: React.FC = () => {
                     <div className="space-y-4">
                         {orgs.map((org, i) => {
                             const empCount = org.totalEmployees ?? org.employees ?? 0;
-                            const planLabel = org.planTier || org.plan || 'Starter';
+                            const planLabel = org.planName || (org.planTier ? `${org.planTier.charAt(0) + org.planTier.slice(1).toLowerCase()} Plan` : (org.plan || 'Starter Plan'));
 
                             return (
                                 <motion.div 

@@ -13,6 +13,11 @@ export async function GET(request: Request) {
       SubscriptionService.getOrganizationPlan(orgId),
     ]);
 
+    const isEnterprise =
+      planInfo.plan.type === "ENTERPRISE" ||
+      (planInfo.plan as any).tier === "ENTERPRISE" ||
+      planInfo.plan.name?.toUpperCase().includes("ENTERPRISE");
+
     const subscriptionInfo = {
       organizationId: org?.id || orgId,
       organizationName: org?.name || "Organization",
@@ -21,15 +26,17 @@ export async function GET(request: Request) {
       planTier: planInfo.plan.type,
       status: planInfo.status,
       isTrial: planInfo.isTrial,
-      trialDaysRemaining: 14,
+      daysRemaining: planInfo.daysRemaining,
+      trialDaysRemaining: planInfo.trialDaysRemaining ?? planInfo.daysRemaining,
+      isExpired: planInfo.isExpired,
       billingCycle: planInfo.plan.billingCycle,
       startDate: planInfo.startDate,
       endDate: planInfo.endDate,
       amount: planInfo.plan.price,
       limits: {
-        maxBranches: planInfo.limits.maxBranches,
-        maxManagers: planInfo.limits.maxManagers,
-        maxEmployees: planInfo.limits.maxEmployees,
+        maxBranches: isEnterprise ? null : planInfo.limits.maxBranches,
+        maxManagers: isEnterprise ? null : planInfo.limits.maxManagers,
+        maxEmployees: isEnterprise ? null : planInfo.limits.maxEmployees,
         usedBranches: planInfo.usage.branches,
         usedManagers: planInfo.usage.managers,
         usedEmployees: planInfo.usage.employees,

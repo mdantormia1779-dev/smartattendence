@@ -91,7 +91,9 @@ export class PlanLimitExceededError extends Error {
  * Validates branch creation cap
  */
 export function validateBranchLimit(planKey: string, currentCount: number): void {
-  const plan = PLAN_TIERS[planKey.toUpperCase()] || PLAN_TIERS.STARTER;
+  const upper = planKey.toUpperCase();
+  if (upper === "ENTERPRISE" || upper.includes("ENTERPRISE")) return; // Unlimited for Enterprise
+  const plan = PLAN_TIERS[upper] || PLAN_TIERS.STARTER;
   if (plan.maxBranches !== -1 && currentCount >= plan.maxBranches) {
     throw new PlanLimitExceededError(
       `Plan Limit Reached: Your current ${plan.name} plan allows a maximum of ${plan.maxBranches} branch(es). Please upgrade your subscription to add more branches.`
@@ -103,7 +105,9 @@ export function validateBranchLimit(planKey: string, currentCount: number): void
  * Validates manager creation cap
  */
 export function validateManagerLimit(planKey: string, currentCount: number): void {
-  const plan = PLAN_TIERS[planKey.toUpperCase()] || PLAN_TIERS.STARTER;
+  const upper = planKey.toUpperCase();
+  if (upper === "ENTERPRISE" || upper.includes("ENTERPRISE")) return; // Unlimited for Enterprise
+  const plan = PLAN_TIERS[upper] || PLAN_TIERS.STARTER;
   if (plan.maxManagers !== -1 && currentCount >= plan.maxManagers) {
     throw new PlanLimitExceededError(
       `Plan Limit Reached: Your current ${plan.name} plan allows a maximum of ${plan.maxManagers} manager(s). Please upgrade your subscription to assign more managers.`
@@ -115,7 +119,9 @@ export function validateManagerLimit(planKey: string, currentCount: number): voi
  * Validates employee creation cap
  */
 export function validateEmployeeLimit(planKey: string, currentCount: number): void {
-  const plan = PLAN_TIERS[planKey.toUpperCase()] || PLAN_TIERS.STARTER;
+  const upper = planKey.toUpperCase();
+  if (upper === "ENTERPRISE" || upper.includes("ENTERPRISE")) return; // Unlimited for Enterprise
+  const plan = PLAN_TIERS[upper] || PLAN_TIERS.STARTER;
   if (plan.maxEmployees !== -1 && currentCount >= plan.maxEmployees) {
     throw new PlanLimitExceededError(
       `Plan Limit Reached: Your current ${plan.name} plan allows a maximum of ${plan.maxEmployees} employee(s). Please upgrade your subscription to add more staff.`

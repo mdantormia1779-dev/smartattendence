@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Building2, Save, Globe, Clock, MapPin, Layers, Loader2, KeyRound, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { Organization } from './OrganizationTable';
+import { api } from '@/lib/api-client';
 
 interface OrganizationEditModalProps {
     organization: Organization | null;
@@ -42,6 +43,17 @@ export const OrganizationEditModal: React.FC<OrganizationEditModalProps> = ({
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [availablePlans, setAvailablePlans] = useState<any[]>([]);
+
+    useEffect(() => {
+        let isMounted = true;
+        api.subscriptions.getPlans().then((res) => {
+            if (isMounted && res?.success && Array.isArray(res.data) && res.data.length > 0) {
+                setAvailablePlans(res.data);
+            }
+        }).catch(() => {});
+        return () => { isMounted = false; };
+    }, []);
 
     useEffect(() => {
         if (organization) {
@@ -234,10 +246,27 @@ export const OrganizationEditModal: React.FC<OrganizationEditModalProps> = ({
                                         onChange={(e) => setPlan(e.target.value)}
                                         className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#00B050]/20 focus:border-[#00B050]"
                                     >
-                                        <option value="FREE">Free Tier</option>
-                                        <option value="STARTER">Starter Plan</option>
-                                        <option value="BUSINESS">Business Plan</option>
-                                        <option value="ENTERPRISE">Enterprise Plan</option>
+                                        {availablePlans.length > 0 ? (
+                                            availablePlans.map((p) => {
+                                                const tier = (p.type || p.tier || "STARTER").toUpperCase();
+                                                const isEnterprise = tier === "ENTERPRISE";
+                                                const limitsStr = isEnterprise
+                                                    ? "Unlimited Branch Managers, Branches & Staff"
+                                                    : `${p.maxEmployees ?? 30} Staff, ${p.maxBranches ?? 2} Branches, ${p.maxManagers ?? 3} Managers`;
+                                                return (
+                                                    <option key={p.id || tier} value={tier}>
+                                                        {p.name || `${tier} Plan`} ({limitsStr}) - ৳{Number(p.price || 0).toLocaleString()}/mo
+                                                    </option>
+                                                );
+                                            })
+                                        ) : (
+                                            <>
+                                                <option value="FREE">30-Day Free Trial (30 Employees, 2 Branches, 3 Managers)</option>
+                                                <option value="STARTER">Starter Plan (100 Employees, 5 Branches, 5 Managers)</option>
+                                                <option value="BUSINESS">Business Plan (500 Employees, 20 Branches, 20 Managers)</option>
+                                                <option value="ENTERPRISE">Enterprise Plan (Unlimited Branch Managers, Branches & Staff)</option>
+                                            </>
+                                        )}
                                     </select>
                                 </div>
 

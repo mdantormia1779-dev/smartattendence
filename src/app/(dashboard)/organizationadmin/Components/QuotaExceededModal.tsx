@@ -123,7 +123,7 @@ export default function QuotaExceededModal({
             </div>
 
             <p className="text-[11px] text-stone-500 leading-tight">
-              To add more {resourceName.toLowerCase()}, please upgrade to a higher tier plan such as <strong className="text-stone-800 font-bold">Starter</strong> or <strong className="text-stone-800 font-bold">Business</strong>.
+              To add more {resourceName.toLowerCase()}, please upgrade to a higher tier plan such as <strong className="text-stone-800 font-bold">Business</strong> or <strong className="text-stone-800 font-bold">Enterprise</strong> for unlimited quotas.
             </p>
           </div>
 
@@ -135,11 +135,11 @@ export default function QuotaExceededModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
               <div className="flex items-center gap-2 p-2.5 bg-emerald-50/60 rounded-xl border border-emerald-100 text-emerald-900 font-medium">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Expanded / Unlimited Staff</span>
+                <span>Unlimited Branch Managers & Staff</span>
               </div>
               <div className="flex items-center gap-2 p-2.5 bg-emerald-50/60 rounded-xl border border-emerald-100 text-emerald-900 font-medium">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Multiple Branch Locations</span>
+                <span>Unlimited Branch Locations</span>
               </div>
               <div className="flex items-center gap-2 p-2.5 bg-emerald-50/60 rounded-xl border border-emerald-100 text-emerald-900 font-medium">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -160,10 +160,14 @@ export default function QuotaExceededModal({
             >
               Maybe Later
             </button>
-            <Link
-              href="/#pricing"
+            <button
+              type="button"
               onClick={() => {
-                if (onUpgrade) onUpgrade();
+                if (onUpgrade) {
+                  onUpgrade();
+                } else if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("open-subscription-modal"));
+                }
                 onClose();
               }}
               className="w-full sm:w-auto flex-2 py-3 px-5 rounded-xl bg-gradient-to-r from-emerald-600 to-[#00B050] hover:from-emerald-700 hover:to-emerald-600 text-white text-xs font-bold shadow-lg shadow-emerald-600/25 transition-all text-center flex items-center justify-center gap-2 cursor-pointer active:scale-95"
@@ -171,7 +175,7 @@ export default function QuotaExceededModal({
               <Zap className="w-4 h-4 text-amber-300" />
               Upgrade Plan Now
               <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+            </button>
           </div>
 
         </div>
