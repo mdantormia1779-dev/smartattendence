@@ -263,13 +263,41 @@ export async function getUserNotifications(user: {
         ],
       };
     } else {
-      // EMPLOYEE
+      // EMPLOYEE: find employee record to resolve both id, employeeCode and organizationId
+      const emp = await prisma.employees.findFirst({
+        where: {
+          OR: [
+            { id: user.userId },
+            { employeeCode: user.userId },
+            ...(user.organizationId ? [{ id: user.userId, organizationId: user.organizationId }] : []),
+          ],
+        },
+        select: { id: true, employeeCode: true, organizationId: true },
+      }).catch(() => null);
+
+      const targetEmpIds = Array.from(
+        new Set([user.userId, emp?.id, emp?.employeeCode].filter(Boolean) as string[])
+      );
+      const targetOrgId = emp?.organizationId || user.organizationId;
+
       whereClause = {
         OR: [
           { recipientType: "GLOBAL_BROADCAST" },
-          { organizationId: user.organizationId, recipientType: "ORG_BROADCAST" },
-          { organizationId: user.organizationId, recipientId: "EMPLOYEE" },
-          { recipientId: user.userId },
+          { recipientId: "ALL" },
+          ...(targetOrgId
+            ? [
+                { organizationId: targetOrgId, recipientType: "ORG_BROADCAST" },
+                { organizationId: targetOrgId, recipientId: "ORG_ALL" },
+                { organizationId: targetOrgId, recipientId: "EMPLOYEE" },
+                { organizationId: targetOrgId, recipientType: "ROLE_BROADCAST" },
+              ]
+            : [
+                { recipientType: "ORG_BROADCAST" },
+                { recipientId: "EMPLOYEE" },
+              ]),
+          { recipientId: { in: targetEmpIds } },
+          { recipientType: "EMPLOYEE", recipientId: { in: targetEmpIds } },
+          { recipientType: "TARGETED_USER", recipientId: { in: targetEmpIds } },
         ],
       };
     }

@@ -11,9 +11,14 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const session = getTenantContext(request);
 
-    const userId = searchParams.get("userId") || session?.userId || "user-super-1";
-    const role = (searchParams.get("role") || session?.role || "SUPER_ADMIN") as RoleType;
-    const organizationId = searchParams.get("organizationId") || session?.organizationId || null;
+    const headerUserId = request.headers.get("x-user-id");
+    const headerEmpId = request.headers.get("x-employee-id");
+    const headerOrgId = request.headers.get("x-organization-id");
+    const headerRole = request.headers.get("x-user-role");
+
+    const userId = searchParams.get("userId") || headerUserId || headerEmpId || session?.userId || "user-super-1";
+    const role = (searchParams.get("role") || headerRole || session?.role || "SUPER_ADMIN") as RoleType;
+    const organizationId = searchParams.get("organizationId") || headerOrgId || session?.organizationId || null;
 
     const notifs = await getUserNotifications({
       userId,
