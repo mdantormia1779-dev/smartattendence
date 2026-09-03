@@ -288,3 +288,41 @@ export const UpdateContactStatusSchema = z.object({
   status: z.enum(["UNREAD", "READ", "IN_PROGRESS", "RESOLVED", "ARCHIVED"]),
   adminNotes: z.string().optional().nullable(),
 });
+
+// ==========================================
+// Task Management Validators
+// ==========================================
+export const CreateTaskSchema = z.object({
+  employeeId: z.string().min(1, "Employee is required"),
+  title: z.string().min(2, "Task title must be at least 2 characters"),
+  description: z.string().optional().nullable(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).default("MEDIUM"),
+  dueDate: z.string().optional().nullable(),
+  startDate: z.string().optional().nullable(),
+  branchId: z.string().optional().nullable(),
+  departmentId: z.string().optional().nullable(),
+});
+
+export const UpdateTaskSchema = z.object({
+  title: z.string().min(2, "Task title must be at least 2 characters").optional(),
+  description: z.string().optional().nullable(),
+  employeeId: z.string().min(1).optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
+  status: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"]).optional(),
+  dueDate: z.string().optional().nullable(),
+  startDate: z.string().optional().nullable(),
+  completionNotes: z.string().optional().nullable(),
+  attachmentUrl: z.string().optional().nullable(),
+});
+
+export const TaskQuerySchema = z.object({
+  employeeId: z.string().optional(),
+  status: z.string().optional(),
+  priority: z.string().optional(),
+  branchId: z.string().optional(),
+  departmentId: z.string().optional(),
+  search: z.string().optional(),
+  page: z.coerce.number().min(1).default(1).optional(),
+  limit: z.coerce.number().min(1).max(100).default(20).optional(),
+});
+

@@ -22,6 +22,7 @@ import {
     Share2,
     BellRing,
     Sparkles,
+    CheckSquare,
     X
 } from "lucide-react";
 import { api } from "@/lib/api-client";
@@ -30,7 +31,7 @@ interface NavItem {
     name: string;
     href: string;
     icon: React.ComponentType<{ className?: string }>;
-    badgeKey?: "pendingLeaves" | "pendingOvertime" | "totalEmployees";
+    badgeKey?: "pendingLeaves" | "pendingOvertime" | "totalEmployees" | "pendingTasks";
 }
 
 const navItems: NavItem[] = [
@@ -41,6 +42,7 @@ const navItems: NavItem[] = [
     { name: "Manage Employees", href: "/organizationadmin/employees", icon: Users, badgeKey: "totalEmployees" },
     { name: "Shift Management", href: "/organizationadmin/shifts", icon: Clock },
     { name: "Live Attendance", href: "/organizationadmin/attendance", icon: ScanFace },
+    { name: "Task Management", href: "/organizationadmin/tasks", icon: CheckSquare, badgeKey: "pendingTasks" },
     { name: "Leave Management", href: "/organizationadmin/leaves", icon: CalendarCheck, badgeKey: "pendingLeaves" },
     { name: "Holiday Calendar", href: "/organizationadmin/holidays", icon: Calendar },
     { name: "Overtime (OT) Rules", href: "/organizationadmin/overtime", icon: TrendingUp, badgeKey: "pendingOvertime" },
@@ -71,6 +73,7 @@ export default function Sidebar() {
         pendingLeaves: 0,
         pendingOvertime: 0,
         totalEmployees: 0,
+        pendingTasks: 0,
     });
 
     // 1. Load Real Organization Session, Plan, and Dynamic Badges
@@ -96,12 +99,13 @@ export default function Sidebar() {
 
         // Fetch fresh organization profile, trial status, and live action badges in parallel
         try {
-            const [orgsRes, trialRes, leavesRes, overtimeRes, employeesRes] = await Promise.allSettled([
+            const [orgsRes, trialRes, leavesRes, overtimeRes, employeesRes, tasksRes] = await Promise.allSettled([
                 api.organizations.getAll(),
                 api.subscriptions.getTrialStatus(),
                 api.leaves.getAll(),
                 api.overtime.getAll(),
                 api.employees.getAll(),
+                api.tasks.getAll(),
             ]);
 
             // Map Organization Profile & Plan
@@ -160,10 +164,19 @@ export default function Sidebar() {
                 totalEmpCount = employeesRes.value.data.length;
             }
 
+            // Map Pending Tasks
+            let pendingTaskCount = 0;
+            if (tasksRes.status === "fulfilled" && tasksRes.value?.success && Array.isArray(tasksRes.value.data)) {
+                pendingTaskCount = tasksRes.value.data.filter((t: any) =>
+                    t.status === "PENDING" || t.status === "IN_PROGRESS"
+                ).length;
+            }
+
             setBadgeCounts({
                 pendingLeaves: pendingLeaveCount,
                 pendingOvertime: pendingOtCount,
                 totalEmployees: totalEmpCount,
+                pendingTasks: pendingTaskCount,
             });
         } catch (e) {
             console.warn("Organization sidebar real data load fallback:", e);
@@ -179,6 +192,7 @@ export default function Sidebar() {
         window.addEventListener("subscription-updated", handleUpdate);
         window.addEventListener("leaves-updated", handleUpdate);
         window.addEventListener("overtime-updated", handleUpdate);
+        window.addEventListener("tasks-updated", handleUpdate);
         return () => {
             window.removeEventListener("user-profile-updated", handleUpdate);
             window.removeEventListener("org-profile-updated", handleUpdate);

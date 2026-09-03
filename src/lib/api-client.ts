@@ -352,6 +352,15 @@ class ApiClient {
     getAll: (params?: any) => this.get("/api/audit-logs", params),
     getById: (id: string) => this.get(`/api/audit-logs/${id}`),
   };
+
+  tasks = {
+    getAll: (params?: any) => this.get("/api/tasks", params),
+    getById: (id: string) => this.get(`/api/tasks/${id}`),
+    create: (body: any) => this.post("/api/tasks", body),
+    update: (id: string, body: any) => this.patch(`/api/tasks/${id}`, body),
+    delete: (id: string) => this.delete(`/api/tasks/${id}`),
+    getStats: (params?: any) => this.get("/api/tasks/stats", params),
+  };
 }
 
 export const api = new ApiClient();
