@@ -79,13 +79,13 @@ export class AttendanceService {
     const searchStart = new Date(dStart.getTime() - 24 * 60 * 60 * 1000);
     const searchEnd = new Date(dStart.getTime() + 24 * 60 * 60 * 1000);
 
-    // 2. Fetch all active employees for this organization
+    // 2. Fetch active employee(s)
     const employees = await prisma.employees.findMany({
       where: {
-        organizationId: validOrgId,
+        organizationId: validOrgId !== "all" ? validOrgId : undefined,
         status: { not: "TERMINATED" },
-        ...(query.branchId ? { branchId: query.branchId } : {}),
-        ...(query.departmentId ? { departmentId: query.departmentId } : {}),
+        ...(query.branchId && query.branchId !== "ALL" ? { branchId: query.branchId } : {}),
+        ...(query.departmentId && query.departmentId !== "ALL" ? { departmentId: query.departmentId } : {}),
         ...(query.employeeId ? { OR: [{ id: query.employeeId }, { employeeCode: query.employeeId }] } : {}),
       },
       include: {
@@ -99,6 +99,90 @@ export class AttendanceService {
       },
       orderBy: { fullName: "asc" },
     }).catch(() => []);
+
+    // 2b. If employee is querying their attendance history (all past dates, no single date given)
+    if (query.employeeId && !query.date) {
+      const targetEmp = employees[0] || (await prisma.employees.findFirst({
+        where: { OR: [{ id: query.employeeId }, { employeeCode: query.employeeId }] },
+        include: {
+          branches: { select: { id: true, name: true } },
+          departments: { select: { id: true, name: true } },
+          shift_assignments: {
+            include: {
+              shifts: { select: { name: true, startTime: true, endTime: true } },
+            },
+          },
+        },
+      }).catch(() => null));
+
+      if (targetEmp) {
+        const historyRecords = await prisma.attendance.findMany({
+          where: { employeeId: targetEmp.id },
+          orderBy: { date: "desc" },
+          take: query.limit || 60,
+          include: {
+            employees: {
+              include: { branches: true, departments: true },
+            },
+          },
+        }).catch(() => []);
+
+        const shiftInfo = targetEmp.shift_assignments?.[0]?.shifts
+          ? `${targetEmp.shift_assignments[0].shifts.name} (${targetEmp.shift_assignments[0].shifts.startTime}-${targetEmp.shift_assignments[0].shifts.endTime})`
+          : "Regular Shift (09:00 AM - 05:00 PM)";
+
+        return historyRecords.map((att) => {
+          let statusStr: AttendanceEntry["status"] = "PRESENT";
+          const checkInDate = att.checkInTime ? new Date(att.checkInTime) : null;
+          const localTimeInfo = checkInDate ? getTimeInTimezone(checkInDate, orgTimezone) : null;
+          const isLateByHour = localTimeInfo ? (localTimeInfo.hour > 9 || (localTimeInfo.hour === 9 && localTimeInfo.minute > 15)) : false;
+
+          if (att.status === AttendanceStatus.LATE || att.lateMinutes > 0 || isLateByHour) statusStr = "LATE";
+          else if (att.status === AttendanceStatus.HALF_DAY) statusStr = "HALF_DAY";
+          else if (att.status === AttendanceStatus.ON_LEAVE) statusStr = "ON_LEAVE";
+          else if (att.status === AttendanceStatus.ABSENT) statusStr = "ABSENT";
+
+          let methodStr: AttendanceEntry["verificationMethod"] = "FACE_RECOGNITION";
+          if (att.checkInMethod === AttendanceMethod.GPS) methodStr = "GPS_GEOFENCE";
+          else if (att.checkInMethod === AttendanceMethod.FINGERPRINT) methodStr = "BIOMETRIC_DEVICE";
+          else if (att.checkInMethod === AttendanceMethod.MANUAL) methodStr = "MANUAL_OVERRIDE";
+
+          const timeFormatted = att.checkInTime
+            ? formatTimeInTimezone(att.checkInTime, orgTimezone)
+            : "--";
+          const outFormatted = att.checkOutTime
+            ? formatTimeInTimezone(att.checkOutTime, orgTimezone)
+            : null;
+
+          const recordDateStr = att.date instanceof Date
+            ? getLocalDateString(att.date, orgTimezone)
+            : new Date(att.date).toISOString().split("T")[0];
+
+          return {
+            id: att.id,
+            organizationId: validOrgId,
+            employeeId: targetEmp.employeeCode || targetEmp.id,
+            employeeName: targetEmp.fullName,
+            avatar: targetEmp.profilePicture || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
+            department: targetEmp.departments?.name || "General",
+            branch: targetEmp.branches?.name || "Main Branch",
+            branchId: targetEmp.branchId || undefined,
+            departmentId: targetEmp.departmentId || undefined,
+            shift: shiftInfo,
+            date: recordDateStr,
+            checkInTime: timeFormatted,
+            checkOutTime: outFormatted,
+            status: statusStr,
+            verificationMethod: methodStr,
+            faceConfidence: att.faceScore ? Number(att.faceScore.toFixed(1)) : 98.5,
+            gpsDistanceMeters: 24,
+            isGeofenceVerified: true,
+            isRegularized: att.checkInMethod === AttendanceMethod.MANUAL,
+            createdAt: att.createdAt.toISOString(),
+          };
+        });
+      }
+    }
 
     // 3. Fetch all attendance punches for target date range
     const attendanceRecords = await prisma.attendance.findMany({

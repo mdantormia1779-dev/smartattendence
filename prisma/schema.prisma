@@ -148,6 +148,7 @@ model employees {
   overtime             overtime[]
   payslips             payslips[]
   shift_assignments    shift_assignments[]
+  tasks                tasks[]
 
   @@unique([organizationId, email])
   @@unique([organizationId, employeeCode])
@@ -289,6 +290,7 @@ model organizations {
   payments        payments[]
   subscriptions   subscriptions?
   affiliate_referrals affiliate_referrals[]
+  tasks           tasks[]
 }
 
 model overtime {
@@ -681,5 +683,49 @@ model contact_messages {
   @@index([status])
   @@index([category])
   @@index([createdAt])
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model tasks {
+  id              String        @id
+  organizationId  String
+  branchId        String?
+  departmentId    String?
+  employeeId      String
+  assignedById    String
+  assignedByName  String?
+  assignedByRole  UserRole
+  title           String
+  description     String?
+  priority        TaskPriority  @default(MEDIUM)
+  status          TaskStatus    @default(PENDING)
+  dueDate         DateTime?
+  startDate       DateTime?
+  completedAt     DateTime?
+  completionNotes String?
+  attachmentUrl   String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  organizations   organizations @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employees       employees     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([status])
+  @@index([dueDate])
 }
 

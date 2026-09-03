@@ -17,6 +17,7 @@ import {
     Shield,
     Share2,
     Briefcase,
+    CheckSquare,
     X
 } from "lucide-react";
 import { api } from "@/lib/api-client";
@@ -25,6 +26,7 @@ const managerNavItems = [
     { name: "Dashboard", href: "/manager", icon: LayoutDashboard },
     { name: "My Team Members", href: "/manager/employees", icon: Users },
     { name: "Team Attendance", href: "/manager/attendance", icon: ScanFace },
+    { name: "Team Tasks", href: "/manager/tasks", icon: CheckSquare },
     { name: "Shift Scheduling", href: "/manager/shifts", icon: Clock },
     { name: "Leave Approvals", href: "/manager/leaves", icon: CalendarCheck },
     { name: "Overtime Requests", href: "/manager/overtime", icon: TrendingUp },
