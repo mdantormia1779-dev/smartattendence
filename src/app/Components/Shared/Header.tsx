@@ -315,7 +315,7 @@ const Header = () => {
             {/* Bottom Actions */}
             <div className="pt-4 flex flex-col gap-3">
               <a
-                href="/smartattendence.apk"
+                href="https://github.com/mdantormia1779-dev/smartattendence/releases/download/v1.0.0/smartattendence.apk"
                 download="smartattendence.apk"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="w-full text-center text-sm font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
@@ -352,4 +352,4 @@ const Header = () => {
   );
 };
 
-export default Header;
+export default Header;

@@ -173,7 +173,7 @@ const AppDownloadSection = () => {
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-2">
                 {/* Primary Direct Download Button */}
                 <a
-                  href="/smartattendence.apk"
+                  href="https://github.com/mdantormia1779-dev/smartattendence/releases/download/v1.0.0/smartattendence.apk"
                   download="smartattendence.apk"
                   className="flex-1 inline-flex items-center justify-center gap-3 bg-[#00B050] hover:bg-[#009644] text-white font-semibold text-base px-7 py-4 rounded-2xl shadow-lg hover:shadow-emerald-500/25 transition-all duration-200 transform hover:-translate-y-0.5 cursor-pointer group"
                 >

@@ -94,7 +94,7 @@ const HeroSection = () => {
           </Link>
 
           <a 
-            href="/smartattendence.apk" 
+            href="https://github.com/mdantormia1779-dev/smartattendence/releases/download/v1.0.0/smartattendence.apk" 
             download="smartattendence.apk"
             className="w-full sm:w-auto px-6 py-3 rounded-xl bg-white/15 hover:bg-white/25 text-white font-medium text-base backdrop-blur-md border border-white/25 transition-all flex items-center justify-center gap-2.5 shadow-md hover:scale-105 cursor-pointer"
           >
