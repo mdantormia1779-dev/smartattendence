@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/public/smartattendence.apk
 
 # next.js
 /.next/
