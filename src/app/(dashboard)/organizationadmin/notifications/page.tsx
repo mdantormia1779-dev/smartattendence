@@ -76,14 +76,18 @@ export default function OrgAdminNotificationCenterPage() {
         let orgId = "org-1";
 
         if (typeof window !== "undefined") {
-            const stored = localStorage.getItem("user");
-            if (stored) {
+            const raw = localStorage.getItem("user") || localStorage.getItem("user_info") || localStorage.getItem("userData");
+            if (raw) {
                 try {
-                    const parsed = JSON.parse(stored);
+                    const parsed = JSON.parse(raw);
                     if (parsed.id || parsed.userId) userId = parsed.id || parsed.userId;
                     if (parsed.name || parsed.fullName) userName = parsed.name || parsed.fullName;
-                    if (parsed.organizationId) orgId = parsed.organizationId;
+                    if (parsed.organizationId && parsed.organizationId !== "org-1") orgId = parsed.organizationId;
                 } catch {}
+            }
+            const directOrgId = localStorage.getItem("organizationId") || localStorage.getItem("orgId");
+            if (directOrgId && (!orgId || orgId === "org-1")) {
+                orgId = directOrgId;
             }
         }
         return { userId, userName, orgId };
@@ -161,13 +165,32 @@ export default function OrgAdminNotificationCenterPage() {
         try {
             setIsLoading(true);
             const { userId, orgId } = getSession();
-            const res = await fetch(`/api/notifications?userId=${userId}&role=ORG_ADMIN&organizationId=${orgId}&_t=${Date.now()}`, {
+
+            let targetOrg = orgId;
+            if (!targetOrg || targetOrg === "org-1") {
+                try {
+                    const orgRes = await api.organizations.getAll();
+                    if (orgRes?.success && Array.isArray(orgRes.data) && orgRes.data.length > 0) {
+                        targetOrg = orgRes.data[0].id;
+                    }
+                } catch {}
+            }
+
+            const queryParams = new URLSearchParams();
+            if (userId) queryParams.append("userId", userId);
+            queryParams.append("role", "ORG_ADMIN");
+            if (targetOrg && targetOrg !== "org-1") queryParams.append("organizationId", targetOrg);
+            queryParams.append("_t", Date.now().toString());
+
+            const res = await fetch(`/api/notifications?${queryParams.toString()}`, {
                 cache: "no-store",
                 headers: {
                     "Cache-Control": "no-cache, no-store, must-revalidate",
                     Pragma: "no-cache",
                     "x-user-role": "ORG_ADMIN",
-                    "x-org-id": orgId,
+                    "x-user-id": userId,
+                    "x-organization-id": targetOrg || "",
+                    "x-org-id": targetOrg || "",
                 },
             });
             const json = await res.json();
@@ -254,13 +277,23 @@ export default function OrgAdminNotificationCenterPage() {
             setErrorMessage(null);
             const { userId, userName, orgId } = getSession();
 
+            let targetOrg = orgId;
+            if (!targetOrg || targetOrg === "org-1") {
+                try {
+                    const orgRes = await api.organizations.getAll();
+                    if (orgRes?.success && Array.isArray(orgRes.data) && orgRes.data.length > 0) {
+                        targetOrg = orgRes.data[0].id;
+                    }
+                } catch {}
+            }
+
             const payload = {
                 senderId: userId,
                 senderName: `${userName} (Org Admin)`,
                 senderRole: "ORG_ADMIN",
-                senderOrgId: orgId,
+                senderOrgId: targetOrg,
                 scope,
-                targetOrgId: orgId,
+                targetOrgId: targetOrg,
                 targetRole: scope === "ROLE_BROADCAST" ? targetRole : null,
                 recipientUserId: scope === "TARGETED_USER" ? recipientUserId.trim() : null,
                 title: title.trim(),
@@ -280,7 +313,9 @@ export default function OrgAdminNotificationCenterPage() {
                 headers: { 
                     "Content-Type": "application/json",
                     "x-user-role": "ORG_ADMIN",
-                    "x-org-id": orgId,
+                    "x-user-id": userId,
+                    "x-organization-id": targetOrg || "",
+                    "x-org-id": targetOrg || "",
                 },
                 body: JSON.stringify(payload),
             });
@@ -306,12 +341,14 @@ export default function OrgAdminNotificationCenterPage() {
         if (!deletingNotification) return;
         try {
             setIsProcessing(true);
-            const { orgId } = getSession();
+            const { orgId, userId } = getSession();
             const res = await fetch(`/api/notifications/${deletingNotification.id}`, {
                 method: "DELETE",
                 headers: {
                     "x-user-role": "ORG_ADMIN",
-                    "x-org-id": orgId,
+                    "x-user-id": userId,
+                    "x-organization-id": orgId || "",
+                    "x-org-id": orgId || "",
                 },
             });
             const json = await res.json();

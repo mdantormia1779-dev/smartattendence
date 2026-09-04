@@ -57,21 +57,25 @@ export default function NotificationDropdown({
     let resolvedOrgId = propOrgId ?? null;
 
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("user");
+      const stored = localStorage.getItem("user") || localStorage.getItem("user_info") || localStorage.getItem("userData");
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
           if (parsed.id || parsed.userId) resolvedUserId = parsed.id || parsed.userId;
           if (parsed.role) resolvedRole = parsed.role;
-          if (parsed.organizationId !== undefined) resolvedOrgId = parsed.organizationId;
+          if (parsed.organizationId !== undefined && parsed.organizationId !== "org-1") resolvedOrgId = parsed.organizationId;
         } catch {}
+      }
+      const directOrgId = localStorage.getItem("organizationId") || localStorage.getItem("orgId");
+      if (directOrgId && (!resolvedOrgId || resolvedOrgId === "org-1")) {
+        resolvedOrgId = directOrgId;
       }
     }
 
     return {
       userId: propUserId || resolvedUserId,
       role: propRole || resolvedRole,
-      organizationId: propOrgId !== undefined ? propOrgId : resolvedOrgId,
+      organizationId: (propOrgId && propOrgId !== "org-1") ? propOrgId : (resolvedOrgId && resolvedOrgId !== "org-1" ? resolvedOrgId : null),
     };
   };
 
@@ -91,6 +95,8 @@ export default function NotificationDropdown({
           Pragma: "no-cache",
           "x-user-role": ctx.role,
           "x-user-id": ctx.userId,
+          "x-organization-id": ctx.organizationId || "",
+          "x-org-id": ctx.organizationId || "",
         },
       });
 

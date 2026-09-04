@@ -13,12 +13,15 @@ export async function GET(request: Request) {
 
     const headerUserId = request.headers.get("x-user-id");
     const headerEmpId = request.headers.get("x-employee-id");
-    const headerOrgId = request.headers.get("x-organization-id");
+    const headerOrgId = request.headers.get("x-organization-id") || request.headers.get("x-org-id");
     const headerRole = request.headers.get("x-user-role");
 
     const userId = searchParams.get("userId") || headerUserId || headerEmpId || session?.userId || "user-super-1";
     const role = (searchParams.get("role") || headerRole || session?.role || "SUPER_ADMIN") as RoleType;
-    const organizationId = searchParams.get("organizationId") || headerOrgId || session?.organizationId || null;
+    let organizationId = searchParams.get("organizationId") || headerOrgId || session?.organizationId || null;
+    if (organizationId === "org-1" || organizationId === "undefined") {
+      organizationId = null;
+    }
 
     const notifs = await getUserNotifications({
       userId,
@@ -55,7 +58,10 @@ export async function POST(request: Request) {
     const senderRole = (session?.role || body.senderRole || "SUPER_ADMIN") as RoleType;
     const senderId = session?.userId || body.senderId || "user-super-1";
     const senderName = session?.fullName || body.senderName || "Super Admin";
-    const senderOrgId = session?.organizationId || body.senderOrgId || null;
+    let senderOrgId = session?.organizationId || body.senderOrgId || body.targetOrgId || request.headers.get("x-organization-id") || request.headers.get("x-org-id") || null;
+    if (senderOrgId === "org-1" || senderOrgId === "undefined") {
+      senderOrgId = null;
+    }
 
     const result = await sendNotification({
       senderId,
